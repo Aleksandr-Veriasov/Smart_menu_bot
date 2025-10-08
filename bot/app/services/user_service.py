@@ -10,7 +10,10 @@ from packages.db.repository import RecipeRepository, UserRepository
 from packages.db.schemas import UserCreate
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
-from packages.redis.repository import RecipeCacheRepository, UserCacheRepository
+from packages.redis.repository import (
+    RecipeCacheRepository,
+    UserCacheRepository,
+)
 from packages.redis.utils import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)

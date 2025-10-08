@@ -8,7 +8,9 @@ from telegram.ext import (
     filters,
 )
 
-from bot.app.handlers.recipes.edit_delete_recipe import conversation_edit_recipe
+from bot.app.handlers.recipes.edit_delete_recipe import (
+    conversation_edit_recipe,
+)
 from bot.app.handlers.recipes.pagination import handler_pagination
 from bot.app.handlers.recipes.recipes_menu import (
     recipe_choice,

@@ -19,7 +19,10 @@ from pydantic import (
 )
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings.sources import EnvSettingsSource, PydanticBaseSettingsSource
+from pydantic_settings.sources import (
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+)
 from sqlalchemy.engine import URL
 
 logger = logging.getLogger(__name__)
@@ -273,15 +276,50 @@ class RedisSettings(BaseAppSettings):
     port: str = Field(alias='REDIS_PORT')
     password: SecretStr = Field(alias='REDIS_PASSWORD')
     db: str = Field(alias='REDIS_DB')
-    prefix: str = Field(
-        default='myapp:dev', alias='REDIS_PREFIX'
-    )
+    prefix: Optional[str] = Field(default=None, alias='REDIS_PREFIX')
+    app_env: str = Field(default='dev', alias='APP_ENV')
+    app_name: str = Field(default='myapp', alias='APP_NAME')
 
     def dsn(self) -> str:
         return (
             f'redis://:{self.password.get_secret_value()}'
             f'@{self.host}:{self.port}/{self.db}'
         )
+
+    @classmethod
+    def build_prefix(
+        cls, *, prefix: Optional[str], app_name: str, app_env: str
+    ) -> str:
+        """
+        Правило:
+        - если prefix задан → нормализуем и используем его;
+        - иначе собираем из APP_NAME и APP_ENV: "<name>:<env>"
+        """
+        p = (prefix or "").strip()
+        if p:
+            return p.strip(":")
+        name = (app_name or "myapp").strip()
+        env = (app_env or "dev").strip().lower()
+        return f"{name}:{env}"
+
+    @property
+    def resolved_prefix(self) -> str:
+        """
+        Финальный префикс с учётом REDIS_PREFIX/APP_NAME/APP_ENV
+        (без хвостовых двоеточий).
+        """
+        return self.build_prefix(
+            prefix=self.prefix, app_name=self.app_name, app_env=self.app_env
+        )
+
+    def namespaced(self, key: str) -> str:
+        """
+        Префиксует любой ключ Redis:
+        - избегает двойных двоеточий,
+        - пустой префикс возвращает исходный key.
+        """
+        p = self.resolved_prefix.strip(":")
+        return f"{p}:{key}" if p else key
 
 
 class TelegramSettings(BaseAppSettings):
@@ -392,15 +430,38 @@ class FastApiSettings(BaseAppSettings):
         иначе первый элемент или 'localhost'.
         """
         if debug is True:
-            return "localhost"
+            return 'localhost'
         for h in self.allowed_hosts:
-            if h and h not in ("localhost", "127.0.0.1") and "." in h:
+            if h and h not in ('localhost', '127.0.0.1') and '.' in h:
                 return h
-        return self.allowed_hosts[0] if self.allowed_hosts else "localhost"
+        return self.allowed_hosts[0] if self.allowed_hosts else 'localhost'
 
     def base_url(self) -> str:
-        scheme = "https" if self.use_https else "http"
-        return f"{scheme}://{self.external_domain()}"
+        scheme = 'https' if self.use_https else 'http'
+        return f'{scheme}://{self.external_domain()}'
+
+
+class StreamsSettings(BaseAppSettings):
+    """ Конфигурация потоков задач """
+    tasks: str = 'dl:tasks'
+    done: str = 'dl:done'
+    failed: str = 'dl:failed'
+    group_workers: str = 'dl:workers'
+    group_bot: str = 'bot'
+    maxlen: int = 5000
+
+
+class DownloadSettings(BaseAppSettings):
+    """ Конфигурация загрузки видео """
+    videos_dir: str = Field(default='/videos', alias='VIDEOS_DIR')
+    max_concurrency: int = 3  # макс. число одновременных загрузок
+    ytdlp_retries: int = 3  # число попыток при ошибках ytdlp
+    ytdlp_timeout_sec: int = 120  # таймаут одной попытки ytdlp
+    playwright_timeout_sec: int = 30  # таймаут Playwright
+    ffmpeg_timeout_sec: int = 90  # таймаут ffmpeg
+    cleanup_ttl_min: int = 20  # время жизни файлов на диске
+    http_proxy: Optional[str] = None
+    https_proxy: Optional[str] = None
 
 
 class Settings(BaseAppSettings):
@@ -417,13 +478,15 @@ class Settings(BaseAppSettings):
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)
     deepseek: DeepSeekSettings = Field(default_factory=DeepSeekSettings)
     sentry: SentrySettings = Field(default_factory=SentrySettings)
-    # 🔹 CORS: список доменов, которым можно слать запросы к API
+    # CORS: список доменов, которым можно слать запросы к API
     cors_origins_raw: str | None = Field(default=None, alias='CORS_ORIGINS')
     admin: AdminSettinds = Field(default_factory=AdminSettinds)
     security: SecuritySettings = SecuritySettings()
     redis: RedisSettings = Field(default_factory=RedisSettings)
     webhooks: WebHookSettings = Field(default_factory=WebHookSettings)
     fast_api: FastApiSettings = Field(default_factory=FastApiSettings)
+    streams: StreamsSettings = Field(default_factory=StreamsSettings)
+    download: DownloadSettings = Field(default_factory=DownloadSettings)
 
     @property
     def cors_origins(self) -> list[str]:
@@ -462,7 +525,6 @@ class Settings(BaseAppSettings):
         }
 
 
-# Инициализация с fail-fast и безопасным логированием
 try:
     settings = Settings()
     logger.info('✅ Конфигурация загружена')

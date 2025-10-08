@@ -136,9 +136,9 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
         )
     )
     logger.debug(f'📼 category_id = {category_id}')
-    service = RecipeService(db, state.redis)
+    service_rec = RecipeService(db, state.redis)
     if category_id:
-        pairs = await service.get_all_recipes_ids_and_titles(
+        pairs = await service_rec.get_all_recipes_ids_and_titles(
             user_id, category_id
         )
         logger.debug(f'📼 pairs = {pairs}')

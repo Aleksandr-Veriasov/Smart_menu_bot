@@ -14,10 +14,10 @@ from starlette.staticfiles import StaticFiles
 from backend.app.admin.views import AdminAuth, setup_admin
 from backend.app.api.routers import api_router
 from packages.app_state import AppState
+from packages.common.logging_config import setup_logging
 from packages.common_settings import settings
 from packages.db.database import Database
 from packages.db.migrate_and_seed import ensure_admin
-from packages.logging_config import setup_logging
 from packages.redis.redis_conn import close_redis, get_redis
 
 setup_logging()
@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> None:
+    """
+    Контекст жизни приложения FastAPI.
+    Здесь инициализируем глобальные объекты (БД, кэш, очередь задач и т.п.)
+    и сохраняем их в app.state.
+    """
     # 1) DB
     state = AppState(
         db=Database(

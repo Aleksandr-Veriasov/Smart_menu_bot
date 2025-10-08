@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
-from typing import Optional, cast
+from typing import AsyncGenerator, Optional, cast
 
 from fastapi import FastAPI, HTTPException, Request
 from telegram import Update
@@ -9,11 +9,11 @@ from telegram.ext import Application
 
 from bot.app.core.types import AppState, PTBApp
 from bot.app.handlers.setup import setup_handlers
+from packages.common.logging_config import setup_logging
 from packages.common_settings.settings import settings
 from packages.db.database import Database
 from packages.db.migrate_and_seed import ensure_db_up_to_date
 from packages.db.models import Base
-from packages.logging_config import setup_logging
 from packages.media.video_downloader import cleanup_old_videos
 from packages.redis.redis_conn import close_redis, get_redis
 
@@ -144,7 +144,7 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Контекстный менеджер для инициализации и завершения FastAPI-приложения.
     Здесь же инициализируем PTB Application в режиме webhook.

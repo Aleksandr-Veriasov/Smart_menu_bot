@@ -13,7 +13,9 @@ from packages.media.audio_extractor import extract_audio
 from packages.media.safe_remove import safe_remove
 from packages.media.speech_recognition import async_transcribe_audio
 from packages.media.video_converter import async_convert_to_mp4
-from packages.media.video_downloader import async_download_video_and_description
+from packages.media.video_downloader import (
+    async_download_video_and_description,
+)
 
 AUDIO_FOLDER = 'audio/'
 

@@ -1,14 +1,37 @@
+# VCS
+.git
+.gitignore
+
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-*.db
-*.sqlite3
-.env
-tests/
+
+# Virtualenv
+.venv
+env/
 venv/
-*.log
-*.DS_Store
-instagram_cookies.txt
-instagram_cookies.b64
-.env.*
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Tests и локальные данные
+tests/
+__tests__/
+*.pytest_cache
+.coverage
+
+# Docker мусор
+docker-compose.override.yml
+
+# Build artifacts
+dist/
+build/
+*.egg-info
+
+# Медиа/кэш
+videos/
+.cache/

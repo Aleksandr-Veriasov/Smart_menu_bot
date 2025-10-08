@@ -13,7 +13,10 @@ from bot.app.services.ingredients_parser import parse_ingredients
 from bot.app.services.parse_callback import parse_category
 from bot.app.services.save_recipe import save_recipe_service
 from bot.app.utils.context_helpers import get_db
-from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
+from packages.redis.repository import (
+    CategoryCacheRepository,
+    RecipeCacheRepository,
+)
 
 logger = logging.getLogger(__name__)
 

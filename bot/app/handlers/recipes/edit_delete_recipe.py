@@ -21,7 +21,10 @@ from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
 from bot.app.utils.context_helpers import get_db
 from packages.db.repository import RecipeRepository
-from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
+from packages.redis.repository import (
+    CategoryCacheRepository,
+    RecipeCacheRepository,
+)
 
 logger = logging.getLogger(__name__)
 

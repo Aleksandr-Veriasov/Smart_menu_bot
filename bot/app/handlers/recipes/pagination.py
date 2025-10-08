@@ -6,7 +6,10 @@ from telegram import Update
 from telegram.error import BadRequest
 
 from bot.app.core.types import PTBContext
-from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
+from bot.app.keyboards.inlines import (
+    build_recipes_list_keyboard,
+    home_keyboard,
+)
 from packages.redis.repository import RecipeCacheRepository
 
 # Включаем логирование

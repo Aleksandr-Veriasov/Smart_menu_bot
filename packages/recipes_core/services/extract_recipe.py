@@ -5,7 +5,10 @@ import logging
 from functools import partial
 from typing import Protocol
 
-from packages.recipes_core.deepseek_parsers import RecipeExtraction, parse_llm_answer
+from packages.recipes_core.deepseek_parsers import (
+    RecipeExtraction,
+    parse_llm_answer,
+)
 from packages.recipes_core.promts import SYSTEM_PROMPT_RU
 
 logger = logging.getLogger(__name__)
