@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 
 import ffmpeg
 
@@ -17,9 +18,9 @@ def convert_to_mp4(input_path: str) -> str:
     width, height = _get_video_resolution(input_path)
 
     logger.debug(f'Начинаем конвертацию видео: {input_path}')
-    if width is None or height is None:
-        logging.error('Не удалось получить разрешение видео')
-        return None
+    if not width or not height:
+        logger.error('Не удалось получить разрешение видео для %s', input_path)
+        return ''
 
     # Корректируем разрешение, если необходимо
     corrected_width, corrected_height = _correct_resolution(width, height)
@@ -65,9 +66,12 @@ async def async_convert_to_mp4(input_path: str) -> str:
     return await asyncio.to_thread(convert_to_mp4, input_path)
 
 
-def _get_video_resolution(video_path: str) -> tuple[int, int]:
+def _get_video_resolution(video_path: str) -> tuple[int | None, int | None]:
     """Получаем разрешение видео"""
     logger.debug(f'Получаем разрешение видео: {video_path}')
+    if not os.path.exists(video_path):
+        logger.error('Видео %s не найдено перед конвертацией', video_path)
+        return None, None
     try:
         probe = ffmpeg.probe(
             video_path, v='error',
@@ -80,7 +84,7 @@ def _get_video_resolution(video_path: str) -> tuple[int, int]:
         return width, height
     except ffmpeg.Error as e:
         logger.error(f'Ошибка при анализе видео: {e}', exc_info=True)
-        return 0, 0
+        return None, None
 
 
 def _correct_resolution(width: int, height: int) -> tuple[int, int]:

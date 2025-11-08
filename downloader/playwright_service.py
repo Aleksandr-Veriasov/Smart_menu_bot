@@ -145,7 +145,8 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
         raise ValueError("Playwright downloader поддерживает только Instagram/TikTok/Pinterest/YouTube Shorts.")
 
     try:
-        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError(
             "Playwright не установлен. Установите playwright и выполните `playwright install`."
