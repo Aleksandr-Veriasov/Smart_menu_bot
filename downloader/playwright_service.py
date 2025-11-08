@@ -10,6 +10,13 @@ import requests
 
 VIDEO_FOLDER = Path(os.getenv("VIDEO_FOLDER", "/app/videos"))
 VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
+try:
+    VIDEO_FOLDER.chmod(0o777)
+except Exception:
+    # Не критично, просто логируем
+    logging.getLogger(__name__).warning(
+        "Не удалось выставить права 777 на каталог %s", VIDEO_FOLDER
+    )
 WIDTH_VIDEO = int(os.getenv("PLAYWRIGHT_VIEWPORT_WIDTH", "720"))
 HEIGHT_VIDEO = int(os.getenv("PLAYWRIGHT_VIEWPORT_HEIGHT", "1280"))
 
@@ -148,5 +155,9 @@ def download_instagram_with_playwright(url: str) -> Tuple[str, str]:
 
     logger.debug("Playwright нашёл media URL: %s", video_src)
     _download_stream(video_src, dest_path, referer=url, user_agent=user_agent, cookies=cookies)
+    try:
+        dest_path.chmod(0o666)
+    except Exception:
+        logger.warning("Не удалось выставить права 666 на файл %s", dest_path)
     logger.info("✅ Playwright скачал файл: %s", dest_path)
     return str(dest_path), caption
