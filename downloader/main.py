@@ -8,7 +8,7 @@ from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
 
-from downloader.playwright_service import download_instagram_with_playwright
+from downloader.playwright_service import download_with_playwright
 
 logging.basicConfig(
     level=os.getenv("DOWNLOADER_LOG_LEVEL", "INFO"),
@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class DownloadRequest(BaseModel):
-    url: HttpUrl = Field(..., description="Ссылка на Instagram пост или Reels")
+    url: HttpUrl = Field(
+        ...,
+        description="Ссылка на Instagram, TikTok, Pinterest или YouTube Shorts видео",
+    )
 
 
 class DownloadResponse(BaseModel):
@@ -29,8 +32,8 @@ class DownloadResponse(BaseModel):
 @lru_cache
 def get_app() -> FastAPI:
     app = FastAPI(
-        title="Instagram Downloader",
-        description="Сервис для скачивания Instagram-видео через Playwright",
+        title="Media Downloader",
+        description="Сервис для скачивания Instagram/TikTok/Pinterest/YouTube Shorts через Playwright",
         version="0.1.0",
     )
 
@@ -43,7 +46,7 @@ def get_app() -> FastAPI:
         logger.info("Получен запрос на скачивание: %s", payload.url)
         try:
             file_path, caption = await asyncio.to_thread(
-                download_instagram_with_playwright, str(payload.url)
+                download_with_playwright, str(payload.url)
             )
         except ValueError as exc:
             logger.warning("Некорректный запрос: %s", exc)

@@ -12,7 +12,7 @@ from bot.app.utils.deepseek_answers import extract_recipes
 from packages.media.audio_extractor import extract_audio
 from packages.media.safe_remove import safe_remove
 from packages.media.speech_recognition import async_transcribe_audio
-from packages.media.video_converter import async_convert_to_mp4
+# from packages.media.video_converter import async_convert_to_mp4
 from packages.media.video_downloader import async_download_video_and_description
 
 AUDIO_FOLDER = 'audio/'
@@ -55,25 +55,25 @@ async def process_video_pipeline(
         )
         return
 
-    convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
-    await notifier.progress(40, 'Видео конвертировано')
+    # convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
+    # await notifier.progress(40, 'Видео конвертировано')
 
-    def _cleanup_src_video_after_convert(t: asyncio.Task) -> None:
-        safe_remove(video_path)
+    # def _cleanup_src_video_after_convert(t: asyncio.Task) -> None:
+    #     safe_remove(video_path)
 
-    convert_task.add_done_callback(_cleanup_src_video_after_convert)
-    converted_path = await convert_task
+    # convert_task.add_done_callback(_cleanup_src_video_after_convert)
+    # converted_path = await convert_task
 
     upload_task: asyncio.Task[Optional[str]] = asyncio.create_task(
-        send_video_to_channel(context, converted_path)
+        send_video_to_channel(context, video_path)
     )
 
     if context.user_data is not None:
-        context.user_data['video_path'] = converted_path
+        context.user_data['video_path'] = video_path
         context.user_data['video_upload_task'] = upload_task
     await notifier.progress(60, '✅ Видео загружено. Распознаём текст...')
 
-    audio_path = extract_audio(converted_path, AUDIO_FOLDER)
+    audio_path = extract_audio(video_path, AUDIO_FOLDER)
     transcribe_task = asyncio.create_task(async_transcribe_audio(audio_path))
 
     def _cleanup_audio_after_done(_task: asyncio.Task) -> None:
@@ -103,7 +103,7 @@ async def process_video_pipeline(
 
     if context.user_data is not None and video_file_id:
         context.user_data['video_file_id'] = video_file_id
-        safe_remove(converted_path)
+        safe_remove(video_path)
 
     if title and recipe:
         await notifier.progress(100, 'Готово ✅')

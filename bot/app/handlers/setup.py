@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 
 video_link_pattern = (
     r'(https?://)?(www\.)?'
-    r'(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|vimeo\.com)/\S+'
+    r'('
+    r'youtube\.com|youtu\.be|youtube\.com/shorts|tiktok\.com|vm\.tiktok\.com|'
+    r'instagram\.com|pinterest\.com|pin\.it|pinterest\.co'
+    r')/\S+'
 )
 
 

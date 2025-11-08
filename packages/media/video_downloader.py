@@ -44,9 +44,13 @@ def _platform_from_url(url: str) -> str:
     u = url.lower()
     if "instagram.com" in u:
         return "instagram"
-    if "tiktok.com" in u:
+    if "tiktok.com" in u or "vm.tiktok.com" in u:
         return "tiktok"
+    if any(domain in u for domain in ("pinterest.com", "pin.it", "pinterest.co")):
+        return "pinterest"
     if "youtube.com" in u or "youtu.be" in u:
+        if "/shorts/" in u or "youtube.com/shorts" in u:
+            return "youtube_shorts"
         return "youtube"
     return "unknown"
 
@@ -194,11 +198,28 @@ def _download_via_downloader_service(url: str) -> Tuple[str, str]:
 def download_video_and_description(url: str) -> Tuple[str, str]:
     """
     Скачивает видео и возвращает (path, description).
-    Сначала пробуем yt-dlp с ретраями, затем Instagram-фолбэк через downloader.
+    Сначала пробуем внешний downloader (Instagram/TikTok/Pinterest/YouTube Shorts).
+    При неудаче или для других платформ — fallback на yt-dlp.
     """
     _ensure_dir(VIDEO_FOLDER)
     platform = _platform_from_url(url)
 
+    first_exc: Exception | None = None
+
+    # 1) Пытаемся делегировать внешнему сервису (если поддерживаемая платформа)
+    downloader_first = {"instagram", "tiktok", "pinterest", "youtube_shorts"}
+    if platform in downloader_first:
+        try:
+            logger.info("🎭 Downloader-сервис обрабатывает ссылку (%s) %s", platform, url)
+            return _download_via_downloader_service(url)
+        except Exception as downloader_exc:
+            first_exc = downloader_exc
+            logger.warning(
+                "Downloader сервис не справился: %s. Пробуем yt-dlp.",
+                downloader_exc,
+            )
+
+    # 2) Основной механизм — yt-dlp
     max_attempts = 3
     base_sleep = 1.0  # сек; будет нарастать экспоненциально
     last_exc: Exception | None = None
@@ -246,17 +267,8 @@ def download_video_and_description(url: str) -> Tuple[str, str]:
             logger.error("Неожиданная ошибка: %s", e, exc_info=True)
             break
 
-    if platform == "instagram":
-        logger.info("yt-dlp не справился, пробуем сервис downloader…")
-        try:
-            return _download_via_downloader_service(url)
-        except Exception as downloader_exc:
-            logger.error(
-                "Downloader сервис тоже не смог: %s",
-                downloader_exc,
-                exc_info=True,
-            )
-
+    if first_exc:
+        logger.error("❌ Downloader сервис не справился: %s", first_exc, exc_info=True)
     logger.error("❌ Не удалось скачать видео: %s", last_exc)
     return "", ""
 
