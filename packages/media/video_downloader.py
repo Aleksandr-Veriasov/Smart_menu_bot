@@ -4,21 +4,22 @@ import asyncio
 import logging
 import os
 import random
-import re
 import socket
 import time
-from pathlib import Path
 from typing import Tuple
 from urllib.error import HTTPError, URLError
 
+import requests
 import yt_dlp
-from instaloader import Instaloader, Post
 from yt_dlp.utils import DownloadError, ExtractorError
 
 VIDEO_FOLDER = 'videos/'
 WIDTH_VIDEO = 720  # Примерный размер, можно изменить
 HEIGHT_VIDEO = 1280  # Примерный размер, можно изменить
 INACTIVITY_LIMIT_SECONDS = 15 * 60  # 15 минут
+DOWNLOADER_BASE_URL = os.getenv(
+    'DOWNLOADER_BASE_URL', 'http://downloader:8082'
+).rstrip('/')
 
 logger = logging.getLogger(__name__)
 
@@ -82,26 +83,6 @@ def _yt_dlp_opts(output_path: str) -> dict:
         # Чуть более «обычный» User-Agent (yt-dlp сам ставит современный UA)
         # "http_headers": {"User-Agent": "..."},
     }
-
-
-def _is_instagram_login_or_rate_error(err: Exception) -> bool:
-    """
-    Эвристики: когда у Instagram требуется логин / словили 403/429, либо
-    блокируется доступ из-за частоты запросов.
-    """
-    s = str(err).lower()
-    patterns = [
-        "http error 403",
-        "http error 429",
-        "forbidden",
-        "too many requests",
-        "login required",
-        "private video",
-        "this video is only available for registered users",
-        "please log in",
-        "not logged in",
-    ]
-    return any(p in s for p in patterns)
 
 
 def _should_retry(err: Exception) -> bool:
@@ -188,80 +169,32 @@ def _try_download_with_yt_dlp(url: str) -> Tuple[str, str]:
         return file_path, desc
 
 
-def _instagram_shortcode_from_url(url: str) -> str | None:
+def _download_via_downloader_service(url: str) -> Tuple[str, str]:
     """
-    Извлекаем shortcode из ссылок Instagram:
-    - .../reel/<shortcode>/
-    - .../p/<shortcode>/
-    - .../share/<shortcode>/
+    Делегируем скачивание внешнему сервису downloader (Playwright container).
     """
-    m = re.search(r"/(?:reel|p|share)/([A-Za-z0-9_-]{5,})", url)
-    return m.group(1) if m else None
-
-
-def _download_with_instaloader(url: str) -> Tuple[str, str]:
-    """
-    Фолбэк для Instagram через instaloader==4.14.2.
-    Скачиваем видео поста/рила по shortcode, возвращаем путь и подпись.
-    """
-    if Instaloader is None or Post is None:
+    endpoint = f"{DOWNLOADER_BASE_URL}/download"
+    try:
+        response = requests.post(endpoint, json={"url": url}, timeout=90)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
         raise RuntimeError(
-            "instaloader не установлен. Установите instaloader для фолбэка."
-        )
+            f"downloader service request failed: {exc}"
+        ) from exc
 
-    shortcode = _instagram_shortcode_from_url(url)
-    if not shortcode:
-        raise ValueError("Не удалось извлечь Instagram shortcode из URL.")
-
-    _ensure_dir(VIDEO_FOLDER)
-
-    # Настройки: сохраняем только медиа, без доп. файлов и альбомов
-    L = Instaloader(
-        dirname_pattern=VIDEO_FOLDER.rstrip("/"),
-        filename_pattern="{shortcode}",
-        download_pictures=False,
-        download_videos=True,
-        download_video_thumbnails=False,
-        save_metadata=False,
-        compress_json=False,
-        post_metadata_txt_pattern="",
-        max_connection_attempts=3,
-        quiet=True,
-    )
-
-    # «Человечные» паузы
-    _random_human_sleep(0.8, 2.2)
-
-    post = Post.from_shortcode(L.context, shortcode)
-    caption = post.caption or ""
-
-    # Скачаем только этот пост (если карусель — instaloader может качать
-    # все элементы, но в большинстве случаев Reels — одиночное видео)
-    L.download_post(post, target=".")
-
-    # Instaloader сохраняет как {shortcode}.mp4 в VIDEO_FOLDER
-    candidate = Path(VIDEO_FOLDER) / f"{shortcode}.mp4"
-    if not candidate.exists():
-        # возможны варианты именования; попробуем найти любой .mp4 с shortcode
-        for p in Path(VIDEO_FOLDER).glob(f"{shortcode}*.mp4"):
-            candidate = p
-            break
-
-    if not candidate.exists():
-        raise FileNotFoundError(
-            "Instaloader не создал видеофайл ожидемого имени."
-        )
-
-    logger.debug("✅ instaloader скачал файл: %s", candidate)
-    return str(candidate), caption
+    path = payload.get("file_path") or ""
+    desc = payload.get("description") or ""
+    if not path:
+        raise RuntimeError("downloader service returned empty file path.")
+    logger.info("✅ Downloader service подготовил файл: %s", path)
+    return path, desc
 
 
 def download_video_and_description(url: str) -> Tuple[str, str]:
     """
     Скачивает видео и возвращает (path, description).
-    1) yt-dlp с несколькими повторами и «человечными» паузами
-    2) При Instagram-ошибках типа 403/429/login — фолбэк на instaloader
-    (одна попытка)
+    Сначала пробуем yt-dlp с ретраями, затем Instagram-фолбэк через downloader.
     """
     _ensure_dir(VIDEO_FOLDER)
     platform = _platform_from_url(url)
@@ -280,23 +213,6 @@ def download_video_and_description(url: str) -> Tuple[str, str]:
             logger.warning(
                 "yt-dlp ошибка (%d/%d): %s", attempt, max_attempts, e
             )
-
-            # Если это Instagram-ошибка логина/рейта — переходим к instaloader
-            if platform == "instagram" and _is_instagram_login_or_rate_error(
-                e
-            ):
-                logger.info(
-                    "Переходим на instaloader из-за ограничений Instagram…"
-                )
-                try:
-                    return _download_with_instaloader(url)
-                except Exception as ie:
-                    logger.error(
-                        "instaloader тоже не смог: %s", ie, exc_info=True
-                    )
-                    # если instaloader не помог — прекращаем
-                    return "", ""
-
             # Решаем, стоит ли ретраить yt-dlp
             if attempt < max_attempts and _should_retry(e):
                 # экспоненциальная пауза + джиттер
@@ -329,6 +245,17 @@ def download_video_and_description(url: str) -> Tuple[str, str]:
             last_exc = e
             logger.error("Неожиданная ошибка: %s", e, exc_info=True)
             break
+
+    if platform == "instagram":
+        logger.info("yt-dlp не справился, пробуем сервис downloader…")
+        try:
+            return _download_via_downloader_service(url)
+        except Exception as downloader_exc:
+            logger.error(
+                "Downloader сервис тоже не смог: %s",
+                downloader_exc,
+                exc_info=True,
+            )
 
     logger.error("❌ Не удалось скачать видео: %s", last_exc)
     return "", ""

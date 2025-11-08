@@ -12,8 +12,8 @@ from packages.common_settings.settings import settings
 class CustomFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__(
-            fmt='%(filename)s:%(lineno)d #%(levelname)-8s '
-            '[%(asctime)s] - %(name)s - %(message)s'
+            fmt='[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d'
+            ' - %(name)s - %(message)s'
         )
 
 
