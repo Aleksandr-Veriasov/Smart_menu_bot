@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
-from typing import Optional, cast
+from typing import AsyncGenerator, Optional, cast
 
 from fastapi import FastAPI, HTTPException, Request
 from telegram import Update
@@ -81,9 +81,8 @@ async def runtime_stop(state: AppState) -> None:
     Завершение при остановке приложения (PTB или FastAPI).
     Здесь можно останавливать долгоживущие задачи, отключаться от БД и т.п.
     """
-    # Остановить фоновые задачи
-    # достаём контейнер и корректно гасим ресурсы
-    cur_state: AppState = state.bot_data['state']
+    # Останавливаем фоновые задачи и закрываем ресурсы
+    cur_state: AppState = state
 
     task: Optional[asyncio.Task[None]] = cur_state.cleanup_task
     if task and not task.done():
@@ -99,7 +98,7 @@ async def runtime_stop(state: AppState) -> None:
         cur_state.redis = None
         logger.info('🔒 Redis соединения закрыты.')
 
-    cur_state.db.dispose()
+    await cur_state.db.dispose()
     logger.info('🔒 Соединения БД закрыты.')
 
 
@@ -144,7 +143,7 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Контекстный менеджер для инициализации и завершения FastAPI-приложения.
     Здесь же инициализируем PTB Application в режиме webhook.

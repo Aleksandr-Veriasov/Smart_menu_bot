@@ -7,7 +7,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
 from bot.app.core.recipes_mode import RecipeMode
-from bot.app.core.types import PTBContext
+from bot.app.core.types import PTBContext, AppState
 from bot.app.keyboards.inlines import (
     build_recipes_list_keyboard,
     category_keyboard,
@@ -53,11 +53,16 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
 
     user_id = cq.from_user.id
     db = get_db(context)
-    state = context.bot_data['state']
-    service = CategoryService(db, state.redis)
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в recipes_menu')
+        return
+    service = CategoryService(db, app_state.redis)
     categories = await service.get_user_categories_cached(user_id)
 
     mode = parse_mode(cq.data or '')
+    if not mode:
+        mode = RecipeMode.SHOW
     logger.debug(f'⏩ Получен колбэк: {mode}')
     if mode == RecipeMode.RANDOM:
         text = '🔖 Выберите раздел со случайным блюдом:'
@@ -90,22 +95,30 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     Entry-point: r'^(?[a-z0-9][a-z0-9_-]*_recipes(?:_(?:show|random|edit))?$'
     """
     cq = update.callback_query
-    if not cq:
+    if not cq or not cq.data:
+        logger.error('Нет callback_query или данных в recipes_from_category')
         return
     await cq.answer()
 
-    category_slug, mode = parse_category_mode(cq.data or '')
+    parsed = parse_category_mode(cq.data)
+    if parsed is None:
+        logger.error('Некорректный формат callback_query: %s', cq.data)
+        return
+    category_slug, mode = parsed
     logger.debug(f'⏩⏩ category_slug = {category_slug}, mode = {mode}')
 
     user_id = cq.from_user.id
     db = get_db(context)
-    state = context.bot_data['state']
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в recipes_menu')
+        return
     text = ''
 
     # RANDOM — отдельный сценарий (без user_data)
     if mode.value == 'random':
         video_url, text = await random_recipe(
-            db, state.redis, user_id, category_slug
+            db, app_state.redis, user_id, category_slug
         )
 
         if cq.message:
@@ -128,17 +141,17 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
             return
 
     # DEFAULT/EDIT — вытягиваем список и кладём в user_data
-    pairs: List[dict[str, str]] = []
-    service = CategoryService(db, state.redis)
+    pairs: List[dict[str, str | int]] = []
+    service = CategoryService(db, app_state.redis)
     category_id, category_name = (
         await service.get_id_and_name_by_slug_cached(
             category_slug
         )
     )
     logger.debug(f'📼 category_id = {category_id}')
-    service = RecipeService(db, state.redis)
+    service_rec = RecipeService(db, app_state.redis)
     if category_id:
-        pairs = await service.get_all_recipes_ids_and_titles(
+        pairs = await service_rec.get_all_recipes_ids_and_titles(
             user_id, category_id
         )
         logger.debug(f'📼 pairs = {pairs}')
@@ -153,13 +166,16 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
 
     # сохраняем состояние в user_data
     state = context.user_data
+    if state is None:
+        state = {}
+        context.user_data = state
     # state['recipes_items'] = pairs  # [(id, title)]
     state['recipes_page'] = 0
     state['recipes_per_page'] = settings.telegram.recipes_per_page
     state['recipes_total_pages'] = (
         len(pairs) + state['recipes_per_page'] - 1
     ) // state['recipes_per_page']
-    state['is_editing'] = (mode == 'edit')
+    state['is_editing'] = (mode == RecipeMode.EDIT)
     state['category_name'] = category_name
     state['category_slug'] = category_slug
     state['category_id'] = category_id

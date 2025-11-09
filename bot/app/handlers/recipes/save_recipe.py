@@ -6,7 +6,7 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SaveRecipeState
-from bot.app.core.types import PTBContext
+from bot.app.core.types import PTBContext, AppState
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
 from bot.app.services.ingredients_parser import parse_ingredients
@@ -28,8 +28,11 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
     await cq.answer()
     db = get_db(context)
-    state = context.bot_data['state']
-    service = CategoryService(db, state.redis)
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в start_save_recipe')
+        return ConversationHandler.END
+    service = CategoryService(db, app_state.redis)
     categories = await service.get_all_category()
 
     if context.user_data:
@@ -52,6 +55,9 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     if context.user_data:
         draft = context.user_data.get('recipe_draft', {})
     category_slug = parse_category(cq.data or '')
+    if not category_slug:
+        logger.error('Не удалось получить slug категории в save_recipe')
+        return ConversationHandler.END
 
     title = draft.get('title', 'Не указано')
     description = draft.get('recipe', 'Не указано')
@@ -59,12 +65,18 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     video_url = draft.get('video_file_id', '')
     ingredients_raw = parse_ingredients(ingredients)
     user_id = cq.from_user.id if cq.from_user else None
+    if not user_id:
+        logger.error('Не удалось получить user_id в save_recipe')
+        return ConversationHandler.END
 
     db = get_db(context)
-    state = context.bot_data['state']
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в save_recipe')
+        return ConversationHandler.END
     category_name = ''
     try:
-        service = CategoryService(db, state.redis)
+        service = CategoryService(db, app_state.redis)
         category_id, category_name = (
             await service.get_id_and_name_by_slug_cached(category_slug)
         )
@@ -79,10 +91,10 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
                 video_url=video_url,
             )
             await CategoryCacheRepository.invalidate_user_categories(
-                state.redis, user_id
+                app_state.redis, user_id
             )
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
-                state.redis, user_id, category_id
+                app_state.redis, user_id, category_id
             )
     except Exception as e:
         logger.exception('Ошибка при сохранении рецепта: %s', e)

@@ -1,13 +1,16 @@
 import logging
 from contextlib import suppress
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from redis.asyncio import Redis
 
 from packages.db.database import Database
-from packages.db.models import User
 from packages.db.repository import RecipeRepository, UserRepository
 from packages.db.schemas import UserCreate
+
+if TYPE_CHECKING:
+    from telegram import User as TelegramUser
+
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
 from packages.redis.repository import RecipeCacheRepository, UserCacheRepository
@@ -22,7 +25,7 @@ class UserService:
         self.redis = redis
 
     async def ensure_user_exists_and_count(
-        self, tg_user: User
+        self, tg_user: "TelegramUser"
     ) -> int:
         """
         1) Пытаемся взять exists и count из Redis.

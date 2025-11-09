@@ -24,7 +24,7 @@ async def save_recipe_service(
     user_id: int,
     title: str,
     description: str | None,
-    category_id: str,
+    category_id: int,
     ingredients_raw: Iterable[object],
     video_url: str | None = None,
 ) -> Optional[int]:

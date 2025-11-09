@@ -68,6 +68,10 @@ async def user_start(update: Update, context: PTBContext) -> None:
         logger.error('update.effective_user отсутствует в функции start')
         return
 
+    if not state.redis:
+        logger.error('Redis недоступен в функции start')
+        return
+
     db = get_db(context)
     service = UserService(db, state.redis)
     count = await service.ensure_user_exists_and_count(tg_user)

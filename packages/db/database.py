@@ -95,10 +95,9 @@ class Database:
             )
         )
 
-    def dispose(self) -> None:
+    async def dispose(self) -> None:
         """Закрыть все соединения пула (использовать при shutdown)."""
-        # AsyncEngine dispose() синхронный, проксирует в sync_engine.dispose()
-        self.engine.dispose()
+        await self.engine.dispose()
         logger.info('🧹 Async DB engine disposed')
 
     def get_session(self) -> AsyncSession:

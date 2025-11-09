@@ -5,7 +5,7 @@ from contextlib import suppress
 from telegram import Update
 from telegram.error import BadRequest
 
-from bot.app.core.types import PTBContext
+from bot.app.core.types import PTBContext, AppState
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
 from packages.redis.repository import RecipeCacheRepository
 
@@ -28,10 +28,12 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
 
     # Берём user_data; если у вас есть свой хелпер — можно использовать его
     state = context.user_data
-    state_r = context.bot_data['state']
+    app_state = context.bot_data.get('state')
+    if not state or not isinstance(app_state, AppState) or app_state.redis is None:
+        return
     category_id = state.get('category_id', 0)
     items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(
-        state_r.redis, cq.from_user.id, category_id
+        app_state.redis, cq.from_user.id, category_id
     )
     if not items:
         if cq.message:

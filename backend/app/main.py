@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 1) DB
     state = AppState(
         db=Database(
@@ -47,9 +48,12 @@ async def lifespan(app: FastAPI):
     await ensure_admin(state.db)
 
     # 3) SQLAdmin c auth
+    pepper = settings.security.password_pepper
+    if pepper is None:
+        raise RuntimeError("PASSWORD_PEPPER не задан: не можем настроить AdminAuth.")
     authentication_backend = AdminAuth(
         state.db,
-        secret_key=settings.security.password_pepper.get_secret_value()
+        secret_key=pepper.get_secret_value()
     )
     admin = Admin(app, engine, authentication_backend=authentication_backend)
     setup_admin(admin)
@@ -63,7 +67,7 @@ async def lifespan(app: FastAPI):
             await close_redis()
             state.redis = None
             logger.info('🔒 Redis закрыт.')
-        engine.dispose()
+        await engine.dispose()
 
 
 app = FastAPI(
@@ -93,9 +97,12 @@ if settings.fast_api.serve_from_app:
     )
 
 # Session cookie для SQLAdmin auth
+pepper = settings.security.password_pepper
+if pepper is None:
+    raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать.")
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.security.password_pepper.get_secret_value()
+    secret_key=pepper.get_secret_value()
 )
 
 # CORS
@@ -112,5 +119,5 @@ app.include_router(api_router, prefix='/api')
 
 
 @app.get('/ping', tags=['health'])
-async def ping():
+async def ping() -> dict[str, bool]:
     return {'ok': True}

@@ -11,7 +11,7 @@ from telegram.ext import (
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import EDRState
-from bot.app.core.types import PTBContext
+from bot.app.core.types import PTBContext, AppState
 from bot.app.keyboards.inlines import (
     category_keyboard,
     home_keyboard,
@@ -45,8 +45,11 @@ async def start_edit(update: Update, context: PTBContext) -> int:
         recipe_name = await RecipeRepository.get_name_by_id(session, recipe_id)
 
     # кладём ID в user_data для шага 2+
-    if context.user_data:
-        context.user_data['edit'] = {'recipe_id': recipe_id}
+    state = context.user_data
+    if state is None:
+        state = {}
+        context.user_data = state
+    state['edit'] = {'recipe_id': recipe_id}
     await cq.edit_message_text(
         f'Вы хотите отредактировать название рецепта <b>{recipe_name}</b>?',
         parse_mode=ParseMode.HTML,
@@ -80,7 +83,11 @@ async def handle_title(update: Update, context: PTBContext) -> int:
         if not title:
             await msg.reply_text('Пусто. Введите название ещё раз.')
             return EDRState.WAIT_TITLE
-        context.user_data.setdefault('edit', {})['title'] = title
+        state = context.user_data
+        if state is None:
+            state = {}
+            context.user_data = state
+        state.setdefault('edit', {})['title'] = title
         await msg.reply_text(
             f'Сохранить название:\n<b>{title}</b>',
             reply_markup=keyboard_save_cancel_delete(func='handle_title'),
@@ -133,8 +140,11 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
         recipe_name = await RecipeRepository.get_name_by_id(session, recipe_id)
 
     # кладём ID в user_data для шага 2+
-    if context.user_data:
-        context.user_data['delete'] = {'recipe_id': recipe_id}
+    state = context.user_data
+    if state is None:
+        state = {}
+        context.user_data = state
+    state['delete'] = {'recipe_id': recipe_id}
     await cq.edit_message_text(
         f'Вы точно хотите удалить рецепт <b>{recipe_name}</b>?',
         parse_mode=ParseMode.HTML,
@@ -168,7 +178,8 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
         reply_markup=home_keyboard(),
         parse_mode=ParseMode.HTML
     )
-    context.user_data.pop('delete', None)
+    if context.user_data is not None:
+        context.user_data.pop('delete', None)
     return ConversationHandler.END
 
 
@@ -185,8 +196,11 @@ async def change_category(update: Update, context: PTBContext) -> int:
         await cq.edit_message_text('Не смог понять ID рецепта.')
         return ConversationHandler.END
     db = get_db(context)
-    state = context.bot_data['state']
-    service = CategoryService(db, state.redis)
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в start_save_recipe')
+        return ConversationHandler.END
+    service = CategoryService(db, app_state.redis)
     category = await service.get_all_category()
     if context.user_data:
         context.user_data['change_category'] = {'recipe_id': recipe_id}
@@ -214,9 +228,17 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
         await cq.edit_message_text('Не смог понять ID рецепта.')
         return ConversationHandler.END
     category_slug = parse_category(cq.data or '')
+    if not category_slug:
+        logger.error('Не удалось получить slug категории в confirm_change_category')
+        return ConversationHandler.END
+
     db = get_db(context)
-    state = context.bot_data['state']
-    service = CategoryService(db, state.redis)
+    app_state = context.bot_data.get('state')
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error('AppState или Redis недоступен в start_save_recipe')
+        return ConversationHandler.END
+    service = CategoryService(db, app_state.redis)
+
     category_id, _ = await service.get_id_and_name_by_slug_cached(
         category_slug
     )
@@ -225,10 +247,10 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
             session, recipe_id, category_id
         )
     await CategoryCacheRepository.invalidate_user_categories(
-        state.redis, cq.from_user.id
+        app_state.redis, cq.from_user.id
     )
     await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
-        state.redis, cq.from_user.id, category_id
+        app_state.redis, cq.from_user.id, category_id
     )
     logger.debug(f'🗑️ Инвалидирован кэш категорий юзера {cq.from_user.id}')
     await cq.edit_message_text(
@@ -236,7 +258,8 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
             parse_mode=ParseMode.HTML,
             reply_markup=home_keyboard()
         )
-    context.user_data.pop('change_category', None)
+    if context.user_data is not None:
+        context.user_data.pop('change_category', None)
     return ConversationHandler.END
 
 

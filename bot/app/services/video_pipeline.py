@@ -105,7 +105,7 @@ async def process_video_pipeline(
         context.user_data['video_file_id'] = video_file_id
         safe_remove(converted_path)
 
-    if title and recipe:
+    if title and recipe and video_file_id:
         await notifier.progress(100, 'Готово ✅')
         await send_recipe_confirmation(
             message, context, title, recipe, ingredients, video_file_id

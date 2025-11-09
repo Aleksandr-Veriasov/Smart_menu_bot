@@ -16,7 +16,7 @@ def get_db(context: PTBContext) -> Any:
     return state.db
 
 
-def get_redis_cli(context: PTBContext):
+def get_redis_cli(context: PTBContext) -> Any:
     """
     Безопасно извлекает Redis из AppState, лежащего в bot_data.
     """

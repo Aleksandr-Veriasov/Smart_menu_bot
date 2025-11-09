@@ -76,7 +76,7 @@ def _extract_video_src(page: "Page", platform: str) -> str:
         if not src:
             src = video_locator.first.get_attribute("src") or ""
         if src and not src.startswith("blob:"):
-            return src
+            return str(src)
 
     meta_video = page.locator('meta[property="og:video"]')
     if meta_video.count():
@@ -213,7 +213,7 @@ def _extract_youtube_stream_url(page: "Page") -> str:
             if not url:
                 url = _decode_signature_cipher(fmt.get("signatureCipher") or fmt.get("cipher"))
             if url:
-                return url
+                return str(url)
     return ""
 
 
@@ -242,8 +242,8 @@ def _extract_pinterest_video_url(page: "Page") -> str:
     except Exception:
         return ""
 
-    def _search(obj):
-        results = []
+    def _search(obj: object) -> list[str]:
+        results: list[str] = []
         if isinstance(obj, dict):
             if "video_list" in obj and isinstance(obj["video_list"], dict):
                 for variant in obj["video_list"].values():

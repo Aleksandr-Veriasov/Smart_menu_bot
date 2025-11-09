@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Generic, Iterable, List, Optional, TypeVar
+from typing import Generic, Iterable, List, Optional, TypeVar, Any
 
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -112,7 +112,7 @@ class RecipeRepository(BaseRepository[Recipe]):
     @classmethod
     async def update_category(
         cls, session: AsyncSession, recipe_id: int, category_id: int
-    ) -> Recipe:
+    ) -> Optional[str]:
         statement = (
             update(cls.model).where(cls.model.id == recipe_id).
             values(category_id=category_id).
@@ -251,6 +251,8 @@ class CategoryRepository(BaseRepository[Category]):
         ).where(cls.model.slug == slug)
         result = await session.execute(statement)
         row = result.first()
+        if row is None:
+            raise ValueError('Category not found')
         return (row.id, row.name)
 
     @classmethod
@@ -270,7 +272,7 @@ class CategoryRepository(BaseRepository[Category]):
     @classmethod
     async def get_all(
         cls, session: AsyncSession
-    ) -> List[dict[int, str, str]]:
+    ) -> List[dict[str, Any]]:
         statement = select(cls.model).order_by(cls.model.id)
         result = await session.execute(statement)
         rows = result.all()
@@ -283,6 +285,8 @@ class CategoryRepository(BaseRepository[Category]):
         statement = select(cls.model.id).where(cls.model.slug == slug)
         result = await session.execute(statement)
         id = result.scalar_one_or_none()
+        if id is None:
+            raise ValueError('Category not found')
         return id
 
     @classmethod

@@ -220,6 +220,7 @@ class CategoryCacheRepository:
             await r.delete(RedisKeys.all_category())
             logger.debug(f'❌ Запись {RedisKeys.all_category()} битая, удалена')
             return None
+        return None
 
     @classmethod
     async def set_all_name_and_slug(

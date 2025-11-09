@@ -39,7 +39,7 @@ def parse_category_mode(cb: str) -> Optional[Tuple[str, RecipeMode]]:
     return category, mode
 
 
-def parse_category(cb: str) -> Optional[Tuple[str, RecipeMode]]:
+def parse_category(cb: str) -> Optional[str]:
     """
     Возвращает (category_slug) или None, если формат не подошёл.
     """
@@ -52,7 +52,7 @@ def parse_category(cb: str) -> Optional[Tuple[str, RecipeMode]]:
     return category
 
 
-def parse_mode(cb: str) -> Optional[Tuple[str, RecipeMode]]:
+def parse_mode(cb: str) -> Optional[RecipeMode]:
     """
     Возвращает (mode) или None, если формат не подошёл.
     """

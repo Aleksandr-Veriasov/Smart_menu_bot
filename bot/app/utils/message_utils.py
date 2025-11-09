@@ -34,7 +34,7 @@ async def random_recipe(
     random_recipe_id = random.choice(recipes_ids)
     async with db.session() as session:
         recipe = await RecipeRepository().get_recipe_with_connections(
-            session, random_recipe_id
+            session, int(random_recipe_id)
         )
         if recipe is None:
             return '', ''
