@@ -11,9 +11,14 @@ COPY downloader/requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt \
     && python -m playwright install chromium
 
-COPY downloader /app/downloader
+# Создаём пользователя с тем же UID/GID, что и бот
+RUN groupadd -g 100 users || true \
+    && useradd -r -u 10002 -g users appuser \
+    && mkdir -p /app/.cache \
+    && chown -R appuser:users /app
+USER appuser
 
-ENV VIDEO_FOLDER=/app/videos
+COPY downloader /app/downloader
 
 EXPOSE 8082
 

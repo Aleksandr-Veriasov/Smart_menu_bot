@@ -17,9 +17,7 @@ VIDEO_FOLDER = 'videos/'
 WIDTH_VIDEO = 720  # Примерный размер, можно изменить
 HEIGHT_VIDEO = 1280  # Примерный размер, можно изменить
 INACTIVITY_LIMIT_SECONDS = 15 * 60  # 15 минут
-DOWNLOADER_BASE_URL = os.getenv(
-    'DOWNLOADER_BASE_URL', 'http://downloader:8082'
-).rstrip('/')
+DOWNLOADER_BASE_URL = 'http://downloader:8082'
 
 logger = logging.getLogger(__name__)
 

@@ -2,25 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
 from urllib.parse import parse_qs, unquote
 
 import requests
 
-VIDEO_FOLDER = Path(os.getenv("VIDEO_FOLDER", "/app/videos"))
-VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
-try:
-    VIDEO_FOLDER.chmod(0o777)
-except Exception:
-    logging.getLogger(__name__).warning(
-        "Не удалось выставить права 777 на каталог %s", VIDEO_FOLDER
-    )
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
-WIDTH_VIDEO = int(os.getenv("PLAYWRIGHT_VIEWPORT_WIDTH", "720"))
-HEIGHT_VIDEO = int(os.getenv("PLAYWRIGHT_VIEWPORT_HEIGHT", "1280"))
+VIDEO_FOLDER = Path("/app/videos")
+VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
+
+WIDTH_VIDEO = 720
+HEIGHT_VIDEO = 1280
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +35,7 @@ def _platform_from_url(url: str) -> str:
     return "unknown"
 
 
-def _dismiss_instagram_modals(page) -> None:
+def _dismiss_instagram_modals(page: "Page") -> None:
     """Пытаемся закрыть модальные окна согласия/логина."""
     button_variants = [
         "Allow all cookies",
@@ -73,7 +69,7 @@ def _dismiss_instagram_modals(page) -> None:
             continue
 
 
-def _extract_video_src(page, platform: str) -> str:
+def _extract_video_src(page: "Page", platform: str) -> str:
     video_locator = page.locator("video")
     if video_locator.count():
         src = video_locator.first.evaluate("node => node.currentSrc || node.src || ''")
@@ -101,7 +97,7 @@ def _extract_video_src(page, platform: str) -> str:
     raise RuntimeError("Playwright не смог найти ссылку на видео на странице.")
 
 
-def _extract_caption(page) -> str:
+def _extract_caption(page: "Page") -> str:
     selectors = [
         'meta[property="og:description"]',
         'meta[name="description"]',
@@ -190,15 +186,11 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
 
     logger.debug("Playwright (%s) нашёл media URL: %s", platform, video_src)
     _download_stream(video_src, dest_path, referer=referer, user_agent=user_agent, cookies=cookies)
-    try:
-        dest_path.chmod(0o666)
-    except Exception:
-        logger.warning("Не удалось выставить права 666 на файл %s", dest_path)
     logger.info("✅ Playwright скачал файл: %s", dest_path)
     return str(dest_path), caption
 
 
-def _extract_youtube_stream_url(page) -> str:
+def _extract_youtube_stream_url(page: "Page") -> str:
     data_json = page.evaluate(
         "() => {"
         "const resp = window.ytInitialPlayerResponse || window.ytplayer?.config?.args?.player_response;"
@@ -239,7 +231,7 @@ def _decode_signature_cipher(cipher: str | None) -> str:
     return url or ""
 
 
-def _extract_pinterest_video_url(page) -> str:
+def _extract_pinterest_video_url(page: "Page") -> str:
     data_json = page.evaluate(
         "() => window.__PWS_DATA__ ? JSON.stringify(window.__PWS_DATA__) : null"
     )
