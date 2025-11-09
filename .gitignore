@@ -31,8 +31,5 @@ htmlcov/
 
 .DS_Store
 
-videos/
-audio/
-
 docker-compose.override.yml
 docker-compose.db.yml
