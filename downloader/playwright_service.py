@@ -60,6 +60,11 @@ def _dismiss_tiktok_modals(page: 'Page') -> None:
         'button:has-text("Accept All")',
         'button:has-text("Accept all cookies")',
         'button:has-text("Разрешить все")',
+        "button[aria-label='Close']",
+        "button[aria-label='Dismiss']",
+        "button:has-text('Not now')",
+        '#app div[class*="DivXMarkWrapper"]',
+        '#app div[class*="DivFixedBottomContainer"] button',
     ]
     for selector in selectors:
         try:
@@ -227,6 +232,12 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
                 _dismiss_instagram_modals(page)
             elif platform == 'tiktok':
                 _dismiss_tiktok_modals(page)
+                try:
+                    page.wait_for_timeout(1_500)
+                    page.keyboard.press(' ')
+                    page.wait_for_timeout(1_000)
+                except Exception:
+                    pass
             elif platform == 'pinterest':
                 _dismiss_pinterest_modals(page)
             elif platform == 'youtube_shorts':
