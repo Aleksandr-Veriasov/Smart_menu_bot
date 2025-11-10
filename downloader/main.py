@@ -8,10 +8,10 @@ from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
 
-from downloader.playwright_service import download_with_playwright
+from downloader.video_service import download_video
 
 logging.basicConfig(
-    level=os.getenv('DOWNLOADER_LOG_LEVEL', 'INFO'),
+    level=os.getenv('DOWNLOADER_LOG_LEVEL', 'DEBUG'),
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
 )
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def get_app() -> FastAPI:
         logger.info(f'Получен запрос на скачивание: {payload.url}')
         try:
             file_path, caption = await asyncio.to_thread(
-                download_with_playwright, str(payload.url)
+                download_video, str(payload.url)
             )
         except ValueError as exc:
             logger.warning(f'Некорректный запрос: {exc}')

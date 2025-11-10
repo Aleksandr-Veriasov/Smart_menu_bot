@@ -14,7 +14,7 @@ RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt \
 # Создаём пользователя с тем же UID/GID, что и бот
 RUN groupadd -g 100 users || true \
     && useradd -r -u 10002 -g users appuser \
-    && mkdir -p /app/.cache \
+    && mkdir -p /app/.cache/yt-dlp \
     && chown -R appuser:users /app
 USER appuser
 

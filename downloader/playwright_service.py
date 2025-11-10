@@ -49,6 +49,7 @@ def _dismiss_instagram_modals(page: 'Page') -> None:
         try:
             page.get_by_role('button', name=text, exact=False).click(timeout=2000)
             time.sleep(0.5)
+            logger.debug(f'🍪 Instagram: нажали кнопку "{text}"')
             break
         except Exception:
             continue
@@ -56,6 +57,8 @@ def _dismiss_instagram_modals(page: 'Page') -> None:
 
 def _dismiss_tiktok_modals(page: 'Page') -> None:
     selectors = [
+        '#app div[class*="DivXMarkWrapper"]',
+        '#app div[class*="DivFixedBottomContainer"] button',
         'button:has-text("Accept all")',
         'button:has-text("Accept All")',
         'button:has-text("Accept all cookies")',
@@ -63,8 +66,6 @@ def _dismiss_tiktok_modals(page: 'Page') -> None:
         "button[aria-label='Close']",
         "button[aria-label='Dismiss']",
         "button:has-text('Not now')",
-        '#app div[class*="DivXMarkWrapper"]',
-        '#app div[class*="DivFixedBottomContainer"] button',
     ]
     for selector in selectors:
         try:
@@ -72,6 +73,7 @@ def _dismiss_tiktok_modals(page: 'Page') -> None:
             if btn.count():
                 btn.first.click(timeout=2000)
                 time.sleep(0.3)
+                logger.debug(f'🍪 TikTok: кликнули по селектору "{selector}"')
                 break
         except Exception:
             continue
@@ -79,6 +81,7 @@ def _dismiss_tiktok_modals(page: 'Page') -> None:
 
 def _dismiss_pinterest_modals(page: 'Page') -> None:
     selectors = [
+        'button[aria-label="закрыть"]',
         'button:has-text("Accept")',
         'button:has-text("Allow all")',
         'button:has-text("Принять")',
@@ -90,6 +93,7 @@ def _dismiss_pinterest_modals(page: 'Page') -> None:
             if btn.count():
                 btn.first.click(timeout=2000)
                 time.sleep(0.3)
+                logger.debug(f'🍪 Pinterest: кликнули по селектору "{selector}"')
                 break
         except Exception:
             continue
@@ -108,6 +112,7 @@ def _dismiss_youtube_modals(page: 'Page') -> None:
             if btn.count():
                 btn.first.click(timeout=2000)
                 time.sleep(0.3)
+                logger.debug(f'🍪 YouTube: кликнули по селектору "{selector}"')
                 break
         except Exception:
             continue
@@ -123,6 +128,7 @@ def _dismiss_youtube_modals(page: 'Page') -> None:
             if dialog.count():
                 dialog.first.click(timeout=2000)
                 time.sleep(0.3)
+                logger.debug('🚪 YouTube: закрыли всплывающее окно')
                 break
         except Exception:
             continue
@@ -135,23 +141,33 @@ def _extract_video_src(page: 'Page', platform: str) -> str:
         if not src:
             src = video_locator.first.get_attribute('src') or ''
         if src and not src.startswith('blob:'):
+            logger.debug('🎥 Нашли тег <video> и забрали ссылку напрямую')
             return str(src)
 
     meta_video = page.locator('meta[property="og:video"]')
     if meta_video.count():
         candidate = meta_video.first.get_attribute('content') or ''
         if candidate and not candidate.startswith('blob:'):
+            logger.debug('📝 Нашли ссылку в og:video')
             return candidate
 
     if platform == 'youtube_shorts':
         yt_src = _extract_youtube_stream_url(page)
         if yt_src:
+            logger.debug('🔗 YouTube Shorts: URL найден через JSON')
             return yt_src
 
     if platform == 'pinterest':
         pin_src = _extract_pinterest_video_url(page)
         if pin_src:
+            logger.debug('🔗 Pinterest: URL найден через JSON')
             return pin_src
+
+    if platform == 'tiktok':
+        tt_src = _extract_tiktok_video_url(page)
+        if tt_src:
+            logger.debug('🔗 TikTok: URL найден через JSON')
+            return tt_src
 
     raise RuntimeError('Playwright не смог найти ссылку на видео на странице.')
 
@@ -167,11 +183,13 @@ def _extract_caption(page: 'Page') -> str:
         if locator.count():
             value = locator.first.get_attribute('content') or ''
             if value:
+                logger.debug('📝 Подпись найдена в meta-тегах')
                 return value
     return ''
 
 
 def _download_stream(video_url: str, dest_path: Path, referer: str, user_agent: str, cookies: list) -> None:
+    logger.debug(f'⬇️ Начинаем потоковую загрузку {video_url} → {dest_path}')
     headers = {'User-Agent': user_agent, 'Referer': referer}
     cookie_header = '; '.join(
         f'{cookie["name"]}={cookie["value"]}'
@@ -187,6 +205,7 @@ def _download_stream(video_url: str, dest_path: Path, referer: str, user_agent: 
             for chunk in response.iter_content(chunk_size=512 * 1024):
                 if chunk:
                     dst.write(chunk)
+    logger.debug(f'📦 Потоковая загрузка завершена: {dest_path}')
 
 
 def download_with_playwright(url: str) -> Tuple[str, str]:
@@ -198,6 +217,7 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
     supported = {'instagram', 'tiktok', 'pinterest', 'youtube_shorts'}
     if platform not in supported:
         raise ValueError('Playwright downloader поддерживает только Instagram/TikTok/Pinterest/YouTube Shorts.')
+    logger.debug(f'🎯 Playwright стартует для {platform}: {url}')
 
     try:
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -227,17 +247,12 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
                 page.goto(url, wait_until='networkidle', timeout=45_000)
             except PlaywrightTimeoutError:
                 page.goto(url, wait_until='domcontentloaded', timeout=45_000)
+            logger.debug(f'🌐 Страница загружена: {page.url}')
 
             if platform == 'instagram':
                 _dismiss_instagram_modals(page)
             elif platform == 'tiktok':
                 _dismiss_tiktok_modals(page)
-                try:
-                    page.wait_for_timeout(1_500)
-                    page.keyboard.press(' ')
-                    page.wait_for_timeout(1_000)
-                except Exception:
-                    pass
             elif platform == 'pinterest':
                 _dismiss_pinterest_modals(page)
             elif platform == 'youtube_shorts':
@@ -245,19 +260,20 @@ def download_with_playwright(url: str) -> Tuple[str, str]:
             try:
                 page.wait_for_selector('video', timeout=30_000)
             except PlaywrightTimeoutError:
-                logger.warning('Видео элемент не появился вовремя на %s', page.url)
+                logger.warning(f'⏳ Видео элемент не появился вовремя на {page.url}')
 
             video_src = _extract_video_src(page, platform)
             caption = _extract_caption(page)
             cookies = context.cookies()
             referer = page.url
+            logger.debug(f'🍪 Сохранили {len(cookies)} cookies для скачивания')
         finally:
             context.close()
             browser.close()
 
-    logger.debug('Playwright (%s) нашёл media URL: %s', platform, video_src)
+    logger.debug(f'Playwright ({platform}) нашёл media URL: {video_src}')
     _download_stream(video_src, dest_path, referer=referer, user_agent=user_agent, cookies=cookies)
-    logger.info('✅ Playwright скачал файл: %s', dest_path)
+    logger.info(f'✅ Playwright скачал файл: {dest_path}')
     return str(dest_path), caption
 
 
@@ -330,3 +346,47 @@ def _extract_pinterest_video_url(page: 'Page') -> str:
 
     urls = _search(data)
     return urls[0] if urls else ''
+
+
+def _extract_tiktok_video_url(page: 'Page') -> str:
+    data_json = page.evaluate(
+        """
+        () => {
+            const source = window.__UNIVERSAL_DATA__ || window.__UNIVERSAL_DATA || window.SIGI_STATE || null;
+            if (!source) return null;
+            try { return JSON.stringify(source); } catch (e) { return null; }
+        }
+        """
+    )
+    if not data_json:
+        logger.debug('📄 TikTok: JSON состояния не найден')
+        return ''
+    try:
+        data = json.loads(data_json)
+    except Exception:
+        logger.debug('⚠️ TikTok: не удалось распарсить JSON состояния')
+        return ''
+
+    url = _search_tiktok_url_in_state(data)
+    if url:
+        return url
+    logger.debug('❌ TikTok: не нашли ссылку в JSON состоянии')
+    return ''
+
+
+def _search_tiktok_url_in_state(obj: object) -> str:
+    if isinstance(obj, dict):
+        for key in ('downloadAddr', 'playAddr', 'playAddrH265'):
+            value = obj.get(key)
+            if isinstance(value, str) and value.startswith('http'):
+                return value
+        for value in obj.values():
+            found = _search_tiktok_url_in_state(value)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _search_tiktok_url_in_state(item)
+            if found:
+                return found
+    return ''
