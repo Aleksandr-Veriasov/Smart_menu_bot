@@ -21,7 +21,10 @@ COPY packages /app/packages
 COPY backend  /app/backend
 
 # non-root
-RUN useradd -r -u 10001 -g users appuser && chown -R appuser:users /app
+RUN groupadd -g 100 users || true \
+    && useradd -r -u 10002 -g users appuser \
+    && mkdir -p /app/.cache \
+    && chown -R appuser:users /app
 USER appuser
 
 EXPOSE 8000

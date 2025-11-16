@@ -19,9 +19,10 @@ COPY bot/requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
 
 # non-root пользователь и права
-RUN useradd -r -u 10002 -g users appuser \
- && mkdir -p /app/.cache \
- && chown -R appuser:users /app
+RUN groupadd -g 100 users || true \
+    && useradd -r -u 10002 -g users appuser \
+    && mkdir -p /app/.cache \
+    && chown -R appuser:users /app
 USER appuser
 
 # Куда класть кэш моделей
