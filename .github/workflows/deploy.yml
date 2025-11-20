@@ -32,7 +32,7 @@ jobs:
       DEEPSEEK_API_KEY: test
       DEEPSEEK_BASE_URL: https://api.example.com
       DEEPSEEK_MODEL: deepseek-test-model
-      SENTRY_DSN: ""
+      SENTRY_DSN: https://example.com/ci
       ALLOWED_HOSTS: localhost,127.0.0.1
       SERVE_STATIC_FROM_APP: "false"
       UVICORN_WORKERS: "1"
