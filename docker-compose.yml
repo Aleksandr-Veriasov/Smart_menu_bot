@@ -19,6 +19,7 @@ services:
       context: .
       dockerfile: downloader/Dockerfile
     container_name: downloader
+    user: "1000:1000"
     env_file:
       - .env
     environment:
@@ -68,6 +69,7 @@ services:
       context: .
       dockerfile: bot/Dockerfile
     container_name: tgbot
+    user: "1000:1000"
     # restart: always
     env_file:
       - .env
@@ -91,6 +93,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: backend
+    user: "1000:1000"
     env_file: 
       - .env
     environment:

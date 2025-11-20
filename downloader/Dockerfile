@@ -11,15 +11,6 @@ COPY downloader/requirements.txt /tmp/requirements.txt
 RUN pip install uv && uv pip install --system -r /tmp/requirements.txt \
     && python -m playwright install chromium
 
-# Создаём пользователя с тем же UID/GID, что и бот
-RUN groupadd -g 1000 users || true \
-    && useradd -r -u 1000 -g users appuser \
-    && mkdir -p /app/.cache/yt-dlp \
-    && chown -R appuser:users /app
-USER appuser
-
-COPY downloader /app/downloader
-
 EXPOSE 8082
 
 CMD ["uvicorn", "downloader.main:app", "--host", "0.0.0.0", "--port", "8082"]

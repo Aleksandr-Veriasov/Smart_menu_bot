@@ -18,13 +18,6 @@ WORKDIR /app
 COPY bot/requirements.txt /tmp/requirements.txt
 RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 
-# non-root пользователь и права
-RUN groupadd -g 1000 users || true \
-    && useradd -r -u 1000 -g users appuser \
-    && mkdir -p /app/.cache \
-    && chown -R appuser:users /app
-USER appuser
-
 # Куда класть кэш моделей
 ENV XDG_CACHE_HOME=/app/.cache
 

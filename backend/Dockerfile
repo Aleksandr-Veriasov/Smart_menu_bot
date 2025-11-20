@@ -20,13 +20,6 @@ RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 COPY packages /app/packages
 COPY backend  /app/backend
 
-# non-root
-RUN groupadd -g 1000 users || true \
-    && useradd -r -u 1000 -g users appuser \
-    && mkdir -p /app/.cache \
-    && chown -R appuser:users /app
-USER appuser
-
 EXPOSE 8000
 
 # healthcheck ждёт /ping
