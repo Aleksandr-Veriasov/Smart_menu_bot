@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Копируем зависимости
 COPY bot/requirements.txt /tmp/requirements.txt
-RUN pip install uv && uv pip install -r /tmp/requirements.txt
+RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 
 # non-root пользователь и права
 RUN groupadd -g 100 users || true \

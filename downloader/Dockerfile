@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY downloader/requirements.txt /tmp/requirements.txt
-RUN pip install uv && uv pip install -r /tmp/requirements.txt \
+RUN pip install uv && uv pip install --system -r /tmp/requirements.txt \
     && python -m playwright install chromium
 
 # Создаём пользователя с тем же UID/GID, что и бот
