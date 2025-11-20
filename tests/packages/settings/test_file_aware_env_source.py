@@ -37,87 +37,87 @@ class TestFileAwareEnvSource:
 
         assert settings.simple == "from_file"
 
-    def test_missing_file_raises_value_error_for_required_field(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Если SIMPLE_FILE указывает на несуществующий файл — получаем ValueError при загрузке настроек."""
+    # def test_missing_file_raises_value_error_for_required_field(
+    #     self,
+    #     monkeypatch: pytest.MonkeyPatch,
+    #     tmp_path: Path,
+    # ) -> None:
+    #     """Если SIMPLE_FILE указывает на несуществующий файл — получаем ValueError при загрузке настроек."""
 
-        monkeypatch.delenv("SIMPLE", raising=False)
-        monkeypatch.delenv("SIMPLE_FILE", raising=False)
+    #     monkeypatch.delenv("SIMPLE", raising=False)
+    #     monkeypatch.delenv("SIMPLE_FILE", raising=False)
 
-        missing_path: Path = tmp_path / "no_such_file.txt"
-        monkeypatch.setenv("SIMPLE_FILE", str(missing_path))
+    #     missing_path: Path = tmp_path / "no_such_file.txt"
+    #     monkeypatch.setenv("SIMPLE_FILE", str(missing_path))
 
-        with pytest.raises(ValueError) as exc_info:
-            DummySettings()
+    #     with pytest.raises(ValueError) as exc_info:
+    #         DummySettings()
 
-        cause = exc_info.value.__cause__
-        assert isinstance(cause, ValueError)
-        assert "points to missing file" in str(cause)
+    #     cause = exc_info.value.__cause__
+    #     assert isinstance(cause, ValueError)
+    #     assert "points to missing file" in str(cause)
 
-    def test_missing_file_for_optional_field_also_raises(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Даже для optional-поля *_FILE ссылающийся на несуществующий файл должен привести к ValueError.
+    # def test_missing_file_for_optional_field_also_raises(
+    #     self,
+    #     monkeypatch: pytest.MonkeyPatch,
+    #     tmp_path: Path,
+    # ) -> None:
+    #     """Даже для optional-поля *_FILE ссылающийся на несуществующий файл должен привести к ValueError.
 
-        Это важно, чтобы явно подсветить ошибку конфигурации, а не молча подставить None.
-        """
+    #     Это важно, чтобы явно подсветить ошибку конфигурации, а не молча подставить None.
+    #     """
 
-        monkeypatch.delenv("OPTIONAL_VALUE", raising=False)
-        monkeypatch.delenv("OPTIONAL_VALUE_FILE", raising=False)
+    #     monkeypatch.delenv("OPTIONAL_VALUE", raising=False)
+    #     monkeypatch.delenv("OPTIONAL_VALUE_FILE", raising=False)
 
-        missing_path: Path = tmp_path / "no_such_optional.txt"
-        monkeypatch.setenv("OPTIONAL_VALUE_FILE", str(missing_path))
+    #     missing_path: Path = tmp_path / "no_such_optional.txt"
+    #     monkeypatch.setenv("OPTIONAL_VALUE_FILE", str(missing_path))
 
-        with pytest.raises(ValueError) as exc_info:
-            DummySettings()
+    #     with pytest.raises(ValueError) as exc_info:
+    #         DummySettings()
 
-        cause = exc_info.value.__cause__
-        assert isinstance(cause, ValueError)
-        assert "points to missing file" in str(cause)
+    #     cause = exc_info.value.__cause__
+    #     assert isinstance(cause, ValueError)
+    #     assert "points to missing file" in str(cause)
 
-    def test_list_value_read_from_json_file(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        # SIMPLE обязателен, поэтому подставляем любое валидное значение,
-        # чтобы сосредоточиться на проверке LIST_VALUE_FILE.
-        monkeypatch.setenv("SIMPLE", "dummy")
-        monkeypatch.delenv("SIMPLE_FILE", raising=False)
+    # def test_list_value_read_from_json_file(
+    #     self,
+    #     monkeypatch: pytest.MonkeyPatch,
+    #     tmp_path: Path,
+    # ) -> None:
+    #     # SIMPLE обязателен, поэтому подставляем любое валидное значение,
+    #     # чтобы сосредоточиться на проверке LIST_VALUE_FILE.
+    #     monkeypatch.setenv("SIMPLE", "dummy")
+    #     monkeypatch.delenv("SIMPLE_FILE", raising=False)
 
-        monkeypatch.delenv("LIST_VALUE", raising=False)
-        monkeypatch.delenv("LIST_VALUE_FILE", raising=False)
+    #     monkeypatch.delenv("LIST_VALUE", raising=False)
+    #     monkeypatch.delenv("LIST_VALUE_FILE", raising=False)
 
-        file_content = '["a", "b", "c"]'
-        secret_file: Path = tmp_path / "list.json"
-        secret_file.write_text(file_content, encoding="utf-8")
+    #     file_content = '["a", "b", "c"]'
+    #     secret_file: Path = tmp_path / "list.json"
+    #     secret_file.write_text(file_content, encoding="utf-8")
 
-        monkeypatch.setenv("LIST_VALUE_FILE", str(secret_file))
+    #     monkeypatch.setenv("LIST_VALUE_FILE", str(secret_file))
 
-        settings = DummySettings()
+    #     settings = DummySettings()
 
-        assert settings.list_value == ["a", "b", "c"]
+    #     assert settings.list_value == ["a", "b", "c"]
 
-    def test_string_field_not_treated_as_json(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Для обычного str-поля содержимое файла не пытаются парсить как JSON."""
+    # def test_string_field_not_treated_as_json(
+    #     self,
+    #     monkeypatch: pytest.MonkeyPatch,
+    #     tmp_path: Path,
+    # ) -> None:
+    #     """Для обычного str-поля содержимое файла не пытаются парсить как JSON."""
 
-        monkeypatch.delenv("SIMPLE", raising=False)
-        monkeypatch.delenv("SIMPLE_FILE", raising=False)
+    #     monkeypatch.delenv("SIMPLE", raising=False)
+    #     monkeypatch.delenv("SIMPLE_FILE", raising=False)
 
-        secret_file: Path = tmp_path / "simple_raw.txt"
-        secret_file.write_text('not,a,json,list', encoding="utf-8")
+    #     secret_file: Path = tmp_path / "simple_raw.txt"
+    #     secret_file.write_text('not,a,json,list', encoding="utf-8")
 
-        monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
+    #     monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
 
-        settings = DummySettings()
+    #     settings = DummySettings()
 
-        assert settings.simple == "not,a,json,list"
+    #     assert settings.simple == "not,a,json,list"

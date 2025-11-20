@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 1) зависимости (кэш слоя)
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+RUN pip install uv --upgrade pip && uv pip install -r /tmp/requirements.txt
 
 # 2) только нужный код
 COPY packages /app/packages
