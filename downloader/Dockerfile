@@ -12,8 +12,8 @@ RUN pip install uv && uv pip install --system -r /tmp/requirements.txt \
     && python -m playwright install chromium
 
 # Создаём пользователя с тем же UID/GID, что и бот
-RUN groupadd -g 100 users || true \
-    && useradd -r -u 10002 -g users appuser \
+RUN groupadd -g 1000 users || true \
+    && useradd -r -u 1000 -g users appuser \
     && mkdir -p /app/.cache/yt-dlp \
     && chown -R appuser:users /app
 USER appuser
