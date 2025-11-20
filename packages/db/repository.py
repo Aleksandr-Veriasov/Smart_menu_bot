@@ -1,8 +1,7 @@
-
 from __future__ import annotations
 
 import logging
-from typing import Generic, Iterable, List, Optional, TypeVar, Any
+from typing import Any, Generic, Iterable, List, Optional, TypeVar
 
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -30,7 +29,7 @@ from packages.db.schemas import (
 
 logger = logging.getLogger(__name__)
 
-M = TypeVar('M')  # тип модели
+M = TypeVar("M")  # тип модели
 
 
 async def fetch_all(session: AsyncSession, stmt: Select[tuple[M]]) -> list[M]:
@@ -55,11 +54,11 @@ class UserRepository(BaseRepository[User]):
         user = cls.model(**data)
         session.add(user)
         try:
-            await session.flush()     # получаем PK / дефолты
+            await session.flush()  # получаем PK / дефолты
         except IntegrityError as exc:
             await session.rollback()
-            raise ValueError('User already exists') from exc
-        await session.refresh(user)    # подхватить БД-дефолты/триггеры
+            raise ValueError("User already exists") from exc
+        await session.refresh(user)  # подхватить БД-дефолты/триггеры
         return user
 
     @classmethod
@@ -68,7 +67,7 @@ class UserRepository(BaseRepository[User]):
     ) -> User:
         user = await cls.get_by_id(session, user_id)
         if not user:
-            raise ValueError('User not found')
+            raise ValueError("User not found")
         changes = payload.model_dump(exclude_unset=True, exclude_none=True)
 
         for key, value in changes.items():
@@ -89,7 +88,7 @@ class RecipeRepository(BaseRepository[Recipe]):
         data = recipe_create.model_dump(exclude_unset=True)
         recipe = cls.model(**data)
         session.add(recipe)
-        await session.flush()          # получим PK/дефолты, но без коммита
+        await session.flush()  # получим PK/дефолты, но без коммита
         await session.refresh(recipe)  # подхватить БД-дефолты/триггеры
         return recipe
 
@@ -99,7 +98,7 @@ class RecipeRepository(BaseRepository[Recipe]):
     ) -> Recipe:
         recipe = await cls.get_by_id(session, recipe_id)
         if not recipe:
-            raise ValueError('Recipe not found')
+            raise ValueError("Recipe not found")
         changes = recipe_update.model_dump(exclude_unset=True)
 
         for key, value in changes.items():
@@ -114,18 +113,19 @@ class RecipeRepository(BaseRepository[Recipe]):
         cls, session: AsyncSession, recipe_id: int, category_id: int
     ) -> Optional[str]:
         statement = (
-            update(cls.model).where(cls.model.id == recipe_id).
-            values(category_id=category_id).
-            returning(cls.model.title)
+            update(cls.model)
+            .where(cls.model.id == recipe_id)
+            .values(category_id=category_id)
+            .returning(cls.model.title)
         )
         result = await session.execute(statement)
         row = result.scalar_one_or_none()
         logger.debug(
-            f'Updated recipe {recipe_id} to category '
-            f'{category_id}, title={row}'
+            f"Updated recipe {recipe_id} to category "
+            f"{category_id}, title={row}"
         )
         if row is None:
-            raise ValueError('Recipe not found')
+            raise ValueError("Recipe not found")
         return row
 
     @classmethod
@@ -133,13 +133,14 @@ class RecipeRepository(BaseRepository[Recipe]):
         cls, session: AsyncSession, recipe_id: int, title: str
     ) -> None:
         statement = (
-            update(cls.model).where(cls.model.id == recipe_id).
-            values(title=title)
+            update(cls.model)
+            .where(cls.model.id == recipe_id)
+            .values(title=title)
         )
         result = await session.execute(statement)
         if result.rowcount == 0:
-            raise ValueError('Recipe not found')
-        logger.debug(f'👉 Updated recipe {recipe_id} title to {title}')
+            raise ValueError("Recipe not found")
+        logger.debug(f"👉 Updated recipe {recipe_id} title to {title}")
 
     @classmethod
     async def get_count_by_user(
@@ -154,14 +155,13 @@ class RecipeRepository(BaseRepository[Recipe]):
 
     @classmethod
     async def get_recipes_id_by_category(
-        cls, session: AsyncSession,
-        user_id: int,
-        category_id: int
+        cls, session: AsyncSession, user_id: int, category_id: int
     ) -> List[int]:
-        statement: Select[tuple[int]] = select(Recipe.id).where(
-                Recipe.user_id == user_id,
-                Recipe.category_id == category_id
-        ).order_by(desc(Recipe.id))
+        statement: Select[tuple[int]] = (
+            select(Recipe.id)
+            .where(Recipe.user_id == user_id, Recipe.category_id == category_id)
+            .order_by(desc(Recipe.id))
+        )
 
         return await fetch_all(session, statement)
 
@@ -191,13 +191,14 @@ class RecipeRepository(BaseRepository[Recipe]):
         """
         Получает все рецепты пользователя с их ID и заголовками.
         """
-        statement = select(Recipe.id, Recipe.title).where(
-                Recipe.user_id == user_id,
-                Recipe.category_id == category_id
-        ).order_by(Recipe.id)
+        statement = (
+            select(Recipe.id, Recipe.title)
+            .where(Recipe.user_id == user_id, Recipe.category_id == category_id)
+            .order_by(Recipe.id)
+        )
         result = await session.execute(statement)
         rows = result.all()
-        return [{'id': int(row.id), 'title': str(row.title)} for row in rows]
+        return [{"id": int(row.id), "title": str(row.title)} for row in rows]
 
     @classmethod
     async def get_name_by_id(
@@ -212,15 +213,13 @@ class RecipeRepository(BaseRepository[Recipe]):
         return name
 
     @classmethod
-    async def delete(
-        cls, session: AsyncSession, recipe_id: int
-    ) -> None:
+    async def delete(cls, session: AsyncSession, recipe_id: int) -> None:
         """
         Удаляет рецепт по его ID.
         """
         recipe = await cls.get_by_id(session, recipe_id)
         if not recipe:
-            raise ValueError('Recipe not found')
+            raise ValueError("Recipe not found")
         await session.delete(recipe)
 
 
@@ -235,24 +234,24 @@ class CategoryRepository(BaseRepository[Category]):
         category = cls.model(**data)
         session.add(category)
         try:
-            await session.flush()     # получим PK / дефолты
+            await session.flush()  # получим PK / дефолты
         except IntegrityError as exc:
             await session.rollback()
-            raise ValueError('Category already exists') from exc
-        await session.refresh(category)    # подхватить БД-дефолты/триггеры
+            raise ValueError("Category already exists") from exc
+        await session.refresh(category)  # подхватить БД-дефолты/триггеры
         return category
 
     @classmethod
     async def get_id_and_name_by_slug(
         cls, session: AsyncSession, slug: str
     ) -> tuple[int, str]:
-        statement = select(
-            cls.model.id, cls.model.name
-        ).where(cls.model.slug == slug)
+        statement = select(cls.model.id, cls.model.name).where(
+            cls.model.slug == slug
+        )
         result = await session.execute(statement)
         row = result.first()
         if row is None:
-            raise ValueError('Category not found')
+            raise ValueError("Category not found")
         return (row.id, row.name)
 
     @classmethod
@@ -260,24 +259,20 @@ class CategoryRepository(BaseRepository[Category]):
         cls, session: AsyncSession
     ) -> List[dict[str, str]]:
         statement = select(
-            cls.model.name.label('name'),
-            cls.model.slug.label('slug'),
+            cls.model.name.label("name"),
+            cls.model.slug.label("slug"),
         ).order_by(cls.model.id)
         result = await session.execute(statement)
         rows = result.all()
-        return [
-            {'name': row.name, 'slug': row.slug} for row in rows
-        ]
+        return [{"name": row.name, "slug": row.slug} for row in rows]
 
     @classmethod
-    async def get_all(
-        cls, session: AsyncSession
-    ) -> List[dict[str, Any]]:
+    async def get_all(cls, session: AsyncSession) -> List[dict[str, Any]]:
         statement = select(cls.model).order_by(cls.model.id)
         result = await session.execute(statement)
         rows = result.all()
         return [
-            {'id': row.id, 'name': row.name, 'slug': row.slug} for row in rows
+            {"id": row.id, "name": row.name, "slug": row.slug} for row in rows
         ]
 
     @classmethod
@@ -286,26 +281,26 @@ class CategoryRepository(BaseRepository[Category]):
         result = await session.execute(statement)
         id = result.scalar_one_or_none()
         if id is None:
-            raise ValueError('Category not found')
+            raise ValueError("Category not found")
         return id
 
     @classmethod
     async def get_name_and_slug_by_user_id(
         cls, session: AsyncSession, user_id: int
     ) -> List[dict[str, str]]:
-        statement = select(
-            cls.model.name.label('name'),
-            cls.model.slug.label('slug'),
-        ).join(Recipe, Recipe.category_id == cls.model.id).where(
-            Recipe.user_id == user_id
-        ).group_by(
-            cls.model.id, cls.model.name, cls.model.slug
-        ).order_by(cls.model.id)
+        statement = (
+            select(
+                cls.model.name.label("name"),
+                cls.model.slug.label("slug"),
+            )
+            .join(Recipe, Recipe.category_id == cls.model.id)
+            .where(Recipe.user_id == user_id)
+            .group_by(cls.model.id, cls.model.name, cls.model.slug)
+            .order_by(cls.model.id)
+        )
         result = await session.execute(statement)
         rows = result.all()
-        return [
-            {'name': row.name, 'slug': row.slug} for row in rows
-        ]
+        return [{"name": row.name, "slug": row.slug} for row in rows]
 
 
 class VideoRepository(BaseRepository[Video]):
@@ -332,7 +327,7 @@ class VideoRepository(BaseRepository[Video]):
             await session.flush()  # получим PK / дефолты
         except IntegrityError as exc:
             await session.rollback()
-            raise ValueError('Video already exists') from exc
+            raise ValueError("Video already exists") from exc
         await session.refresh(video)  # подхватить БД-дефолты/триггеры
         return video
 
@@ -350,7 +345,7 @@ class IngredientRepository(BaseRepository[Ingredient]):
                 await session.flush()  # получим PK / дефолты
             except IntegrityError as exc:
                 await session.rollback()
-                raise ValueError('Ingredient already exists') from exc
+                raise ValueError("Ingredient already exists") from exc
             await session.refresh(ingredient)
         return ingredient
 
@@ -392,7 +387,7 @@ class IngredientRepository(BaseRepository[Ingredient]):
         if to_insert:
             stmt = (
                 pg_insert(Ingredient)
-                .values([{'name': n} for n in to_insert])
+                .values([{"name": n} for n in to_insert])
                 .on_conflict_do_nothing(index_elements=[Ingredient.name])
                 .returning(Ingredient.id, Ingredient.name)
             )
@@ -427,7 +422,7 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
             await session.flush()  # получим PK / дефолты
         except IntegrityError as exc:
             await session.rollback()
-            raise ValueError('RecipeIngredient already exists') from exc
+            raise ValueError("RecipeIngredient already exists") from exc
         # подхватить БД-дефолты/триггеры
         await session.refresh(recipe_ingredient)
         return recipe_ingredient
@@ -437,7 +432,7 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
         cls,
         session: AsyncSession,
         recipe_id: int,
-        ingredient_ids: Iterable[int]
+        ingredient_ids: Iterable[int],
     ) -> None:
         """
         Массово создаёт связи рецепт-ингредиент.
@@ -447,14 +442,15 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
         if not ids:
             return
         values = [
-            {'recipe_id': int(recipe_id), 'ingredient_id': i} for i in ids
+            {"recipe_id": int(recipe_id), "ingredient_id": i} for i in ids
         ]
         stmt = (
             pg_insert(RecipeIngredient)
             .values(values)
             .on_conflict_do_nothing(
                 index_elements=[
-                    RecipeIngredient.recipe_id, RecipeIngredient.ingredient_id
+                    RecipeIngredient.recipe_id,
+                    RecipeIngredient.ingredient_id,
                 ]
             )
         )

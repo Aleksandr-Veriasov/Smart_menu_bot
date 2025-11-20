@@ -6,7 +6,7 @@ from openai.types.chat import ChatCompletionMessageParam
 
 from packages.integrations.deepseek_api import DeepSeekClient
 
-from .extract_recipe import LLMRecipeExtractor, ChatClient
+from .extract_recipe import ChatClient, LLMRecipeExtractor
 
 
 class _DeepSeekChatAdapter(ChatClient):

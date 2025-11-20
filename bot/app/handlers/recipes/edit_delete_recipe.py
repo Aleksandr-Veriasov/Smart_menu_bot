@@ -11,7 +11,7 @@ from telegram.ext import (
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import EDRState
-from bot.app.core.types import PTBContext, AppState
+from bot.app.core.types import AppState, PTBContext
 from bot.app.keyboards.inlines import (
     category_keyboard,
     home_keyboard,
@@ -21,7 +21,10 @@ from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
 from bot.app.utils.context_helpers import get_db
 from packages.db.repository import RecipeRepository
-from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
+from packages.redis.repository import (
+    CategoryCacheRepository,
+    RecipeCacheRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +35,12 @@ async def start_edit(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    data = cq.data or ''
+    data = cq.data or ""
     # парсим id рецепта
     try:
-        recipe_id = int(data.rsplit('_', 1)[1])
+        recipe_id = int(data.rsplit("_", 1)[1])
     except Exception:
-        await cq.edit_message_text('Не смог понять ID рецепта.')
+        await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
     db = get_db(context)
     async with db.session() as session:
@@ -49,11 +52,11 @@ async def start_edit(update: Update, context: PTBContext) -> int:
     if state is None:
         state = {}
         context.user_data = state
-    state['edit'] = {'recipe_id': recipe_id}
+    state["edit"] = {"recipe_id": recipe_id}
     await cq.edit_message_text(
-        f'Вы хотите отредактировать название рецепта <b>{recipe_name}</b>?',
+        f"Вы хотите отредактировать название рецепта <b>{recipe_name}</b>?",
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard_save_cancel_delete(func='start_edit'),
+        reply_markup=keyboard_save_cancel_delete(func="start_edit"),
     )
     return EDRState.CHOOSE_FIELD
 
@@ -63,11 +66,11 @@ async def choose_field(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    if cq.data == 'f:title':
+    if cq.data == "f:title":
         await cq.edit_message_text(
-            'Введите новое <b>название</b> рецепта:',
+            "Введите новое <b>название</b> рецепта:",
             reply_markup=keyboard_save_cancel_delete(),
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
         )
         return EDRState.WAIT_TITLE
     # отмена
@@ -77,21 +80,22 @@ async def choose_field(update: Update, context: PTBContext) -> int:
 async def handle_title(update: Update, context: PTBContext) -> int:
     """Поймаем текст — это новое название."""
     msg = update.effective_message
-    logger.debug(f'🥩 msg = {msg}, context.user_data = {context.user_data}')
+    logger.debug(f"🥩 msg = {msg}, context.user_data = {context.user_data}")
     if msg:
-        title = (msg.text or '').strip()
+        title = (msg.text or "").strip()
         if not title:
-            await msg.reply_text('Пусто. Введите название ещё раз.')
+            await msg.reply_text("Пусто. Введите название ещё раз.")
             return EDRState.WAIT_TITLE
         state = context.user_data
         if state is None:
             state = {}
             context.user_data = state
-        state.setdefault('edit', {})['title'] = title
+        state.setdefault("edit", {})["title"] = title
         await msg.reply_text(
-            f'Сохранить название:\n<b>{title}</b>',
-            reply_markup=keyboard_save_cancel_delete(func='handle_title'),
-            parse_mode=ParseMode.HTML)
+            f"Сохранить название:\n<b>{title}</b>",
+            reply_markup=keyboard_save_cancel_delete(func="handle_title"),
+            parse_mode=ParseMode.HTML,
+        )
         return EDRState.CONFIRM_TITLE
     return ConversationHandler.END
 
@@ -100,13 +104,13 @@ async def save_changes(update: Update, context: PTBContext) -> int:
     """Сохраняем в БД и завершаем диалог."""
     msg = update.effective_message
     if context.user_data:
-        edit = context.user_data.get('edit') or {}
-    recipe_id: int = int(edit.get('recipe_id', 0))
-    title = edit.get('title')
+        edit = context.user_data.get("edit") or {}
+    recipe_id: int = int(edit.get("recipe_id", 0))
+    title = edit.get("title")
 
     if not recipe_id or not title:
         if msg:
-            await msg.reply_text('Нет изменений для сохранения.')
+            await msg.reply_text("Нет изменений для сохранения.")
         return ConversationHandler.END
 
     db = get_db(context)
@@ -115,9 +119,9 @@ async def save_changes(update: Update, context: PTBContext) -> int:
         await RecipeRepository.update_title(session, recipe_id, title)
     if msg and context.user_data:
         await msg.edit_text(
-            '✅ Изменения сохранены.', reply_markup=home_keyboard()
+            "✅ Изменения сохранены.", reply_markup=home_keyboard()
         )
-        context.user_data.pop('edit', None)
+        context.user_data.pop("edit", None)
     return ConversationHandler.END
 
 
@@ -127,12 +131,12 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    data = cq.data or ''
+    data = cq.data or ""
     # парсим id рецепта
     try:
-        recipe_id = int(data.rsplit('_', 1)[1])
+        recipe_id = int(data.rsplit("_", 1)[1])
     except Exception:
-        await cq.edit_message_text('Не смог понять ID рецепта.')
+        await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
     db = get_db(context)
     async with db.session() as session:
@@ -144,11 +148,11 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
     if state is None:
         state = {}
         context.user_data = state
-    state['delete'] = {'recipe_id': recipe_id}
+    state["delete"] = {"recipe_id": recipe_id}
     await cq.edit_message_text(
-        f'Вы точно хотите удалить рецепт <b>{recipe_name}</b>?',
+        f"Вы точно хотите удалить рецепт <b>{recipe_name}</b>?",
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard_save_cancel_delete(func='delete_recipe'),
+        reply_markup=keyboard_save_cancel_delete(func="delete_recipe"),
     )
     return EDRState.CONFIRM_DELETE
 
@@ -161,12 +165,12 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
     recipe_id = None
 
     if context.user_data:
-        delete_data = context.user_data.get('delete')
-        if delete_data and 'recipe_id' in delete_data:
-            recipe_id = delete_data['recipe_id']
+        delete_data = context.user_data.get("delete")
+        if delete_data and "recipe_id" in delete_data:
+            recipe_id = delete_data["recipe_id"]
 
     if not recipe_id:
-        await cq.edit_message_text('Не смог понять ID рецепта.')
+        await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
     db = get_db(context)
 
@@ -174,12 +178,12 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
         await RecipeRepository.delete(session, recipe_id)
 
     await cq.edit_message_text(
-        '✅ Рецепт успешно удалён.',
+        "✅ Рецепт успешно удалён.",
         reply_markup=home_keyboard(),
-        parse_mode=ParseMode.HTML
+        parse_mode=ParseMode.HTML,
     )
     if context.user_data is not None:
-        context.user_data.pop('delete', None)
+        context.user_data.pop("delete", None)
     return ConversationHandler.END
 
 
@@ -188,24 +192,24 @@ async def change_category(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    data = cq.data or ''
+    data = cq.data or ""
     # парсим id рецепта
     try:
-        recipe_id = int(data.rsplit('_', 1)[1])
+        recipe_id = int(data.rsplit("_", 1)[1])
     except Exception:
-        await cq.edit_message_text('Не смог понять ID рецепта.')
+        await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
     db = get_db(context)
-    app_state = context.bot_data.get('state')
+    app_state = context.bot_data.get("state")
     if not isinstance(app_state, AppState) or app_state.redis is None:
-        logger.error('AppState или Redis недоступен в start_save_recipe')
+        logger.error("AppState или Redis недоступен в start_save_recipe")
         return ConversationHandler.END
     service = CategoryService(db, app_state.redis)
     category = await service.get_all_category()
     if context.user_data:
-        context.user_data['change_category'] = {'recipe_id': recipe_id}
+        context.user_data["change_category"] = {"recipe_id": recipe_id}
     await cq.edit_message_text(
-        '🏷️ Выберете новую категорию:',
+        "🏷️ Выберете новую категорию:",
         parse_mode=ParseMode.HTML,
         reply_markup=category_keyboard(category, RecipeMode.SAVE),
     )
@@ -220,28 +224,28 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
     recipe_id = None
 
     if context.user_data:
-        change_category = context.user_data.get('change_category')
-        if change_category and 'recipe_id' in change_category:
-            recipe_id = change_category['recipe_id']
+        change_category = context.user_data.get("change_category")
+        if change_category and "recipe_id" in change_category:
+            recipe_id = change_category["recipe_id"]
 
     if not recipe_id:
-        await cq.edit_message_text('Не смог понять ID рецепта.')
+        await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
-    category_slug = parse_category(cq.data or '')
+    category_slug = parse_category(cq.data or "")
     if not category_slug:
-        logger.error('Не удалось получить slug категории в confirm_change_category')
+        logger.error(
+            "Не удалось получить slug категории в confirm_change_category"
+        )
         return ConversationHandler.END
 
     db = get_db(context)
-    app_state = context.bot_data.get('state')
+    app_state = context.bot_data.get("state")
     if not isinstance(app_state, AppState) or app_state.redis is None:
-        logger.error('AppState или Redis недоступен в start_save_recipe')
+        logger.error("AppState или Redis недоступен в start_save_recipe")
         return ConversationHandler.END
     service = CategoryService(db, app_state.redis)
 
-    category_id, _ = await service.get_id_and_name_by_slug_cached(
-        category_slug
-    )
+    category_id, _ = await service.get_id_and_name_by_slug_cached(category_slug)
     async with db.session() as session:
         recipe_title = await RecipeRepository.update_category(
             session, recipe_id, category_id
@@ -252,14 +256,14 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
     await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
         app_state.redis, cq.from_user.id, category_id
     )
-    logger.debug(f'🗑️ Инвалидирован кэш категорий юзера {cq.from_user.id}')
+    logger.debug(f"🗑️ Инвалидирован кэш категорий юзера {cq.from_user.id}")
     await cq.edit_message_text(
-            f'✅ Категория рецепта <b>{recipe_title}</b> изменена',
-            parse_mode=ParseMode.HTML,
-            reply_markup=home_keyboard()
-        )
+        f"✅ Категория рецепта <b>{recipe_title}</b> изменена",
+        parse_mode=ParseMode.HTML,
+        reply_markup=home_keyboard(),
+    )
     if context.user_data is not None:
-        context.user_data.pop('change_category', None)
+        context.user_data.pop("change_category", None)
     return ConversationHandler.END
 
 
@@ -269,50 +273,48 @@ async def cancel(update: Update, context: PTBContext) -> int:
     if update.callback_query:
         await update.callback_query.answer()
     if msg and context.user_data:
-        await msg.edit_text('Отменено.', reply_markup=home_keyboard())
-        context.user_data.pop('edit', None)
+        await msg.edit_text("Отменено.", reply_markup=home_keyboard())
+        context.user_data.pop("edit", None)
     return ConversationHandler.END
 
 
 def conversation_edit_recipe() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(start_edit, pattern=r'^edit_recipe_(\d+)$'),
+            CallbackQueryHandler(start_edit, pattern=r"^edit_recipe_(\d+)$"),
+            CallbackQueryHandler(delete_recipe, pattern=r"^delete_recipe_\d+$"),
             CallbackQueryHandler(
-                    delete_recipe, pattern=r'^delete_recipe_\d+$'
-                ),
-            CallbackQueryHandler(
-                    change_category, pattern=r'^change_category_\d+$'
-                ),
+                change_category, pattern=r"^change_category_\d+$"
+            ),
         ],
         states={
             EDRState.CHOOSE_FIELD: [
                 CallbackQueryHandler(
-                    choose_field, pattern=r'^(f:title|f:desc|cancel)$'
+                    choose_field, pattern=r"^(f:title|f:desc|cancel)$"
                 ),
-                CallbackQueryHandler(cancel, pattern=r'^cancel$'),
+                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
             EDRState.WAIT_TITLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_title),
-                CallbackQueryHandler(cancel, pattern=r'^cancel$'),
+                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
             EDRState.CONFIRM_TITLE: [
-                CallbackQueryHandler(save_changes, pattern=r'^save_changes$'),
-                CallbackQueryHandler(cancel, pattern=r'^cancel$'),
+                CallbackQueryHandler(save_changes, pattern=r"^save_changes$"),
+                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
             EDRState.CONFIRM_DELETE: [
-                CallbackQueryHandler(confirm_delete, pattern=r'^delete$'),
-                CallbackQueryHandler(cancel, pattern=r'^cancel$'),
+                CallbackQueryHandler(confirm_delete, pattern=r"^delete$"),
+                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
             EDRState.CONFIRM_CHANGE_CATEGORY: [
                 CallbackQueryHandler(
                     confirm_change_category,
-                    pattern='^[a-z0-9][a-z0-9_-]*_save$'
+                    pattern="^[a-z0-9][a-z0-9_-]*_save$",
                 ),
-                CallbackQueryHandler(cancel, pattern=r'^cancel$'),
-            ]
+                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
+            ],
         },
-        fallbacks=[CallbackQueryHandler(cancel, pattern=r'^cancel$')],
+        fallbacks=[CallbackQueryHandler(cancel, pattern=r"^cancel$")],
         per_chat=True,
         per_user=True,
         # per_message=True,

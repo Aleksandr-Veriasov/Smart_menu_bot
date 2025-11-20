@@ -12,15 +12,15 @@ from packages.common_settings.settings import settings
 class CustomFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__(
-            fmt='[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d'
-            ' - %(name)s - %(message)s'
+            fmt="[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d"
+            " - %(name)s - %(message)s"
         )
 
 
 class APINotificationHandler(logging.Handler):
     def __init__(self, token: str, admin: int) -> None:
         super().__init__()
-        self.url = f'https://api.telegram.org/bot{token}/sendMessage'
+        self.url = f"https://api.telegram.org/bot{token}/sendMessage"
         self.admin = admin
         self.formatter = CustomFormatter()
 
@@ -28,14 +28,16 @@ class APINotificationHandler(logging.Handler):
         try:
             # Форматируем и экранируем HTML
             log_entry = self.format(record)
-            log_entry = log_entry.replace(
-                '[', '\n['
-            ).replace(']', ']\n').replace('__ -', '__ -\n')
+            log_entry = (
+                log_entry.replace("[", "\n[")
+                .replace("]", "]\n")
+                .replace("__ -", "__ -\n")
+            )
             safe = html.escape(log_entry)
             payload = {
-                'chat_id': self.admin,
-                'text': f'<code>{safe}</code>',
-                'parse_mode': 'HTML',
+                "chat_id": self.admin,
+                "text": f"<code>{safe}</code>",
+                "parse_mode": "HTML",
             }
             # обязательно таймаут, чтобы не подвесить логирование
             requests.post(self.url, json=payload, timeout=5)
@@ -45,22 +47,22 @@ class APINotificationHandler(logging.Handler):
 
 
 NOISY_LOGGERS = {
-    'httpcore.connection': logging.INFO,
-    'httpcore.http11': logging.INFO,
-    'httpcore.proxy': logging.INFO,
-    'httpx': logging.ERROR,
-    'websockets.client': logging.INFO,
-    'sqlalchemy.engine.Engine': logging.ERROR,
-    'python_multipart.multipart': logging.INFO,
-    'urllib3': logging.WARNING,
-    'uvicorn': logging.INFO,          # при желании: DEBUG
-    'uvicorn.error': logging.INFO,    # при желании: DEBUG
-    'uvicorn.access': logging.INFO,   # access-лог обычно шумный
+    "httpcore.connection": logging.INFO,
+    "httpcore.http11": logging.INFO,
+    "httpcore.proxy": logging.INFO,
+    "httpx": logging.ERROR,
+    "websockets.client": logging.INFO,
+    "sqlalchemy.engine.Engine": logging.ERROR,
+    "python_multipart.multipart": logging.INFO,
+    "urllib3": logging.WARNING,
+    "uvicorn": logging.INFO,  # при желании: DEBUG
+    "uvicorn.error": logging.INFO,  # при желании: DEBUG
+    "uvicorn.access": logging.INFO,  # access-лог обычно шумный
 }
 
 
 def setup_logging() -> None:
-    """ Настраивает логирование и интеграцию с Sentry. """
+    """Настраивает логирование и интеграцию с Sentry."""
     level = logging.DEBUG if settings.debug else logging.INFO
 
     for h in logging.root.handlers[:]:
@@ -103,15 +105,15 @@ def setup_logging() -> None:
         sentry_sdk.init(
             dsn=str(settings.sentry.dsn),
             send_default_pii=False,
-            _experiments={'enable_logs': True},
+            _experiments={"enable_logs": True},
             integrations=[
                 LoggingIntegration(sentry_logs_level=logging.WARNING)
             ],
             environment=settings.env,
             traces_sample_rate=1.0,
         )
-        logging.getLogger(__name__).info('✅ Sentry инициализирован.')
+        logging.getLogger(__name__).info("✅ Sentry инициализирован.")
     else:
         logging.getLogger(__name__).warning(
-            '⚠️ SENTRY_DSN не задан. Sentry не активен.'
+            "⚠️ SENTRY_DSN не задан. Sentry не активен."
         )

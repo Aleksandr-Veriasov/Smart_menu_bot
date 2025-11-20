@@ -41,23 +41,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Redis
     state.redis = await get_redis()
     ping = await state.redis.ping()
-    logger.info(f'🧠 Redis подключён PING={ping}')
+    logger.info(f"🧠 Redis подключён PING={ping}")
 
     engine: AsyncEngine = state.db.engine
-    logger.info('БД загружена')
+    logger.info("БД загружена")
     await ensure_admin(state.db)
 
     # 3) SQLAdmin c auth
     pepper = settings.security.password_pepper
     if pepper is None:
-        raise RuntimeError("PASSWORD_PEPPER не задан: не можем настроить AdminAuth.")
+        raise RuntimeError(
+            "PASSWORD_PEPPER не задан: не можем настроить AdminAuth."
+        )
     authentication_backend = AdminAuth(
-        state.db,
-        secret_key=pepper.get_secret_value()
+        state.db, secret_key=pepper.get_secret_value()
     )
     admin = Admin(app, engine, authentication_backend=authentication_backend)
     setup_admin(admin)
-    logger.info('Админка загружена')
+    logger.info("Админка загружена")
 
     try:
         yield
@@ -66,12 +67,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if state.redis is not None:
             await close_redis()
             state.redis = None
-            logger.info('🔒 Redis закрыт.')
+            logger.info("🔒 Redis закрыт.")
         await engine.dispose()
 
 
 app = FastAPI(
-    title='Recipes Backend',
+    title="Recipes Backend",
     debug=settings.debug,
     lifespan=lifespan,
 )
@@ -79,7 +80,7 @@ app = FastAPI(
 _allowed = settings.fast_api.allowed_hosts
 if settings.debug and _allowed:
     # В дебаг можно добавить '*' чтобы не мучиться с host header
-    _allowed = _allowed + ['*']
+    _allowed = _allowed + ["*"]
 
 if _allowed:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed)
@@ -88,36 +89,35 @@ if settings.fast_api.serve_from_app:
     app.mount(
         settings.fast_api.mount_static_url,
         StaticFiles(directory=settings.fast_api.static_dir, html=False),
-        name='static',
+        name="static",
     )
     app.mount(
         settings.fast_api.mount_media_url,
         StaticFiles(directory=settings.fast_api.media_dir, html=False),
-        name='media',
+        name="media",
     )
 
 # Session cookie для SQLAdmin auth
 pepper = settings.security.password_pepper
 if pepper is None:
-    raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать.")
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=pepper.get_secret_value()
-)
+    raise RuntimeError(
+        "PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать."
+    )
+app.add_middleware(SessionMiddleware, secret_key=pepper.get_secret_value())
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # API
-app.include_router(api_router, prefix='/api')
+app.include_router(api_router, prefix="/api")
 
 
-@app.get('/ping', tags=['health'])
+@app.get("/ping", tags=["health"])
 async def ping() -> dict[str, bool]:
-    return {'ok': True}
+    return {"ok": True}

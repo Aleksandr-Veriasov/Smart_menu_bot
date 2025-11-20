@@ -114,7 +114,7 @@ class TestFileAwareEnvSource:
         monkeypatch.delenv("SIMPLE_FILE", raising=False)
 
         secret_file: Path = tmp_path / "simple_raw.txt"
-        secret_file.write_text('not,a,json,list', encoding="utf-8")
+        secret_file.write_text("not,a,json,list", encoding="utf-8")
 
         monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
 

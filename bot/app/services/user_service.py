@@ -1,6 +1,6 @@
 import logging
 from contextlib import suppress
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from redis.asyncio import Redis
 
@@ -37,19 +37,17 @@ class UserService:
         recipe_count = await RecipeCacheRepository.get_recipe_count(
             self.redis, user_id
         )
-        logger.debug(f'👉 User {user_id} exists={exists} count={recipe_count}')
+        logger.debug(f"👉 User {user_id} exists={exists} count={recipe_count}")
         if exists is None:
             lock_key = RedisKeys.user_init_lock(user_id=user_id)
             token: Optional[str] = await acquire_lock(
                 self.redis, lock_key, ttl.LOCK
             )
-            logger.debug(f'🔒 User {user_id} lock: {lock_key} token: {token}')
+            logger.debug(f"🔒 User {user_id} lock: {lock_key} token: {token}")
             try:
                 async with self.db.session() as self.session:
-                    user = await UserRepository.get_by_id(
-                        self.session, user_id
-                    )
-                    logger.debug(f'👉 User {user_id} from DB: {user}')
+                    user = await UserRepository.get_by_id(self.session, user_id)
+                    logger.debug(f"👉 User {user_id} from DB: {user}")
                     if user is None:
                         payload = UserCreate(
                             id=tg_user.id,

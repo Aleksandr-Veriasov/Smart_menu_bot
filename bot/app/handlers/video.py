@@ -13,16 +13,16 @@ from bot.app.services.video_pipeline import process_video_pipeline
 logger = logging.getLogger(__name__)
 
 _URL_RE = re.compile(
-    r'(?P<url>https?://(?:www\.)?[^\s<>()\[\]]+)', re.IGNORECASE
+    r"(?P<url>https?://(?:www\.)?[^\s<>()\[\]]+)", re.IGNORECASE
 )
 
 
 def extract_first_url(msg: Message) -> Optional[str]:
     """Вернёт первую ссылку из текста/подписи сообщения, если она есть."""
     # 1) Сначала — entities (Telegram сам корректно выделяет URL и TEXT_LINK)
-    ent_map = msg.parse_entities(
-        [MessageEntity.URL, MessageEntity.TEXT_LINK]
-    ) or {}
+    ent_map = (
+        msg.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]) or {}
+    )
     for ent, value in ent_map.items():
         if ent.type == MessageEntity.TEXT_LINK and ent.url:
             return ent.url
@@ -30,9 +30,10 @@ def extract_first_url(msg: Message) -> Optional[str]:
             return value
 
     # 2) Затем — caption_entities (если ссылка в подписи к медиа)
-    cap_map = msg.parse_caption_entities(
-        [MessageEntity.URL, MessageEntity.TEXT_LINK]
-    ) or {}
+    cap_map = (
+        msg.parse_caption_entities([MessageEntity.URL, MessageEntity.TEXT_LINK])
+        or {}
+    )
     for ent, value in cap_map.items():
         if ent.type == MessageEntity.TEXT_LINK and ent.url:
             return ent.url
@@ -40,9 +41,9 @@ def extract_first_url(msg: Message) -> Optional[str]:
             return value
 
     # 3) Fallback — простая регулярка по тексту/подписи
-    s = (msg.text or msg.caption or '')
+    s = msg.text or msg.caption or ""
     m = _URL_RE.search(s)
-    return m.group('url').rstrip('.,);:!?]»”') if m else None
+    return m.group("url").rstrip(".,);:!?]»”") if m else None
 
 
 async def video_link(update: Update, context: PTBContext) -> None:
@@ -56,8 +57,8 @@ async def video_link(update: Update, context: PTBContext) -> None:
     url = extract_first_url(message)
     if not url:
         await message.reply_text(
-            '❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.'
+            "❌ Не нашёл ссылку в сообщении. Пришлите корректный URL."
         )
         return
-    logger.debug(f'Пользователь отправил ссылку: {url}')
+    logger.debug(f"Пользователь отправил ссылку: {url}")
     asyncio.create_task(process_video_pipeline(url, message, context))

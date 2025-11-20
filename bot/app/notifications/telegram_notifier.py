@@ -21,8 +21,12 @@ class TelegramNotifier(Notifier):
     """
 
     def __init__(
-        self, bot: Bot, chat_id: int, *,
-        min_edit_interval: float = 0.9, context: PTBContext
+        self,
+        bot: Bot,
+        chat_id: int,
+        *,
+        min_edit_interval: float = 0.9,
+        context: PTBContext,
     ):
         self.bot = bot
         self.chat_id = chat_id
@@ -33,12 +37,12 @@ class TelegramNotifier(Notifier):
         # для удобства держим ссылку
         self.user_data: dict[Any, Any] = self.context.user_data
 
-        self.message_id: Optional[int] = self.user_data.get('progress_msg_id')
+        self.message_id: Optional[int] = self.user_data.get("progress_msg_id")
         self._last_edit_ts = 0.0
         self._min_edit_interval = min_edit_interval
         self._closed = False
         self._last_pct: Optional[int] = None
-        self._last_text: str = ''
+        self._last_text: str = ""
 
     # ---------- публичный контракт ----------
 
@@ -46,7 +50,7 @@ class TelegramNotifier(Notifier):
         if self.message_id is None:
             msg = await self.bot.send_message(self.chat_id, text)
             self.message_id = msg.message_id
-            self.user_data['progress_msg_id'] = self.message_id
+            self.user_data["progress_msg_id"] = self.message_id
         else:
             try:
                 await self.bot.edit_message_text(
@@ -56,11 +60,11 @@ class TelegramNotifier(Notifier):
                 )
             except BadRequest as e:
                 msq_str = str(e).lower()
-                if 'not modified' in msq_str:
+                if "not modified" in msq_str:
                     return
-                logger.warning('Не удалось отредактировать сообщение: %s', e)
+                logger.warning("Не удалось отредактировать сообщение: %s", e)
                 if (
-                    'message to edit not found'
+                    "message to edit not found"
                     or "message can't be edited" in msq_str
                 ):
                     new_msg = await self.bot.send_message(self.chat_id, text)
@@ -68,11 +72,11 @@ class TelegramNotifier(Notifier):
                     return
                 raise
 
-    async def progress(self, pct: int, text: str = '') -> None:
+    async def progress(self, pct: int, text: str = "") -> None:
         if self._closed:
             return
         self._last_pct = max(0, min(100, int(pct)))
-        label = text or self._last_text or ''
+        label = text or self._last_text or ""
         content = self._render(self._last_pct, label)
         await self._safe_edit(content)
 
@@ -80,7 +84,7 @@ class TelegramNotifier(Notifier):
         if self._closed:
             return
         self._closed = True
-        content = f'❌ {text}'
+        content = f"❌ {text}"
         if self.message_id is None:
             await self._safe_send(content)
         else:
@@ -92,7 +96,7 @@ class TelegramNotifier(Notifier):
         try:
             return await self.bot.send_message(self.chat_id, text)
         except Exception as e:
-            logger.warning('Не удалось отправить сообщение в Telegram: %s', e)
+            logger.warning("Не удалось отправить сообщение в Telegram: %s", e)
             return None
 
     async def _safe_edit(self, text: str, *, force: bool = False) -> None:
@@ -124,19 +128,19 @@ class TelegramNotifier(Notifier):
         except BadRequest as e:
             # частые случаи: 'Message is not modified' или
             # старый контент равен новому
-            if 'not modified' in str(e).lower():
+            if "not modified" in str(e).lower():
                 return
-            logger.warning('Не удалось отредактировать сообщение: %s', e)
+            logger.warning("Не удалось отредактировать сообщение: %s", e)
         except Exception as e:
-            logger.warning('Ошибка при редактировании сообщения: %s', e)
+            logger.warning("Ошибка при редактировании сообщения: %s", e)
 
     def _render(self, pct: Optional[int], label: str) -> str:
         """Текст + простая прогресс‑бар линия."""
         if pct is None:
-            return label or '⏳ Готовим…'
+            return label or "⏳ Готовим…"
 
         total = 10  # 10 сегментов
         filled = int(round((pct / 100) * total))
-        bar = '█' * filled + '░' * (total - filled)
-        label_part = f' — {label}' if label else ''
-        return f'▶️ Прогресс: {pct}% [{bar}]{label_part}'
+        bar = "█" * filled + "░" * (total - filled)
+        label_part = f" — {label}" if label else ""
+        return f"▶️ Прогресс: {pct}% [{bar}]{label_part}"

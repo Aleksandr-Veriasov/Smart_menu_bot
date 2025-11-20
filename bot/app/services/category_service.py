@@ -30,15 +30,15 @@ class CategoryService:
         cached = await CategoryCacheRepository.get_user_categories(
             self.redis, user_id
         )
-        logger.debug(f'👉 User {user_id} categories from cache: {cached}')
+        logger.debug(f"👉 User {user_id} categories from cache: {cached}")
         if cached:
             return cached
 
         # 2) БД
         lock_key = RedisKeys.user_init_lock(user_id=user_id)
         token: Optional[str] = await acquire_lock(
-                self.redis, lock_key, ttl.LOCK
-            )
+            self.redis, lock_key, ttl.LOCK
+        )
         try:
             async with self.db.session() as self.session:
                 rows = await CategoryRepository.get_name_and_slug_by_user_id(
@@ -64,24 +64,24 @@ class CategoryService:
         cached = await CategoryCacheRepository.get_id_name_by_slug(
             self.redis, slug
         )
-        logger.debug(f'👉 Category {slug} id,name from cache: {cached}')
+        logger.debug(f"👉 Category {slug} id,name from cache: {cached}")
         if cached:
             return cached  # (id, name)
 
         # 2) DB
         lock_key = RedisKeys.slug_init_lock(slug)
         token: Optional[str] = await acquire_lock(
-                self.redis, lock_key, ttl.LOCK
-            )
+            self.redis, lock_key, ttl.LOCK
+        )
         try:
             async with self.db.session() as self.session:
                 result = await CategoryRepository.get_id_and_name_by_slug(
                     self.session, slug
                 )
-                logger.debug(f'👉 Category {slug} id,name from DB: {result}')
-                if result is None or (isinstance(result, tuple) and any(
-                    v is None for v in result
-                )):
+                logger.debug(f"👉 Category {slug} id,name from DB: {result}")
+                if result is None or (
+                    isinstance(result, tuple) and any(v is None for v in result)
+                ):
                     raise ValueError(f'Category with slug="{slug}" not found')
 
                 category_id, category_name = result
@@ -101,18 +101,16 @@ class CategoryService:
         Возвращает список словарей с ключами 'name' и 'slug'.
         """
         # 1) Redis
-        cached = await CategoryCacheRepository.get_all_name_and_slug(
-            self.redis
-        )
-        logger.debug(f'👉 All categories from cache: {cached}')
+        cached = await CategoryCacheRepository.get_all_name_and_slug(self.redis)
+        logger.debug(f"👉 All categories from cache: {cached}")
         if cached:
             return cached
 
         # 2) DB
         lock_key = RedisKeys.catergory_lock()
         token: Optional[str] = await acquire_lock(
-                self.redis, lock_key, ttl.LOCK
-            )
+            self.redis, lock_key, ttl.LOCK
+        )
         try:
             async with self.db.session() as self.session:
                 rows = await CategoryRepository.get_all_name_and_slug(
@@ -121,7 +119,7 @@ class CategoryService:
                 await CategoryCacheRepository.set_all_name_and_slug(
                     self.redis, rows
                 )
-                logger.debug(f'👉 All categories from DB: {rows}')
+                logger.debug(f"👉 All categories from DB: {rows}")
         finally:
             if token:
                 with suppress(Exception):

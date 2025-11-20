@@ -15,8 +15,8 @@ def safe_remove(path: Optional[str]) -> None:
     try:
         if p.exists():
             p.unlink()  # Python 3.10 ок
-            logger.debug('🧹 Удалён временный файл: %s', p)
+            logger.debug("🧹 Удалён временный файл: %s", p)
     except FileNotFoundError:
         pass
     except Exception as e:
-        logger.warning('Не удалось удалить %s: %s', p, e)
+        logger.warning("Не удалось удалить %s: %s", p, e)

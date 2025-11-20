@@ -45,6 +45,7 @@ class UserShort(BaseModel):
 
 # ===================== USER =====================
 
+
 class UserBase(BaseModel):
     username: Optional[str] = None
     first_name: Optional[str] = None
@@ -53,11 +54,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Создание пользователя (Telegram user_id обязателен)."""
+
     id: int  # BigInteger в БД, но для API — int ок
 
 
 class UserUpdate(UserBase):
     """Частичное обновление пользователя."""
+
     pass
 
 
@@ -72,6 +75,7 @@ class UserRead(UserBase):
 
 
 # ===================== CATEGORY =====================
+
 
 class CategoryBase(BaseModel):
     name: str
@@ -93,6 +97,7 @@ class CategoryRead(CategoryBase):
 
 # ===================== INGREDIENT =====================
 
+
 class IngredientBase(BaseModel):
     name: str
 
@@ -112,6 +117,7 @@ class IngredientRead(IngredientBase):
 
 
 # ===================== VIDEO (one-to-one с Recipe) =====================
+
 
 class VideoBase(BaseModel):
     video_url: str
@@ -135,6 +141,7 @@ class VideoRead(VideoBase):
 
 
 # ===================== RECIPE =====================
+
 
 class RecipeBase(BaseModel):
     title: str
@@ -171,6 +178,7 @@ class RecipeRead(RecipeBase):
 
 
 # ===================== RECIPE_INGREDIENT (линк-таблица) =====================
+
 
 class RecipeIngredientCreate(BaseModel):
     recipe_id: int

@@ -16,9 +16,10 @@ class AppState:
     Единый контейнер состояния приложения.
     Хранит долгоживущие ресурсы (БД и т.п.).
     """
+
     db: Database
     cleanup_task: Any | None = None  # сюда можно класть фоновые таски/хэндлы
     redis: Optional[Redis] = None
 
 
-__all__ = ['AppState']
+__all__ = ["AppState"]

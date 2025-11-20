@@ -11,14 +11,15 @@ try:
     # если есть общесистемный перец (pepper), берём из настроек
     _PEPPER: Optional[str] = (
         settings.security.password_pepper.get_secret_value()
-        if settings.security.password_pepper else None
+        if settings.security.password_pepper
+        else None
     )
 except Exception:
     _PEPPER = None
 
 _pwd_ctx = CryptContext(
-    schemes=['bcrypt'],
-    deprecated='auto',
+    schemes=["bcrypt"],
+    deprecated="auto",
     bcrypt__rounds=12,  # баланс безопасность/скорость
 )
 
@@ -28,7 +29,7 @@ def _with_pepper(raw: str) -> str:
         return raw
     # HMAC как примесь перед хэшированием: стойко и детерминированно
     return hmac.new(
-        _PEPPER.encode('utf-8'), raw.encode('utf-8'), 'sha256'
+        _PEPPER.encode("utf-8"), raw.encode("utf-8"), "sha256"
     ).hexdigest()
 
 

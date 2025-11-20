@@ -2,7 +2,7 @@ from packages.recipes_core.services.provider import get_default_extractor
 
 
 async def extract_recipes(
-        description: str, transcript: str
+    description: str, transcript: str
 ) -> tuple[str, str, str]:
     """
     Извлекает название, текст рецепта и ингредиенты из описания и транскрипта.

@@ -14,7 +14,7 @@ async def get_redis() -> Redis:
     if _redis is None:
         _redis = Redis.from_url(
             settings.redis.dsn(),
-            encoding='utf-8',
+            encoding="utf-8",
             decode_responses=True,  # удобно для строк/JSON
             socket_timeout=5.0,
             socket_connect_timeout=3.0,

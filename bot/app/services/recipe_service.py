@@ -30,8 +30,8 @@ class RecipeService:
             self.redis, user_id, category_id
         )
         logger.debug(
-            f'👉 User {user_id} category {category_id} '
-            f'recipes ids and titles from cache: {cached}'
+            f"👉 User {user_id} category {category_id} "
+            f"recipes ids and titles from cache: {cached}"
         )
         if cached:
             return cached
@@ -39,8 +39,8 @@ class RecipeService:
         # 2) БД
         lock_key = RedisKeys.user_init_lock(user_id=user_id)
         token: Optional[str] = await acquire_lock(
-                self.redis, lock_key, ttl.LOCK
-            )
+            self.redis, lock_key, ttl.LOCK
+        )
         try:
             async with self.db.session() as self.session:
                 rows = await RecipeRepository.get_all_recipes_ids_and_titles(

@@ -8,11 +8,11 @@ from typing import Tuple
 
 import requests
 
-VIDEO_FOLDER = 'videos/'
+VIDEO_FOLDER = "videos/"
 INACTIVITY_LIMIT_SECONDS = 15 * 60  # 15 минут
 DOWNLOADER_BASE_URL = os.getenv(
-    'DOWNLOADER_BASE_URL', 'http://downloader:8082'
-).rstrip('/')
+    "DOWNLOADER_BASE_URL", "http://downloader:8082"
+).rstrip("/")
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def _ensure_dir(path: str) -> None:
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        logger.debug(f'📁 Папка для видео создана: {path}')
+        logger.debug(f"📁 Папка для видео создана: {path}")
 
 
 def download_video_and_description(url: str) -> Tuple[str, str]:
@@ -29,21 +29,21 @@ def download_video_and_description(url: str) -> Tuple[str, str]:
     """
     _ensure_dir(VIDEO_FOLDER)
 
-    endpoint = f'{DOWNLOADER_BASE_URL}/download'
+    endpoint = f"{DOWNLOADER_BASE_URL}/download"
     try:
-        response = requests.post(endpoint, json={'url': url}, timeout=120)
+        response = requests.post(endpoint, json={"url": url}, timeout=120)
         response.raise_for_status()
         payload = response.json()
-        file_path = payload.get('file_path') or ''
-        description = payload.get('description') or ''
+        file_path = payload.get("file_path") or ""
+        description = payload.get("description") or ""
         if not file_path:
-            logger.error('Downloader вернул пустой путь.')
-            return '', ''
-        logger.debug(f'✅ Downloader вернул файл: {file_path}')
+            logger.error("Downloader вернул пустой путь.")
+            return "", ""
+        logger.debug(f"✅ Downloader вернул файл: {file_path}")
         return file_path, description
     except Exception as exc:
-        logger.error(f'downloader сервис не ответил: {exc}', exc_info=True)
-        return '', ''
+        logger.error(f"downloader сервис не ответил: {exc}", exc_info=True)
+        return "", ""
 
 
 async def async_download_video_and_description(url: str) -> Tuple[str, str]:
@@ -56,11 +56,11 @@ async def async_download_video_and_description(url: str) -> Tuple[str, str]:
 async def cleanup_old_videos() -> None:
     """Фоновая задача, удаляющая старые видеофайлы без активности."""
     while True:
-        logger.info('Фоновая задача начала работать')
+        logger.info("Фоновая задача начала работать")
         now = time.time()
         if os.path.exists(VIDEO_FOLDER):
             for filename in os.listdir(VIDEO_FOLDER):
-                if filename == '.gitkeep':
+                if filename == ".gitkeep":
                     continue
                 file_path = os.path.join(VIDEO_FOLDER, filename)
                 try:
@@ -69,10 +69,10 @@ async def cleanup_old_videos() -> None:
                         if now - last_access > INACTIVITY_LIMIT_SECONDS:
                             os.remove(file_path)
                             logger.debug(
-                                f'Удалён неиспользуемый файл: {file_path}'
+                                f"Удалён неиспользуемый файл: {file_path}"
                             )
                 except Exception as e:
                     logger.error(
-                        f'Ошибка при удалении файла: {file_path} — {e}'
+                        f"Ошибка при удалении файла: {file_path} — {e}"
                     )
         await asyncio.sleep(INACTIVITY_LIMIT_SECONDS)

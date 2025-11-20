@@ -17,4 +17,4 @@ async def release_lock(r: Redis, name: str, token: str) -> None:
       return redis.call('DEL', KEYS[1])
     else return 0 end
     """
-    await cast('Awaitable[Any]', r.eval(script, 1, name, token))
+    await cast("Awaitable[Any]", r.eval(script, 1, name, token))

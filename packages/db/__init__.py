@@ -9,8 +9,17 @@ from .repository import (
 )
 
 __all__ = [
-    'Database', 'Recipe', 'User', 'Ingredient', 'RecipeIngredient',
-    'Video', 'Category', 'UserRepository', 'RecipeRepository',
-    'CategoryRepository', 'VideoRepository', 'IngredientRepository',
-    'RecipeIngredientRepository'
+    "Database",
+    "Recipe",
+    "User",
+    "Ingredient",
+    "RecipeIngredient",
+    "Video",
+    "Category",
+    "UserRepository",
+    "RecipeRepository",
+    "CategoryRepository",
+    "VideoRepository",
+    "IngredientRepository",
+    "RecipeIngredientRepository",
 ]
