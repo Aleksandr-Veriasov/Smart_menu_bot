@@ -19,6 +19,7 @@ from bot.app.keyboards.inlines import (
 )
 from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
+from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.context_helpers import get_db
 from packages.db.repository import RecipeRepository
 from packages.redis.repository import (
@@ -103,6 +104,10 @@ async def handle_title(update: Update, context: PTBContext) -> int:
 async def save_changes(update: Update, context: PTBContext) -> int:
     """Сохраняем в БД и завершаем диалог."""
     msg = update.effective_message
+    cq = update.callback_query
+    if not cq:
+        return ConversationHandler.END
+    await cq.answer()
     if context.user_data:
         edit = context.user_data.get("edit") or {}
     recipe_id: int = int(edit.get("recipe_id", 0))
@@ -114,9 +119,16 @@ async def save_changes(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
 
     db = get_db(context)
-
-    async with db.session() as session:
-        await RecipeRepository.update_title(session, recipe_id, title)
+    app_state = context.bot_data.get("state")
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error("AppState или Redis недоступен в start_save_recipe")
+        return ConversationHandler.END
+    service = RecipeService(db, app_state.redis)
+    await service.update_recipe_title(
+        user_id=cq.from_user.id,
+        recipe_id=recipe_id,
+        new_title=title,
+    )
     if msg and context.user_data:
         await msg.edit_text(
             "✅ Изменения сохранены.", reply_markup=home_keyboard()
@@ -173,9 +185,12 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
         await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
     db = get_db(context)
-
-    async with db.session() as session:
-        await RecipeRepository.delete(session, recipe_id)
+    app_state = context.bot_data.get("state")
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error("AppState или Redis недоступен в start_save_recipe")
+        return ConversationHandler.END
+    service = RecipeService(db, app_state.redis)
+    await service.delete_recipe(cq.from_user.id, recipe_id)
 
     await cq.edit_message_text(
         "✅ Рецепт успешно удалён.",

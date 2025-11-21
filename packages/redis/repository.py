@@ -78,7 +78,7 @@ class RecipeCacheRepository:
         raw = await r.get(
             RedisKeys.user_recipes_ids_and_titles(user_id, category_id)
         )
-        logger.debug(f"👉 Raw from Redis: {raw}")
+        logger.debug(f"👉 Строка для Redis: {raw}")
         if raw is None:
             return None
         try:
@@ -119,6 +119,7 @@ class RecipeCacheRepository:
         await r.delete(
             RedisKeys.user_recipes_ids_and_titles(user_id, category_id)
         )
+        logger.debug(f"❌ Удален кэш рецептов пользователя {user_id}")
 
 
 class CategoryCacheRepository:

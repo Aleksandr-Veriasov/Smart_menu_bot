@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Optional
@@ -60,5 +59,22 @@ async def video_link(update: Update, context: PTBContext) -> None:
             "❌ Не нашёл ссылку в сообщении. Пришлите корректный URL."
         )
         return
-    logger.debug(f"Пользователь отправил ссылку: {url}")
-    asyncio.create_task(process_video_pipeline(url, message, context))
+
+    pipeline_id = (
+        message.message_id
+    )  # или f"{message.chat_id}:{message.message_id}"
+
+    # Можем пометить, что пайплайн запущен
+    pipelines = (
+        context.user_data.setdefault("pipelines", {})
+        if context.user_data
+        else {}
+    )
+    pipelines[pipeline_id] = {"status": "started"}
+
+    logger.debug(
+        f"Пользователь отправил ссылку: {url}, pipeline_id={pipeline_id}"
+    )
+    context.application.create_task(
+        process_video_pipeline(url, message, context, pipeline_id=pipeline_id)
+    )

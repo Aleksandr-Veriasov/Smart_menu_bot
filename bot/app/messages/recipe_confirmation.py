@@ -28,6 +28,7 @@ async def send_recipe_confirmation(
     recipe: str,
     ingredients: str | Iterable[str],
     video_file_id: str,
+    pipeline_id: int,
 ) -> None:
     """
     Отправляет пользователю видео (по file_id) и сообщение с рецептом
@@ -37,8 +38,10 @@ async def send_recipe_confirmation(
     if message.from_user is None:
         logger.warning("Пользователь не найден (from_user is None)")
         return
-    if context.user_data:
-        context.user_data["recipe_draft"] = {
+    if context.user_data is not None:
+        pipelines = context.user_data.setdefault("pipelines", {})
+        entry = pipelines.setdefault(pipeline_id, {})
+        entry["recipe_draft"] = {
             "title": title,
             "recipe": recipe,
             "video_file_id": video_file_id,
@@ -82,7 +85,7 @@ async def send_recipe_confirmation(
         await message.reply_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=keyboard_save_recipe(),
+            reply_markup=keyboard_save_recipe(pipeline_id=pipeline_id),
             disable_web_page_preview=True,
         )
         logger.debug("Сообщение с рецептом успешно отправлено.")

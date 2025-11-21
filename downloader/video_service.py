@@ -105,8 +105,10 @@ def _extract_description_from_info(info: dict) -> str:
     return cand or ""
 
 
-def _try_download_with_yt_dlp(url: str) -> Tuple[str, str]:
-    output_path = str(VIDEO_FOLDER / "%(id)s.%(ext)s")
+def _try_download_with_yt_dlp(url: str, platform: str) -> Tuple[str, str]:
+    ts_ms = int(time.time() * 1000)
+    filename_tmpl = f"{platform}_{ts_ms}.%(ext)s"
+    output_path = str(VIDEO_FOLDER / filename_tmpl)
     ydl_opts = _yt_dlp_opts(output_path)
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -139,7 +141,7 @@ def download_video(url: str) -> Tuple[str, str]:
         try:
             delay = random.uniform(0.6, 1.8)
             time.sleep(delay)
-            return _try_download_with_yt_dlp(url)
+            return _try_download_with_yt_dlp(url, platform)
         except (DownloadError, ExtractorError) as e:
             last_exc = e
             logger.warning(f"⚠️ yt-dlp ошибка ({attempt}/{max_attempts}): {e}")

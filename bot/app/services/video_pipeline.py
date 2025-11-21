@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 async def process_video_pipeline(
-    url: str, message: Message, context: PTBContext
+    url: str, message: Message, context: PTBContext, pipeline_id: int
 ) -> None:
     """Основной конвейер обработки видео:
     1) Скачиваем видео и описание
@@ -54,7 +54,7 @@ async def process_video_pipeline(
             "Не удалось скачать видео. Отправьте ссылку ещё раз."
         )
         return
-    logger.debug(f"Video downloaded to {description}")
+    logger.debug(f"Описание скачанного видео: {description}")
     convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
     await notifier.progress(40, "Видео конвертировано")
 
@@ -69,8 +69,11 @@ async def process_video_pipeline(
     )
 
     if context.user_data is not None:
-        context.user_data["video_path"] = converted_path
-        context.user_data["video_upload_task"] = upload_task
+        pipelines = context.user_data.setdefault("pipelines", {})
+        pipelines[pipeline_id] = {
+            "video_path": converted_path,
+            "video_upload_task": upload_task,
+        }
     await notifier.progress(60, "✅ Видео загружено. Распознаём текст...")
 
     audio_path = extract_audio(converted_path, AUDIO_FOLDER)
@@ -99,13 +102,21 @@ async def process_video_pipeline(
         video_file_id = None
 
     if context.user_data is not None and video_file_id:
-        context.user_data["video_file_id"] = video_file_id
+        pipelines = context.user_data.setdefault("pipelines", {})
+        entry = pipelines.setdefault(pipeline_id, {})
+        entry["video_file_id"] = video_file_id
         safe_remove(converted_path)
 
     if title and recipe and video_file_id:
         await notifier.progress(100, "Готово ✅")
         await send_recipe_confirmation(
-            message, context, title, recipe, ingredients, video_file_id
+            message,
+            context,
+            title,
+            recipe,
+            ingredients,
+            video_file_id,
+            pipeline_id,
         )
     else:
         await notifier.error("Не удалось извлечь данные из видео.")

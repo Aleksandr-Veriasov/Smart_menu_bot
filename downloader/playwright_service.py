@@ -55,6 +55,10 @@ def _dismiss_instagram_modals(page: "Page") -> None:
         "Разрешить все файлы cookie",
         "Принять все",
     ]
+    close_selectors = [
+        '[aria-label="Закрыть"]',
+        "svg[aria-label='Закрыть']",
+    ]
     for text in button_variants:
         try:
             page.get_by_role("button", name=text, exact=False).click(
@@ -65,12 +69,26 @@ def _dismiss_instagram_modals(page: "Page") -> None:
             break
         except Exception:
             continue
+    for selector in close_selectors:
+        try:
+            btn = page.locator(selector)
+            if btn.count():
+                btn.first.click(timeout=2000)
+                time.sleep(0.5)
+                logger.debug(
+                    f"❌ Instagram: закрыли баннер по селектору {selector}"
+                )
+                break
+        except Exception:
+            continue
 
 
 def _dismiss_tiktok_modals(page: "Page") -> None:
     selectors = [
         '#app div[class*="DivXMarkWrapper"]',
         '#app div[class*="DivFixedBottomContainer"] button',
+        "div.css-hbdz7w-0be0dc34--DivXMarkWrapper",
+        'div[class*="DivXMarkWrapper"]',
         'button:has-text("Accept all")',
         'button:has-text("Accept All")',
         'button:has-text("Accept all cookies")',

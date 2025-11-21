@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # slug может содержать a-z, 0-9, _ и -
 CB_RE = re.compile(
-    r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|edit))?$"
+    r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|edit|save))?$"
 )
 
 CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save?$")
@@ -23,12 +23,12 @@ def parse_category_mode(cb: str) -> Optional[Tuple[str, RecipeMode]]:
     """
     logger.debug(f"⏩⏩⏩ m = {cb}")
     m = CB_RE.fullmatch((cb or "").lower())
-    logger.debug(f"⏩⏩⏩ m = {m}")
+    logger.debug(f"⏩⏩⏩ m = {m.group(0) if m else None}")
     if not m:
         return None
     category = m.group("category")
     mode_str = m.group("mode")
-    logger.debug(f"⏩⏩⏩ mode_str = {mode_str}")
+    logger.debug(f"⏩⏩⏩ mode_str = {mode_str}, category = {category}")
     mode = RecipeMode(mode_str)
     return category, mode
 

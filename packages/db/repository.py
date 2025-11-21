@@ -222,6 +222,18 @@ class RecipeRepository(BaseRepository[Recipe]):
             raise ValueError("Recipe not found")
         await session.delete(recipe)
 
+    @classmethod
+    async def get_category_id_by_recipe_id(
+        cls, session: AsyncSession, recipe_id: int
+    ) -> Optional[int]:
+        """
+        Получает ID категории по ID рецепта.
+        """
+        statement = select(Recipe.category_id).where(Recipe.id == recipe_id)
+        result = await session.execute(statement)
+        category_id = result.scalar_one_or_none()
+        return category_id
+
 
 class CategoryRepository(BaseRepository[Category]):
     model = Category

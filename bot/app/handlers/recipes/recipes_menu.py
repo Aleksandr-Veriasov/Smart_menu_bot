@@ -92,7 +92,7 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
 async def recipes_from_category(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора категории рецептов.
-    Entry-point: r'^(?[a-z0-9][a-z0-9_-]*_recipes(?:_(?:show|random|edit))?$'
+    Entry-point: r'^(?[a-z0-9][a-z0-9_-]*_recipes(?:_(?:show|random|edit|save))?$'
     """
     cq = update.callback_query
     if not cq or not cq.data:

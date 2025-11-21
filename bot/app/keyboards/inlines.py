@@ -70,7 +70,9 @@ def home_keyboard() -> InlineKeyboardMarkup:
 
 
 def category_keyboard(
-    categories: List[dict[str, str]], mode: RecipeMode = RecipeMode.SHOW
+    categories: List[dict[str, str]],
+    mode: RecipeMode = RecipeMode.SHOW,
+    pipeline_id: int = 0,
 ) -> InlineKeyboardMarkup:
     """Создание кнопок для выбора категории рецептов."""
     suffix = mode.value
@@ -82,7 +84,16 @@ def category_keyboard(
         if not name or not slug:
             continue
         rows.append(
-            [InlineKeyboardButton(name, callback_data=f"{slug}_{suffix}")]
+            [
+                InlineKeyboardButton(
+                    name,
+                    callback_data=(
+                        f"{slug}_{suffix}:{pipeline_id}"
+                        if mode is RecipeMode.SAVE
+                        else f"{slug}_{suffix}"
+                    ),
+                )
+            ]
         )
     if mode is RecipeMode.SAVE:
         rows.append(
@@ -226,18 +237,20 @@ def keyboard_save_cancel_delete(func: str = "") -> InlineKeyboardMarkup:
     return kb.adjust(1)
 
 
-def keyboard_save_recipe() -> InlineKeyboardMarkup:
+def keyboard_save_recipe(pipeline_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для сохранения рецепта."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "✅ Сохранить рецепт", callback_data="save_recipe"
+                    "✅ Сохранить рецепт",
+                    callback_data=f"save_recipe:{pipeline_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "❌ Отмена", callback_data="cancel_save_recipe"
+                    "❌ Отмена",
+                    callback_data=f"cancel_save_recipe:{pipeline_id}",
                 )
             ],
         ]
