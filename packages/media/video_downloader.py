@@ -4,15 +4,12 @@ import asyncio
 import logging
 import os
 import time
-from typing import Tuple
 
 import requests
 
 VIDEO_FOLDER = "videos/"
 INACTIVITY_LIMIT_SECONDS = 15 * 60  # 15 минут
-DOWNLOADER_BASE_URL = os.getenv(
-    "DOWNLOADER_BASE_URL", "http://downloader:8082"
-).rstrip("/")
+DOWNLOADER_BASE_URL = os.getenv("DOWNLOADER_BASE_URL", "http://downloader:8082").rstrip("/")
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +20,7 @@ def _ensure_dir(path: str) -> None:
         logger.debug(f"📁 Папка для видео создана: {path}")
 
 
-def download_video_and_description(url: str) -> Tuple[str, str]:
+def download_video_and_description(url: str) -> tuple[str, str]:
     """
     Делегирует скачивание в сервис downloader.
     """
@@ -46,7 +43,7 @@ def download_video_and_description(url: str) -> Tuple[str, str]:
         return "", ""
 
 
-async def async_download_video_and_description(url: str) -> Tuple[str, str]:
+async def async_download_video_and_description(url: str) -> tuple[str, str]:
     """
     Асинхронная обёртка поверх HTTP-запроса.
     """
@@ -68,11 +65,7 @@ async def cleanup_old_videos() -> None:
                         last_access = os.path.getatime(file_path)
                         if now - last_access > INACTIVITY_LIMIT_SECONDS:
                             os.remove(file_path)
-                            logger.debug(
-                                f"Удалён неиспользуемый файл: {file_path}"
-                            )
+                            logger.debug(f"Удалён неиспользуемый файл: {file_path}")
                 except Exception as e:
-                    logger.error(
-                        f"Ошибка при удалении файла: {file_path} — {e}"
-                    )
+                    logger.error(f"Ошибка при удалении файла: {file_path} — {e}")
         await asyncio.sleep(INACTIVITY_LIMIT_SECONDS)

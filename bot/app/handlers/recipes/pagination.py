@@ -29,22 +29,14 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     # Берём user_data; если у вас есть свой хелпер — можно использовать его
     state = context.user_data
     app_state = context.bot_data.get("state")
-    if (
-        not state
-        or not isinstance(app_state, AppState)
-        or app_state.redis is None
-    ):
+    if not state or not isinstance(app_state, AppState) or app_state.redis is None:
         return
     category_id = state.get("category_id", 0)
-    items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(
-        app_state.redis, cq.from_user.id, category_id
-    )
+    items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(app_state.redis, cq.from_user.id, category_id)
     if not items:
         if cq.message:
             with suppress(BadRequest):
-                await cq.edit_message_text(
-                    "Список рецептов пуст.", reply_markup=home_keyboard()
-                )
+                await cq.edit_message_text("Список рецептов пуст.", reply_markup=home_keyboard())
         return
 
     m = _PAGE_RE.match(cq.data or "")

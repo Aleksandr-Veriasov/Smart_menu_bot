@@ -39,10 +39,5 @@ class RedisKeys:
         return f"{cls.PREFIX}:lock:category"
 
     @classmethod
-    def user_recipes_ids_and_titles(
-        cls, user_id: int | str, category_id: int | str
-    ) -> str:
-        return (
-            f"{cls.PREFIX}:user:{user_id}:category"
-            f":{category_id}:recipes_ids_titles"
-        )
+    def user_recipes_ids_and_titles(cls, user_id: int | str, category_id: int | str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:category" f":{category_id}:recipes_ids_titles"

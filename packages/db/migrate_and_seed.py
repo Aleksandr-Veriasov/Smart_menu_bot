@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 from alembic import command
 from alembic.config import Config
@@ -24,7 +23,7 @@ def _make_alembic_config(db_url: str) -> Config:
     return cfg
 
 
-def _get_current_alembic_version(conn: Connection) -> Optional[str]:
+def _get_current_alembic_version(conn: Connection) -> str | None:
     """Получаем текущую версию alembic из БД.
     Если таблица alembic_version есть.
     Если таблицы нет, возвращаем None.
@@ -47,9 +46,7 @@ def _get_current_alembic_version(conn: Connection) -> Optional[str]:
     if not exists:
         return None
 
-    ver = conn.execute(
-        text("SELECT version_num FROM alembic_version LIMIT 1")
-    ).scalar()
+    ver = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
     return str(ver) if ver else ""
 
 
@@ -130,17 +127,13 @@ async def ensure_admin(db: Database) -> None:
         return
 
     async with db.session() as session:  # AsyncSession
-        await _ensure_admin_in_session(
-            session, adm.login, adm.password.get_secret_value()
-        )
+        await _ensure_admin_in_session(session, adm.login, adm.password.get_secret_value())
 
 
-async def _ensure_admin_in_session(
-    session: AsyncSession, login: str, raw_password: str
-) -> None:
+async def _ensure_admin_in_session(session: AsyncSession, login: str, raw_password: str) -> None:
     # Ищем по логину
     res = await session.execute(select(Admin).where(Admin.login == login))
-    existing: Optional[Admin] = res.scalar_one_or_none()
+    existing: Admin | None = res.scalar_one_or_none()
     if existing:
         return
 

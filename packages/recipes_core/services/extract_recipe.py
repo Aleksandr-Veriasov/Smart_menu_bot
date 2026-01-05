@@ -32,9 +32,7 @@ class LLMRecipeExtractor:
     def __init__(self, chat_client: ChatClient):
         self.chat = chat_client
 
-    def extract_sync(
-        self, *, description: str, recognized_text: str
-    ) -> RecipeExtraction:
+    def extract_sync(self, *, description: str, recognized_text: str) -> RecipeExtraction:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT_RU},
             {"role": "user", "content": f"Description: {description}"},
@@ -45,9 +43,7 @@ class LLMRecipeExtractor:
         logger.debug("LLM: ответ получен, длина=%s", len(raw))
         return parse_llm_answer(raw)
 
-    async def extract(
-        self, *, description: str, recognized_text: str
-    ) -> RecipeExtraction:
+    async def extract(self, *, description: str, recognized_text: str) -> RecipeExtraction:
         loop = asyncio.get_running_loop()
         fn = partial(
             self.extract_sync,

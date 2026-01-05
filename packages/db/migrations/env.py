@@ -13,9 +13,7 @@ from packages.db.models import Base
 # Alembic Config object
 config = context.config
 SYNC_URL = settings.db.sqlalchemy_url(use_async=False)
-config.set_main_option(
-    "sqlalchemy.url", SYNC_URL.render_as_string(hide_password=False)
-)
+config.set_main_option("sqlalchemy.url", SYNC_URL.render_as_string(hide_password=False))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

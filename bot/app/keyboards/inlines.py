@@ -1,5 +1,4 @@
 import logging
-from typing import List
 
 from telegram import (
     InlineKeyboardButton,
@@ -16,31 +15,15 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     """Создание кнопок для стартового сообщения и домой."""
     if new_user:
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🍳 Загрузить рецепт", callback_data="upload_recipe"
-                )
-            ],
+            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
             [InlineKeyboardButton("❓ Помощь", callback_data="help")],
         ]
     else:
         keyboard = [
             [InlineKeyboardButton("📖 Рецепты", callback_data="recipes_show")],
-            [
-                InlineKeyboardButton(
-                    "🎲 Случайные рецепты", callback_data="recipes_random"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🍳 Загрузить рецепт", callback_data="upload_recipe"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "✏️ Редактировать рецепт", callback_data="recipes_edit"
-                )
-            ],
+            [InlineKeyboardButton("🎲 Случайные рецепты", callback_data="recipes_random")],
+            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
+            [InlineKeyboardButton("✏️ Редактировать рецепт", callback_data="recipes_edit")],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     return reply_markup
@@ -51,11 +34,7 @@ def help_keyboard() -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("🏠 На главную", callback_data="start")],
-            [
-                InlineKeyboardButton(
-                    "🍳 Загрузить рецепт", callback_data="upload_recipe"
-                )
-            ],
+            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
         ]
     )
     return keyboard
@@ -63,14 +42,12 @@ def help_keyboard() -> InlineKeyboardMarkup:
 
 def home_keyboard() -> InlineKeyboardMarkup:
     """Создание кнопок для домашнего меню."""
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🏠 На главную", callback_data="start")]]
-    )
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 На главную", callback_data="start")]])
     return keyboard
 
 
 def category_keyboard(
-    categories: List[dict[str, str]],
+    categories: list[dict[str, str]],
     mode: RecipeMode = RecipeMode.SHOW,
     pipeline_id: int = 0,
 ) -> InlineKeyboardMarkup:
@@ -87,22 +64,12 @@ def category_keyboard(
             [
                 InlineKeyboardButton(
                     name,
-                    callback_data=(
-                        f"{slug}_{suffix}:{pipeline_id}"
-                        if mode is RecipeMode.SAVE
-                        else f"{slug}_{suffix}"
-                    ),
+                    callback_data=(f"{slug}_{suffix}:{pipeline_id}" if mode is RecipeMode.SAVE else f"{slug}_{suffix}"),
                 )
             ]
         )
     if mode is RecipeMode.SAVE:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    "❌ Отмена", callback_data="cancel_save_recipe"
-                )
-            ]
-        )
+        rows.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_save_recipe")])
     else:
         rows.append([InlineKeyboardButton("🔙 Назад", callback_data="start")])
     reply_markup = InlineKeyboardMarkup(rows)
@@ -110,7 +77,7 @@ def category_keyboard(
 
 
 def build_recipes_list_keyboard(
-    items: List[dict[str, int | str]],
+    items: list[dict[str, int | str]],
     page: int = 0,
     *,
     per_page: int = 5,
@@ -138,13 +105,9 @@ def build_recipes_list_keyboard(
 
     # пагинация
     if end < total:
-        rows.append(
-            [InlineKeyboardButton("Далее ⏩", callback_data=f"next_{page + 1}")]
-        )
+        rows.append([InlineKeyboardButton("Далее ⏩", callback_data=f"next_{page + 1}")])
     if page > 0:
-        rows.append(
-            [InlineKeyboardButton("⏪ Назад", callback_data=f"prev_{page - 1}")]
-        )
+        rows.append([InlineKeyboardButton("⏪ Назад", callback_data=f"prev_{page - 1}")])
 
     # домой/меню (если нужно)
     rows.append([InlineKeyboardButton("🏠 В меню", callback_data="start")])
@@ -192,11 +155,7 @@ def choice_recipe_keyboard(page: int) -> InlineKeyboardMarkup:
 def keyboard_choose_field() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [
-                InlineKeyboardButton(
-                    "📝 Изменить название", callback_data="f:title"
-                )
-            ],
+            [InlineKeyboardButton("📝 Изменить название", callback_data="f:title")],
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel")],
         ]
     )
@@ -205,11 +164,7 @@ def keyboard_choose_field() -> InlineKeyboardMarkup:
 def keyboard_save() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [
-                InlineKeyboardButton(
-                    "✅ Сохранить", callback_data="save_changes"
-                )
-            ],
+            [InlineKeyboardButton("✅ Сохранить", callback_data="save_changes")],
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel")],
         ]
     )

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator, Optional
 
 from sqlalchemy import MetaData, create_engine, text
 from sqlalchemy.engine import URL, Engine
@@ -30,28 +30,26 @@ class Database:
 
     def __init__(
         self,
-        db_url: Optional[str | URL] = None,
-        engine: Optional[Engine] = None,
+        db_url: str | URL | None = None,
+        engine: Engine | None = None,
         *,
         echo: bool = False,
         pool_pre_ping: bool = settings.db.pool_pre_ping,
         pool_recycle: int = settings.db.pool_recycle,
-        pool_size: Optional[int] = None,
-        max_overflow: Optional[int] = None,
-        pool_timeout: Optional[int] = None,
+        pool_size: int | None = None,
+        max_overflow: int | None = None,
+        pool_timeout: int | None = None,
     ) -> None:
         if engine is not None:
             self.engine = engine
-            safe = getattr(
-                engine.url, "render_as_string", lambda **_: "<engine>"
-            )(hide_password=True)
+            safe = getattr(engine.url, "render_as_string", lambda **_: "<engine>")(hide_password=True)
             logger.info("🚀 DB engine injected: %s", safe)
         else:
             url = db_url or settings.db.sqlalchemy_url(use_async=True)
             # защита от async-драйвера в синхронном классе
-            if (
-                isinstance(url, URL) and url.drivername.endswith("+asyncpg")
-            ) or (isinstance(url, str) and "asyncpg" in url):
+            if (isinstance(url, URL) and url.drivername.endswith("+asyncpg")) or (
+                isinstance(url, str) and "asyncpg" in url
+            ):
                 raise ValueError(
                     "Получен async-драйвер (asyncpg) для синхронного Database."
                     "Соберите sync URL (postgresql+psycopg2 / "
@@ -80,11 +78,7 @@ class Database:
 
             self.engine = create_engine(url, **engine_kwargs)
 
-            safe = (
-                url.render_as_string(hide_password=True)
-                if isinstance(url, URL)
-                else "<masked url>"
-            )
+            safe = url.render_as_string(hide_password=True) if isinstance(url, URL) else "<masked url>"
             logger.info("🚀 DB engine created for %s", safe)
 
         self._sessionmaker: sessionmaker[Session] = sessionmaker(

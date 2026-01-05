@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 from markupsafe import Markup, escape
 from sqladmin import Admin, ModelView
@@ -28,18 +28,10 @@ class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         try:
             form = await request.form()
-            username = (
-                str(form.get("username") or "").strip()
-                if isinstance(form.get("username"), str)
-                else ""
-            )
+            username = str(form.get("username") or "").strip() if isinstance(form.get("username"), str) else ""
             logger.debug(f"📼 username = {username}")
 
-            password = (
-                str(form.get("password") or "").strip()
-                if isinstance(form.get("password"), str)
-                else ""
-            )
+            password = str(form.get("password") or "").strip() if isinstance(form.get("password"), str) else ""
             if not username or not password:
                 return False
 
@@ -58,9 +50,7 @@ class AdminAuth(AuthenticationBackend):
             return False
         except Exception as e:
             # важный лог — увидишь реальную причину 500 в консоли
-            logging.getLogger(__name__).exception(
-                "AdminAuth.login failed: %s", e
-            )
+            logging.getLogger(__name__).exception("AdminAuth.login failed: %s", e)
             return False
 
     async def logout(self, request: Request) -> bool:
@@ -70,12 +60,8 @@ class AdminAuth(AuthenticationBackend):
     async def authenticate(self, request: Request) -> bool:
         return "admin_login" in request.session
 
-    async def _get_admin(
-        self, session: AsyncSession, login: str
-    ) -> Optional[AdminModel]:
-        res = await session.execute(
-            select(AdminModel).where(AdminModel.login == login)
-        )
+    async def _get_admin(self, session: AsyncSession, login: str) -> AdminModel | None:
+        res = await session.execute(select(AdminModel).where(AdminModel.login == login))
         return res.scalar_one_or_none()
 
 
@@ -120,14 +106,12 @@ class UserAdmin(ModelView, model=User):  # type: ignore[call-arg]
     can_delete = False
 
     column_formatters = {
-        "recipes_count": lambda m, _: len(getattr(m, "recipes") or []),
+        "recipes_count": lambda m, _: len(m.recipes or []),
     }
 
     column_formatters_detail: ClassVar[Any] = {
         "recipes_name": lambda m, _: (
-            Markup("<br>".join(escape(r.title) for r in (m.recipes or [])))
-            if m.recipes
-            else "—"
+            Markup("<br>".join(escape(r.title) for r in (m.recipes or []))) if m.recipes else "—"
         ),
     }
 
@@ -156,7 +140,7 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
     can_delete = True
 
     column_formatters = {
-        "recipes_count": lambda m, _: len(getattr(m, "recipes") or []),
+        "recipes_count": lambda m, _: len(m.recipes or []),
     }
 
     async def on_model_change(
@@ -203,13 +187,9 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
 
         # на всякий случай удалим и текущий ключ
         await CategoryCacheRepository.invalidate_by_slug(redis, str(new_slug))
-        await CategoryCacheRepository.set_id_name_by_slug(
-            redis, str(new_slug), model.id, model.name
-        )
+        await CategoryCacheRepository.set_id_name_by_slug(redis, str(new_slug), model.id, model.name)
 
-    async def after_model_delete(
-        self, model: Category, request: Request
-    ) -> None:
+    async def after_model_delete(self, model: Category, request: Request) -> None:
         """
         При удалении категории — чистим ключ по slug.
         """
@@ -245,14 +225,12 @@ class IngredientAdmin(ModelView, model=Ingredient):  # type: ignore[call-arg]
     can_delete = True
 
     column_formatters: ClassVar[Any] = {
-        "recipes_count": lambda m, _: len(getattr(m, "recipes") or []),
+        "recipes_count": lambda m, _: len(m.recipes or []),
     }
 
     column_formatters_detail: ClassVar[Any] = {
         "recipes_name": lambda m, _: (
-            Markup("<br>".join(escape(r.title) for r in (m.recipes or [])))
-            if m.recipes
-            else "—"
+            Markup("<br>".join(escape(r.title) for r in (m.recipes or []))) if m.recipes else "—"
         ),
     }
 
@@ -351,32 +329,20 @@ class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
 
     column_formatters: ClassVar[Any] = {
         "category_name": lambda m, _: (m.category.name if m.category else "—"),
-        "user_username": lambda m, _: (
-            (m.user.username or f"ID {m.user.id}") if m.user else "—"
-        ),
+        "user_username": lambda m, _: ((m.user.username or f"ID {m.user.id}") if m.user else "—"),
         "ingredients_count": lambda m, _: len(m.ingredients or []),
         "has_video": lambda m, _: "✓" if getattr(m, "video", None) else "—",
     }
 
     column_formatters_detail: ClassVar[Any] = {
         "category_name": lambda m, _: (m.category.name if m.category else "—"),
-        "user_username": lambda m, _: (
-            (m.user.username or f"ID {m.user.id}") if m.user else "—"
-        ),
+        "user_username": lambda m, _: ((m.user.username or f"ID {m.user.id}") if m.user else "—"),
         "ingredients_text": lambda m, _: (
-            Markup("<br>".join(escape(i.name) for i in (m.ingredients or [])))
-            if m.ingredients
-            else "—"
+            Markup("<br>".join(escape(i.name) for i in (m.ingredients or []))) if m.ingredients else "—"
         ),
-        "video_link": lambda m, _: (
-            m.video.video_url if m.video and m.video.video_url else "—"
-        ),
+        "video_link": lambda m, _: (m.video.video_url if m.video and m.video.video_url else "—"),
         # опционально: многострочный текст без HTML
-        "description": lambda m, _: (
-            Markup("<br>".join(escape(m.description).splitlines()))
-            if m.description
-            else "—"
-        ),
+        "description": lambda m, _: (Markup("<br>".join(escape(m.description).splitlines())) if m.description else "—"),
     }
 
     # ajax-подгрузка полей в формах

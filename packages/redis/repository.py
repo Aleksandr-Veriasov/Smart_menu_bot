@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
 
 from redis.asyncio import Redis
 
@@ -28,9 +27,7 @@ class UserCacheRepository:
         """
         Установить флаг 'пользователь существует'.
         """
-        await r.setex(
-            RedisKeys.user_exists(user_id=user_id), ttl.USER_EXISTS, "1"
-        )
+        await r.setex(RedisKeys.user_exists(user_id=user_id), ttl.USER_EXISTS, "1")
         logger.debug(f"✅ User {user_id} exists set in cache")
 
     @classmethod
@@ -55,12 +52,8 @@ class RecipeCacheRepository:
     @classmethod
     async def set_recipe_count(cls, r: Redis, user_id: int, count: int) -> None:
         """Сохраняет количество рецептов пользователя в Redis с TTL."""
-        count_ttl = (
-            ttl.RECIPE_COUNT_SHORT if count < 5 else ttl.RECIPE_COUNT_LONG
-        )
-        await r.setex(
-            RedisKeys.recipe_count(user_id=user_id), count_ttl, str(count)
-        )
+        count_ttl = ttl.RECIPE_COUNT_SHORT if count < 5 else ttl.RECIPE_COUNT_LONG
+        await r.setex(RedisKeys.recipe_count(user_id=user_id), count_ttl, str(count))
 
     @classmethod
     async def invalidate_recipe_count(cls, r: Redis, user_id: int) -> None:
@@ -70,23 +63,19 @@ class RecipeCacheRepository:
     @classmethod
     async def get_all_recipes_ids_and_titles(
         cls, r: Redis, user_id: int, category_id: int
-    ) -> Optional[List[dict[str, int | str]]]:
+    ) -> list[dict[str, int | str]] | None:
         """
         Вернёт список (id, title) всех рецептов пользователя из Redis
         или None, если кэша нет.
         """
-        raw = await r.get(
-            RedisKeys.user_recipes_ids_and_titles(user_id, category_id)
-        )
+        raw = await r.get(RedisKeys.user_recipes_ids_and_titles(user_id, category_id))
         logger.debug(f"👉 Строка для Redis: {raw}")
         if raw is None:
             return None
         try:
             data = json.loads(raw)
             # лёгкая валидация формы
-            if isinstance(data, list) and all(
-                isinstance(x, dict) for x in data
-            ):
+            if isinstance(data, list) and all(isinstance(x, dict) for x in data):
                 return data
         except Exception:
             # битые данные — игнорируем
@@ -99,7 +88,7 @@ class RecipeCacheRepository:
         r: Redis,
         user_id: int,
         category_id: int,
-        items: List[dict[str, int | str]],
+        items: list[dict[str, int | str]],
     ) -> None:
         """
         Сохраняет список (id, title) всех рецептов пользователя в Redis с TTL.
@@ -112,22 +101,16 @@ class RecipeCacheRepository:
         )
 
     @classmethod
-    async def invalidate_all_recipes_ids_and_titles(
-        cls, r: Redis, user_id: int, category_id: int
-    ) -> None:
+    async def invalidate_all_recipes_ids_and_titles(cls, r: Redis, user_id: int, category_id: int) -> None:
         """Удаляет кэш списка (id, title) всех рецептов пользователя."""
-        await r.delete(
-            RedisKeys.user_recipes_ids_and_titles(user_id, category_id)
-        )
+        await r.delete(RedisKeys.user_recipes_ids_and_titles(user_id, category_id))
         logger.debug(f"❌ Удален кэш рецептов пользователя {user_id}")
 
 
 class CategoryCacheRepository:
 
     @classmethod
-    async def get_user_categories(
-        cls, r: Redis, user_id: int
-    ) -> Optional[List[Dict[str, str]]]:
+    async def get_user_categories(cls, r: Redis, user_id: int) -> list[dict[str, str]] | None:
         """
         Вернёт список словарей [{'name':..., 'slug':...}] из Redis
         или None, если кэша нет.
@@ -138,9 +121,7 @@ class CategoryCacheRepository:
         try:
             data = json.loads(raw)
             # лёгкая валидация формы
-            if isinstance(data, list) and all(
-                isinstance(x, dict) for x in data
-            ):
+            if isinstance(data, list) and all(isinstance(x, dict) for x in data):
                 return data
         except Exception:
             # битые данные — игнорируем
@@ -148,14 +129,10 @@ class CategoryCacheRepository:
         return None
 
     @classmethod
-    async def set_user_categories(
-        cls, r: Redis, user_id: int, items: List[Dict[str, str]]
-    ) -> None:
+    async def set_user_categories(cls, r: Redis, user_id: int, items: list[dict[str, str]]) -> None:
         """Сохраняет список категорий пользователя в Redis с TTL."""
         payload = json.dumps(items, ensure_ascii=False)
-        await r.setex(
-            RedisKeys.user_categories(user_id), ttl.USER_CATEGORIES, payload
-        )
+        await r.setex(RedisKeys.user_categories(user_id), ttl.USER_CATEGORIES, payload)
 
     @classmethod
     async def invalidate_user_categories(cls, r: Redis, user_id: int) -> None:
@@ -165,9 +142,7 @@ class CategoryCacheRepository:
         await r.delete(RedisKeys.user_categories(user_id))
 
     @classmethod
-    async def get_id_name_by_slug(
-        cls, r: Redis, slug: str
-    ) -> Optional[Tuple[int, str]]:
+    async def get_id_name_by_slug(cls, r: Redis, slug: str) -> tuple[int, str] | None:
         """
         Вернёт (id, name) категории из Redis по slug
         или None, если кэша нет.
@@ -185,9 +160,7 @@ class CategoryCacheRepository:
             return None
 
     @classmethod
-    async def set_id_name_by_slug(
-        cls, r: Redis, slug: str, cat_id: int, name: str
-    ) -> None:
+    async def set_id_name_by_slug(cls, r: Redis, slug: str, cat_id: int, name: str) -> None:
         """Сохраняет (id, name) категории в Redis по slug."""
         value = f"{int(cat_id)}|{name}"
         await r.set(RedisKeys.category_by_slug(slug), value)
@@ -198,9 +171,7 @@ class CategoryCacheRepository:
         await r.delete(RedisKeys.category_by_slug(slug))
 
     @classmethod
-    async def get_all_name_and_slug(
-        cls, r: Redis
-    ) -> Optional[List[Dict[str, str]]]:
+    async def get_all_name_and_slug(cls, r: Redis) -> list[dict[str, str]] | None:
         """
         Вернёт список словарей [{'name':..., 'slug':...}] всех категорий из
         Redis или None, если кэша нет.
@@ -211,9 +182,7 @@ class CategoryCacheRepository:
         try:
             data = json.loads(raw)
             # лёгкая валидация формы
-            if isinstance(data, list) and all(
-                isinstance(x, dict) for x in data
-            ):
+            if isinstance(data, list) and all(isinstance(x, dict) for x in data):
                 return data
         except Exception:
             # битые данные — игнорируем
@@ -223,9 +192,7 @@ class CategoryCacheRepository:
         return None
 
     @classmethod
-    async def set_all_name_and_slug(
-        cls, r: Redis, items: List[Dict[str, str]]
-    ) -> None:
+    async def set_all_name_and_slug(cls, r: Redis, items: list[dict[str, str]]) -> None:
         """Сохраняет список всех категорий в Redis с TTL."""
         payload = json.dumps(items, ensure_ascii=False)
         await r.set(RedisKeys.all_category(), payload)

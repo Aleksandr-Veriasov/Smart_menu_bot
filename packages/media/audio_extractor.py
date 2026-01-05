@@ -11,9 +11,7 @@ def extract_audio(video_path: str, output_folder: str) -> str:
     if not os.path.exists(output_folder):
         os.makedirs(output_folder, exist_ok=True)
 
-    audio_path: str = os.path.join(
-        output_folder, os.path.basename(video_path).rsplit(".", 1)[0] + ".wav"
-    )
+    audio_path: str = os.path.join(output_folder, os.path.basename(video_path).rsplit(".", 1)[0] + ".wav")
 
     command: list[str] = [
         "ffmpeg",

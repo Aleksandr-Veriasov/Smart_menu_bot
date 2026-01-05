@@ -130,9 +130,7 @@ async def save_changes(update: Update, context: PTBContext) -> int:
         new_title=title,
     )
     if msg and context.user_data:
-        await msg.edit_text(
-            "✅ Изменения сохранены.", reply_markup=home_keyboard()
-        )
+        await msg.edit_text("✅ Изменения сохранены.", reply_markup=home_keyboard())
         context.user_data.pop("edit", None)
     return ConversationHandler.END
 
@@ -248,9 +246,7 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
     category_slug = parse_category(cq.data or "")
     if not category_slug:
-        logger.error(
-            "Не удалось получить slug категории в confirm_change_category"
-        )
+        logger.error("Не удалось получить slug категории в confirm_change_category")
         return ConversationHandler.END
 
     db = get_db(context)
@@ -262,15 +258,9 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
 
     category_id, _ = await service.get_id_and_name_by_slug_cached(category_slug)
     async with db.session() as session:
-        recipe_title = await RecipeRepository.update_category(
-            session, recipe_id, category_id
-        )
-    await CategoryCacheRepository.invalidate_user_categories(
-        app_state.redis, cq.from_user.id
-    )
-    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
-        app_state.redis, cq.from_user.id, category_id
-    )
+        recipe_title = await RecipeRepository.update_category(session, recipe_id, category_id)
+    await CategoryCacheRepository.invalidate_user_categories(app_state.redis, cq.from_user.id)
+    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, cq.from_user.id, category_id)
     logger.debug(f"🗑️ Инвалидирован кэш категорий юзера {cq.from_user.id}")
     await cq.edit_message_text(
         f"✅ Категория рецепта <b>{recipe_title}</b> изменена",
@@ -298,15 +288,11 @@ def conversation_edit_recipe() -> ConversationHandler:
         entry_points=[
             CallbackQueryHandler(start_edit, pattern=r"^edit_recipe_(\d+)$"),
             CallbackQueryHandler(delete_recipe, pattern=r"^delete_recipe_\d+$"),
-            CallbackQueryHandler(
-                change_category, pattern=r"^change_category_\d+$"
-            ),
+            CallbackQueryHandler(change_category, pattern=r"^change_category_\d+$"),
         ],
         states={
             EDRState.CHOOSE_FIELD: [
-                CallbackQueryHandler(
-                    choose_field, pattern=r"^(f:title|f:desc|cancel)$"
-                ),
+                CallbackQueryHandler(choose_field, pattern=r"^(f:title|f:desc|cancel)$"),
                 CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
             EDRState.WAIT_TITLE: [

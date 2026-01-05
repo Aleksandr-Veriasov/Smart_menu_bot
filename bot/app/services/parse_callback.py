@@ -1,15 +1,12 @@
 import logging
 import re
-from typing import Optional, Tuple
 
 from bot.app.core.recipes_mode import RecipeMode
 
 logger = logging.getLogger(__name__)
 
 # slug может содержать a-z, 0-9, _ и -
-CB_RE = re.compile(
-    r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|edit|save))?$"
-)
+CB_RE = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|edit|save))?$")
 
 CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save?$")
 
@@ -17,7 +14,7 @@ CB_RE_M = re.compile(r"^recipes(?:_(?P<mode>show|random|edit))?$")
 CB_CAT_MODE_ID = re.compile(r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$")
 
 
-def parse_category_mode(cb: str) -> Optional[Tuple[str, RecipeMode]]:
+def parse_category_mode(cb: str) -> tuple[str, RecipeMode] | None:
     """
     Возвращает (category_slug, mode) или None, если формат не подошёл.
     """
@@ -33,7 +30,7 @@ def parse_category_mode(cb: str) -> Optional[Tuple[str, RecipeMode]]:
     return category, mode
 
 
-def parse_category(cb: str) -> Optional[str]:
+def parse_category(cb: str) -> str | None:
     """
     Возвращает (category_slug) или None, если формат не подошёл.
     """
@@ -46,7 +43,7 @@ def parse_category(cb: str) -> Optional[str]:
     return category
 
 
-def parse_mode(cb: str) -> Optional[RecipeMode]:
+def parse_mode(cb: str) -> RecipeMode | None:
     """
     Возвращает (mode) или None, если формат не подошёл.
     """
@@ -60,7 +57,7 @@ def parse_mode(cb: str) -> Optional[RecipeMode]:
     return mode
 
 
-def parse_category_mode_id(cb: str) -> Optional[Tuple[str, str, int]]:
+def parse_category_mode_id(cb: str) -> tuple[str, str, int] | None:
     """
     Возвращает (category, mode, obj_id) или None, если формат не подошёл.
     mode: 'show' | 'random' | 'edit'

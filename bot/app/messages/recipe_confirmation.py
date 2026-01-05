@@ -1,8 +1,8 @@
 import asyncio
 import logging
+from collections.abc import Iterable
 from contextlib import suppress
 from html import escape
-from typing import Iterable, Optional
 
 from telegram import Message
 from telegram.constants import ParseMode
@@ -45,28 +45,19 @@ async def send_recipe_confirmation(
             "title": title,
             "recipe": recipe,
             "video_file_id": video_file_id,
-            "ingredients": (
-                list(ingredients)
-                if not isinstance(ingredients, str)
-                else ingredients
-            ),
+            "ingredients": (list(ingredients) if not isinstance(ingredients, str) else ingredients),
         }
     video_msg = None
     logger.debug(f"video_file_id = {video_file_id} ,title = {title},")
     # 1) Видео (если есть file_id) — ждём до 10 сек
     if video_file_id:
-        logger.debug(
-            "Пытаемся отправить видео пользователю (file_id=%s)", video_file_id
-        )
-        video_msg = await send_video_with_wait(
-            message, video_file_id, total_timeout=10.0, check_interval=2.0
-        )
+        logger.debug("Пытаемся отправить видео пользователю (file_id=%s)", video_file_id)
+        video_msg = await send_video_with_wait(message, video_file_id, total_timeout=10.0, check_interval=2.0)
 
     # 2) Если не успели — мягкий фолбэк двумя сообщениями
     if video_msg is None and video_file_id:
         await message.reply_text(
-            "⚠️ Видео подготовлено, но его отправка заняла слишком долго. "
-            "Ниже отправляю текст рецепта.",
+            "⚠️ Видео подготовлено, но его отправка заняла слишком долго. " "Ниже отправляю текст рецепта.",
         )
 
     # 3) Текст (экранируем только пользовательские поля)
@@ -93,7 +84,7 @@ async def send_recipe_confirmation(
         logger.error("Ошибка при отправке текста рецепта: %s", e, exc_info=True)
 
 
-async def _try_reply_video(message: Message, file_id: str) -> Optional[Message]:
+async def _try_reply_video(message: Message, file_id: str) -> Message | None:
     """
     Единичная попытка отправить видео по file_id. Возвращает Message или None.
     """
@@ -120,7 +111,7 @@ async def send_video_with_wait(
     *,
     total_timeout: float = 10.0,
     check_interval: float = 2.0,
-) -> Optional[Message]:
+) -> Message | None:
     """
     Запускает отправку видео и ждёт её завершения не более total_timeout
     секунд, проверяя каждые check_interval. Если не успели — отменяет задачу
@@ -131,9 +122,7 @@ async def send_video_with_wait(
     try:
         while remaining > 0:
             try:
-                return await asyncio.wait_for(
-                    task, timeout=min(check_interval, remaining)
-                )
+                return await asyncio.wait_for(task, timeout=min(check_interval, remaining))
             except asyncio.TimeoutError:
                 remaining -= check_interval
                 # просто ждём дальше

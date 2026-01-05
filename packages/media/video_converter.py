@@ -27,9 +27,7 @@ def convert_to_mp4(input_path: str) -> str:
 
     # Логирование размеров для проверки
     logger.debug(f"Исходное разрешение видео: {width}x{height}")
-    logger.debug(
-        f"Исправленное разрешение видео: {corrected_width}x{corrected_height}"
-    )
+    logger.debug(f"Исправленное разрешение видео: {corrected_width}x{corrected_height}")
 
     # Уменьшаем разрешение на 40%
     new_width = int(corrected_width * CORRECTION_FACTOR)
@@ -38,9 +36,7 @@ def convert_to_mp4(input_path: str) -> str:
     # Корректируем новый размер на 2 (чтобы избежать ошибок при обработке)
     new_width, new_height = _correct_resolution(new_width, new_height)
 
-    logger.debug(
-        f"Новое разрешение видео после сжатия: {new_width}x{new_height}"
-    )
+    logger.debug(f"Новое разрешение видео после сжатия: {new_width}x{new_height}")
 
     try:
         # Выполняем конвертацию с исправленным разрешением

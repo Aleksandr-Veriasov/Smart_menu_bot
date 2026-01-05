@@ -78,12 +78,9 @@ async def send_video_to_channel(
                     max_retries,
                 )
                 break
-            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(
-                0, _MAX_JITTER_SEC
-            )
+            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(0, _MAX_JITTER_SEC)
             logger.warning(
-                "⚠️ TimedOut при отправке видео. "
-                "Повтор через %.2fs (attempt %s/%s)",
+                "⚠️ TimedOut при отправке видео. " "Повтор через %.2fs (attempt %s/%s)",
                 backoff,
                 attempt,
                 max_retries,
@@ -100,9 +97,7 @@ async def send_video_to_channel(
                     max_retries,
                 )
                 break
-            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(
-                0, _MAX_JITTER_SEC
-            )
+            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(0, _MAX_JITTER_SEC)
             logger.warning(
                 "🌐 NetworkError: %s. Повтор через %.2fs (attempt %s/%s)",
                 e,
@@ -115,17 +110,13 @@ async def send_video_to_channel(
         except BadRequest as e:
             # Невалидные данные (например, файл слишком большой / неверные
             # параметры) — ретраить бессмысленно
-            logger.error(
-                "❌ BadRequest при отправке видео: %s", e, exc_info=True
-            )
+            logger.error("❌ BadRequest при отправке видео: %s", e, exc_info=True)
             return ""
 
         except Exception as e:
             # Любая другая ошибка — логируем и выходим
             # (обычно нет смысла ретраить неизвестные исключения)
-            logger.error(
-                "💥 Неожиданная ошибка при отправке видео: %s", e, exc_info=True
-            )
+            logger.error("💥 Неожиданная ошибка при отправке видео: %s", e, exc_info=True)
             return ""
 
     # если все попытки ушли в ретраи, но успеха нет

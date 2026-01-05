@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
 
 from sqlalchemy import MetaData, text
 from sqlalchemy.engine import URL
@@ -29,15 +29,15 @@ class Database:
 
     def __init__(
         self,
-        db_url: Optional[str | URL] = None,
-        engine: Optional[AsyncEngine] = None,
+        db_url: str | URL | None = None,
+        engine: AsyncEngine | None = None,
         *,
         echo: bool = False,
         pool_pre_ping: bool = settings.db.pool_pre_ping,
         pool_recycle: int = settings.db.pool_recycle,
-        pool_size: Optional[int] = None,
-        max_overflow: Optional[int] = None,
-        pool_timeout: Optional[int] = None,
+        pool_size: int | None = None,
+        max_overflow: int | None = None,
+        pool_timeout: int | None = None,
     ) -> None:
         if engine is not None:
             self.engine: AsyncEngine = engine
@@ -50,14 +50,13 @@ class Database:
         else:
             url = db_url or settings.db.sqlalchemy_url(use_async=True)
             # защита от sync-драйвера в асинхронном классе
-            is_async = (
-                isinstance(url, URL) and url.drivername.endswith("+asyncpg")
-            ) or (isinstance(url, str) and "asyncpg" in url)
+            is_async = (isinstance(url, URL) and url.drivername.endswith("+asyncpg")) or (
+                isinstance(url, str) and "asyncpg" in url
+            )
 
             if not is_async:
                 raise ValueError(
-                    "Получен sync-драйвер для асинхронного Database. "
-                    "Соберите async URL (postgresql+asyncpg)."
+                    "Получен sync-драйвер для асинхронного Database. " "Соберите async URL (postgresql+asyncpg)."
                 )
 
             # разумные дефолты, если не заданы аргументами
@@ -82,19 +81,13 @@ class Database:
 
             self.engine = create_async_engine(url, **engine_kwargs)
 
-            safe = (
-                url.render_as_string(hide_password=True)
-                if isinstance(url, URL)
-                else "<masked url>"
-            )
+            safe = url.render_as_string(hide_password=True) if isinstance(url, URL) else "<masked url>"
             logger.info("🚀 Async DB engine created for %s", safe)
 
-        self._sessionmaker: async_sessionmaker[AsyncSession] = (
-            async_sessionmaker(
-                bind=self.engine,
-                expire_on_commit=False,
-                class_=AsyncSession,
-            )
+        self._sessionmaker: async_sessionmaker[AsyncSession] = async_sessionmaker(
+            bind=self.engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
         )
 
     async def dispose(self) -> None:

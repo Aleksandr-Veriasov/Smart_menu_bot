@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Optional
 
 from telegram import Message
 
@@ -20,9 +19,7 @@ AUDIO_FOLDER = "audio/"
 logger = logging.getLogger(__name__)
 
 
-async def process_video_pipeline(
-    url: str, message: Message, context: PTBContext, pipeline_id: int
-) -> None:
+async def process_video_pipeline(url: str, message: Message, context: PTBContext, pipeline_id: int) -> None:
     """Основной конвейер обработки видео:
     1) Скачиваем видео и описание
     2) Конвертируем в mp4
@@ -35,24 +32,18 @@ async def process_video_pipeline(
     В случае ошибок — уведомляем пользователя.
     9) Чистим временные файлы
     """
-    chat_id = (
-        message.chat_id if hasattr(message, "chat_id") else message.chat.id
-    )
+    chat_id = message.chat_id if hasattr(message, "chat_id") else message.chat.id
 
     notifier = TelegramNotifier(context.bot, chat_id, context=context)
     notifier.message_id = None
     # стартовое сообщение (создастся и запомнится message_id)
-    await notifier.info(
-        "🔄 Скачиваю видео и описание... Пожалуйста, подождите."
-    )
+    await notifier.info("🔄 Скачиваю видео и описание... Пожалуйста, подождите.")
 
     # дальше обычный ход
     video_path, description = await async_download_video_and_description(url)
     await notifier.progress(20, "📼 Видео скачано")
     if not video_path:
-        await notifier.error(
-            "Не удалось скачать видео. Отправьте ссылку ещё раз."
-        )
+        await notifier.error("Не удалось скачать видео. Отправьте ссылку ещё раз.")
         return
     logger.debug(f"Описание скачанного видео: {description}")
     convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
@@ -64,9 +55,7 @@ async def process_video_pipeline(
     convert_task.add_done_callback(_cleanup_src_video_after_convert)
     converted_path = await convert_task
 
-    upload_task: asyncio.Task[Optional[str]] = asyncio.create_task(
-        send_video_to_channel(context, converted_path)
-    )
+    upload_task: asyncio.Task[str | None] = asyncio.create_task(send_video_to_channel(context, converted_path))
 
     if context.user_data is not None:
         pipelines = context.user_data.setdefault("pipelines", {})
@@ -85,13 +74,11 @@ async def process_video_pipeline(
     transcribe_task.add_done_callback(_cleanup_audio_after_done)
     transcript = await transcribe_task
 
-    await notifier.progress(
-        80, "🧠 Подготавливаем рецепт через AI... " "Рецепт практически готов!"
-    )
+    await notifier.progress(80, "🧠 Подготавливаем рецепт через AI... " "Рецепт практически готов!")
 
     title, recipe, ingredients = await extract_recipes(description, transcript)
 
-    video_file_id: Optional[str] = None
+    video_file_id: str | None = None
     try:
         # если аплоад уже успел — получим результат мгновенно
         # таймаут можно убрать, если не нужен контроль зависания

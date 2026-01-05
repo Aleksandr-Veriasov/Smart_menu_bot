@@ -41,24 +41,12 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(conversation_edit_recipe())
     # pattern='^save_recipe$'
     app.add_handler(save_recipe_handlers())
-    app.add_handler(
-        MessageHandler(
-            filters.Regex(video_link_pattern) & filters.TEXT, video_link
-        )
-    )
+    app.add_handler(MessageHandler(filters.Regex(video_link_pattern) & filters.TEXT, video_link))
     app.add_handler(CallbackQueryHandler(user_help, pattern="^help$"))
     app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))
-    app.add_handler(
-        CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$")
-    )
-    app.add_handler(
-        CallbackQueryHandler(
-            recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"
-        )
-    )
-    app.add_handler(
-        CallbackQueryHandler(handler_pagination, pattern=r"^(next|prev)_\d+$")
-    )
+    app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
+    app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
+    app.add_handler(CallbackQueryHandler(handler_pagination, pattern=r"^(next|prev)_\d+$"))
     app.add_handler(
         CallbackQueryHandler(
             recipe_choice,

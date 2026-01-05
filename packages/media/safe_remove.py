@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def safe_remove(path: Optional[str]) -> None:
+def safe_remove(path: str | None) -> None:
     """Безопасно удаляет файл, если он существует."""
     if not path:
         return

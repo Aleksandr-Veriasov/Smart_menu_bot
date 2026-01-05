@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -13,7 +12,7 @@ class RecipeExtraction(BaseModel):
     raw: str = ""  # сырой ответ (для дебага)
 
     @property
-    def ingredients_list(self) -> List[str]:
+    def ingredients_list(self) -> list[str]:
         return [
             re.sub(r"^[-*]\s*", "", line).strip()
             for line in self.ingredients_text.splitlines()

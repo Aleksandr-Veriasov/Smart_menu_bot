@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hmac
-from typing import Optional
 
 from passlib.context import CryptContext
 
@@ -9,10 +8,8 @@ from packages.common_settings.settings import settings
 
 try:
     # если есть общесистемный перец (pepper), берём из настроек
-    _PEPPER: Optional[str] = (
-        settings.security.password_pepper.get_secret_value()
-        if settings.security.password_pepper
-        else None
+    _PEPPER: str | None = (
+        settings.security.password_pepper.get_secret_value() if settings.security.password_pepper else None
     )
 except Exception:
     _PEPPER = None
@@ -28,9 +25,7 @@ def _with_pepper(raw: str) -> str:
     if not _PEPPER:
         return raw
     # HMAC как примесь перед хэшированием: стойко и детерминированно
-    return hmac.new(
-        _PEPPER.encode("utf-8"), raw.encode("utf-8"), "sha256"
-    ).hexdigest()
+    return hmac.new(_PEPPER.encode("utf-8"), raw.encode("utf-8"), "sha256").hexdigest()
 
 
 def hash_password(raw_password: str) -> str:

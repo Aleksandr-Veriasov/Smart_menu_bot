@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from telegram import Bot
 from telegram.error import BadRequest
@@ -37,11 +37,11 @@ class TelegramNotifier(Notifier):
         # для удобства держим ссылку
         self.user_data: dict[Any, Any] = self.context.user_data
 
-        self.message_id: Optional[int] = self.user_data.get("progress_msg_id")
+        self.message_id: int | None = self.user_data.get("progress_msg_id")
         self._last_edit_ts = 0.0
         self._min_edit_interval = min_edit_interval
         self._closed = False
-        self._last_pct: Optional[int] = None
+        self._last_pct: int | None = None
         self._last_text: str = ""
 
     # ---------- публичный контракт ----------
@@ -63,10 +63,7 @@ class TelegramNotifier(Notifier):
                 if "not modified" in msq_str:
                     return
                 logger.warning("Не удалось отредактировать сообщение: %s", e)
-                if (
-                    "message to edit not found"
-                    or "message can't be edited" in msq_str
-                ):
+                if "message to edit not found" or "message can't be edited" in msq_str:
                     new_msg = await self.bot.send_message(self.chat_id, text)
                     self.message_id = new_msg.message_id
                     return
@@ -92,7 +89,7 @@ class TelegramNotifier(Notifier):
 
     # ---------- внутренние хелперы ----------
 
-    async def _safe_send(self, text: str) -> Optional[Any]:
+    async def _safe_send(self, text: str) -> Any | None:
         try:
             return await self.bot.send_message(self.chat_id, text)
         except Exception as e:
@@ -103,9 +100,7 @@ class TelegramNotifier(Notifier):
         # дросселирование, чтобы не упереться в лимиты
         now = time.monotonic()
         if not force and (now - self._last_edit_ts) < self._min_edit_interval:
-            await asyncio.sleep(
-                self._min_edit_interval - (now - self._last_edit_ts)
-            )
+            await asyncio.sleep(self._min_edit_interval - (now - self._last_edit_ts))
 
         if self.message_id is None:
             # если по какой-то причине id ещё нет — шлём новое
@@ -120,9 +115,7 @@ class TelegramNotifier(Notifier):
             return  # нечего редактировать
 
         try:
-            await self.bot.edit_message_text(
-                chat_id=self.chat_id, message_id=self.message_id, text=text
-            )
+            await self.bot.edit_message_text(chat_id=self.chat_id, message_id=self.message_id, text=text)
             self._last_text = text
             self._last_edit_ts = time.monotonic()
         except BadRequest as e:
@@ -134,7 +127,7 @@ class TelegramNotifier(Notifier):
         except Exception as e:
             logger.warning("Ошибка при редактировании сообщения: %s", e)
 
-    def _render(self, pct: Optional[int], label: str) -> str:
+    def _render(self, pct: int | None, label: str) -> str:
         """Текст + простая прогресс‑бар линия."""
         if pct is None:
             return label or "⏳ Готовим…"

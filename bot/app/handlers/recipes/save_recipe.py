@@ -45,19 +45,12 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     service = CategoryService(db, app_state.redis)
     categories = await service.get_all_category()
 
-    pipelines = (
-        context.user_data.get("pipelines", {})
-        if context.user_data is not None
-        else {}
-    )
+    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
     draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
     title = draft.get("title", "")
     await cq.edit_message_text(
-        f"🔖 <b>Выберете категорию для этого рецепта:</b>\n\n"
-        f"🍽 <b>Название рецепта:</b>\n{title}\n\n",
-        reply_markup=category_keyboard(
-            categories, RecipeMode.SAVE, pipeline_id=pipeline_id
-        ),
+        f"🔖 <b>Выберете категорию для этого рецепта:</b>\n\n" f"🍽 <b>Название рецепта:</b>\n{title}\n\n",
+        reply_markup=category_keyboard(categories, RecipeMode.SAVE, pipeline_id=pipeline_id),
         parse_mode=ParseMode.HTML,
     )
     return SaveRecipeState.CHOOSE_CATEGORY
@@ -76,11 +69,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         logger.error("Не удалось распарсить pipeline_id в save_recipe")
         return ConversationHandler.END
 
-    pipelines = (
-        context.user_data.get("pipelines", {})
-        if context.user_data is not None
-        else {}
-    )
+    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
     draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
     category_slug = parse_category(category_part)
     if not category_slug:
@@ -105,9 +94,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     category_name = ""
     try:
         service = CategoryService(db, app_state.redis)
-        category_id, category_name = (
-            await service.get_id_and_name_by_slug_cached(category_slug)
-        )
+        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
         async with db.session() as session:
             await save_recipe_service(
                 session,
@@ -118,12 +105,8 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
                 ingredients_raw=ingredients_raw,
                 video_url=video_url,
             )
-            await CategoryCacheRepository.invalidate_user_categories(
-                app_state.redis, user_id
-            )
-            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
-                app_state.redis, user_id, category_id
-            )
+            await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
+            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await cq.edit_message_text(
@@ -170,25 +153,15 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
 def save_recipe_handlers() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(
-                start_save_recipe, pattern=r"^save_recipe:\d+$"
-            ),
-            CallbackQueryHandler(
-                cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"
-            ),
+            CallbackQueryHandler(start_save_recipe, pattern=r"^save_recipe:\d+$"),
+            CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"),
         ],
         states={
             SaveRecipeState.CHOOSE_CATEGORY: [
-                CallbackQueryHandler(
-                    save_recipe, pattern=r"^[a-z0-9][a-z0-9_-]*_save:\d+$"
-                )
+                CallbackQueryHandler(save_recipe, pattern=r"^[a-z0-9][a-z0-9_-]*_save:\d+$")
             ]
         },
-        fallbacks=[
-            CallbackQueryHandler(
-                cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"
-            )
-        ],
+        fallbacks=[CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$")],
         per_chat=True,
         per_user=True,
         per_message=True,

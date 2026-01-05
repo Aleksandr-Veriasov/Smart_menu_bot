@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 from telegram import Message, MessageEntity, Update
 
@@ -11,17 +10,13 @@ from bot.app.services.video_pipeline import process_video_pipeline
 
 logger = logging.getLogger(__name__)
 
-_URL_RE = re.compile(
-    r"(?P<url>https?://(?:www\.)?[^\s<>()\[\]]+)", re.IGNORECASE
-)
+_URL_RE = re.compile(r"(?P<url>https?://(?:www\.)?[^\s<>()\[\]]+)", re.IGNORECASE)
 
 
-def extract_first_url(msg: Message) -> Optional[str]:
+def extract_first_url(msg: Message) -> str | None:
     """Вернёт первую ссылку из текста/подписи сообщения, если она есть."""
     # 1) Сначала — entities (Telegram сам корректно выделяет URL и TEXT_LINK)
-    ent_map = (
-        msg.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]) or {}
-    )
+    ent_map = msg.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]) or {}
     for ent, value in ent_map.items():
         if ent.type == MessageEntity.TEXT_LINK and ent.url:
             return ent.url
@@ -29,10 +24,7 @@ def extract_first_url(msg: Message) -> Optional[str]:
             return value
 
     # 2) Затем — caption_entities (если ссылка в подписи к медиа)
-    cap_map = (
-        msg.parse_caption_entities([MessageEntity.URL, MessageEntity.TEXT_LINK])
-        or {}
-    )
+    cap_map = msg.parse_caption_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]) or {}
     for ent, value in cap_map.items():
         if ent.type == MessageEntity.TEXT_LINK and ent.url:
             return ent.url
@@ -55,26 +47,14 @@ async def video_link(update: Update, context: PTBContext) -> None:
         return
     url = extract_first_url(message)
     if not url:
-        await message.reply_text(
-            "❌ Не нашёл ссылку в сообщении. Пришлите корректный URL."
-        )
+        await message.reply_text("❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.")
         return
 
-    pipeline_id = (
-        message.message_id
-    )  # или f"{message.chat_id}:{message.message_id}"
+    pipeline_id = message.message_id  # или f"{message.chat_id}:{message.message_id}"
 
     # Можем пометить, что пайплайн запущен
-    pipelines = (
-        context.user_data.setdefault("pipelines", {})
-        if context.user_data
-        else {}
-    )
+    pipelines = context.user_data.setdefault("pipelines", {}) if context.user_data else {}
     pipelines[pipeline_id] = {"status": "started"}
 
-    logger.debug(
-        f"Пользователь отправил ссылку: {url}, pipeline_id={pipeline_id}"
-    )
-    context.application.create_task(
-        process_video_pipeline(url, message, context, pipeline_id=pipeline_id)
-    )
+    logger.debug(f"Пользователь отправил ссылку: {url}, pipeline_id={pipeline_id}")
+    context.application.create_task(process_video_pipeline(url, message, context, pipeline_id=pipeline_id))

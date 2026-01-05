@@ -1,6 +1,6 @@
 import logging
 from contextlib import suppress
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from redis.asyncio import Redis
 
@@ -24,9 +24,7 @@ class UserService:
         self.db = db
         self.redis = redis
 
-    async def ensure_user_exists_and_count(
-        self, tg_user: "TelegramUser"
-    ) -> int:
+    async def ensure_user_exists_and_count(self, tg_user: "TelegramUser") -> int:
         """
         1) Пытаемся взять exists и count из Redis.
         2) Если чего-то нет — проверяем БД / создаём (под локом).
@@ -34,15 +32,11 @@ class UserService:
         """
         user_id = tg_user.id
         exists = await UserCacheRepository.get_exists(self.redis, user_id)
-        recipe_count = await RecipeCacheRepository.get_recipe_count(
-            self.redis, user_id
-        )
+        recipe_count = await RecipeCacheRepository.get_recipe_count(self.redis, user_id)
         logger.debug(f"👉 User {user_id} exists={exists} count={recipe_count}")
         if exists is None:
             lock_key = RedisKeys.user_init_lock(user_id=user_id)
-            token: Optional[str] = await acquire_lock(
-                self.redis, lock_key, ttl.LOCK
-            )
+            token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
             logger.debug(f"🔒 User {user_id} lock: {lock_key} token: {token}")
             try:
                 async with self.db.session() as self.session:
@@ -55,9 +49,7 @@ class UserService:
                             first_name=tg_user.first_name,
                             last_name=tg_user.last_name,
                         )
-                        user = await UserRepository.create(
-                            self.session, payload
-                        )
+                        user = await UserRepository.create(self.session, payload)
                     await UserCacheRepository.set_exists(self.redis, user.id)
             finally:
                 if token:
@@ -66,10 +58,6 @@ class UserService:
 
         if recipe_count is None:
             async with self.db.session() as self.session:
-                recipe_count = await RecipeRepository.get_count_by_user(
-                    self.session, user_id
-                )
-                await RecipeCacheRepository.set_recipe_count(
-                    self.redis, user_id, recipe_count
-                )
+                recipe_count = await RecipeRepository.get_count_by_user(self.session, user_id)
+                await RecipeCacheRepository.set_recipe_count(self.redis, user_id, recipe_count)
         return recipe_count

@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from typing import AsyncGenerator, Optional, cast
+from typing import cast
 
 from fastapi import FastAPI, HTTPException, Request
 from telegram import Update
@@ -59,9 +60,7 @@ async def runtime_start(ptb_app: PTBApp, state: AppState) -> None:
         raise RuntimeError("DB healthcheck failed at startup")
 
     if settings.db.run_migrations_on_startup:
-        sync_db_url = settings.db.sqlalchemy_url(
-            use_async=False
-        ).render_as_string(hide_password=False)
+        sync_db_url = settings.db.sqlalchemy_url(use_async=False).render_as_string(hide_password=False)
         await ensure_db_up_to_date(sync_db_url)
         logger.info("Миграция выполнена")
 
@@ -84,7 +83,7 @@ async def runtime_stop(state: AppState) -> None:
     # Останавливаем фоновые задачи и закрываем ресурсы
     cur_state: AppState = state
 
-    task: Optional[asyncio.Task[None]] = cur_state.cleanup_task
+    task: asyncio.Task[None] | None = cur_state.cleanup_task
     if task and not task.done():
         logger.info("⛔ Останавливаем фоновую задачу…")
         task.cancel()
@@ -128,11 +127,7 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
 
         ptb_app = cast(
             PTBApp,
-            Application.builder()
-            .token(token)
-            .post_init(on_startup)
-            .post_shutdown(on_shutdown)
-            .build(),
+            Application.builder().token(token).post_init(on_startup).post_shutdown(on_shutdown).build(),
         )
         setup_handlers(ptb_app)
 
