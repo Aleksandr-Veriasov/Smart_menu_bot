@@ -90,6 +90,7 @@ jobs:
           --exclude '.git' \
           --exclude '.github' \
           --exclude '.env' \
+          --exclude 'telethon_session' \
           ./ root@91.99.6.156:/root/smart_menu_bot_prod/
 
     - name: Deploy to server

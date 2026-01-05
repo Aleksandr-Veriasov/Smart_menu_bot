@@ -151,5 +151,5 @@ async def download_video(url: str) -> tuple[str, str]:
             logger.error(f"Неожиданная ошибка yt-dlp: {e}", exc_info=True)
             break
 
-    logger.error(f"yt-dlp тоже не справился: {last_exc}", exc_info=True)
+    logger.warning(f"yt-dlp не справился: {last_exc}", exc_info=True)
     raise RuntimeError("Не удалось скачать видео через downloader")

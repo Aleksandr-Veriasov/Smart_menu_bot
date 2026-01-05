@@ -46,8 +46,12 @@ def get_app() -> FastAPI:
         except ValueError as exc:
             logger.warning(f"Некорректный запрос: {exc}")
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except Exception as exc:
-            logger.exception(f"Ошибка загрузки через downloader: {exc}")
+        except Exception as primary_exc:
+            logger.warning(
+                "Ошибка загрузки через downloader, пробуем fallback",
+                exc_info=primary_exc,
+            )
+
             if telethon_base_url():
                 logger.info("Пробуем скачать через Telethon worker (SaveAsBot)")
                 try:
@@ -56,7 +60,11 @@ def get_app() -> FastAPI:
                     return DownloadResponse(file_path=file_path, description=caption or "")
                 except Exception as telethon_exc:
                     logger.exception(f"Ошибка загрузки через Telethon worker: {telethon_exc}")
-            raise HTTPException(status_code=500, detail="Downloader failed") from exc
+                    raise HTTPException(
+                        status_code=500, detail="Downloader and Telethon worker failed"
+                    ) from telethon_exc
+
+            raise HTTPException(status_code=500, detail="Downloader failed") from primary_exc
 
     return app
 
