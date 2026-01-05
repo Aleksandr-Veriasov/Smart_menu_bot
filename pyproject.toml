@@ -1,19 +1,22 @@
 [tool.isort]
 profile = "black"
 src_paths = ["."]
-known_first_party = ["."]
+known_first_party = ["backend", "bot", "downloader", "gateway", "telethon_worker", "packages"]
 
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
 disallow_any_generics = false
 disable_error_code = ["import-untyped"]
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+warn_redundant_casts = true
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.black]
-line-length = 80
+line-length = 120
 target-version = ["py310"]
 include = '\.pyi?$'
 exclude = '''
@@ -29,12 +32,13 @@ exclude = '''
 '''
 
 [tool.ruff]
-line-length = 80
+line-length = 120
 target-version = "py310"
-src = ["bot", "backend", "downloader", "tests"]
+src = ["bot", "backend", "downloader", "tests", "gateway", "telethon_worker"]
+fix = true
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "UP"]
 ignore = [
     "E501",  # пока не ругаемся на длину строк
 ]

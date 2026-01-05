@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,10 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY downloader/requirements.txt /tmp/requirements.txt
-RUN pip install uv && uv pip install --system -r /tmp/requirements.txt \
-    && python -m playwright install chromium
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
+COPY downloader/requirements.txt /tmp/requirements.txt
+RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
+
+COPY packages/__init__.py /app/packages/__init__.py
+COPY packages/logging_config.py /app/packages/logging_config.py
 COPY downloader /app/downloader
 
 EXPOSE 8082

@@ -19,3 +19,4 @@ repos:
     hooks:
       - id: mypy
         args: ["--config-file=pyproject.toml"]
+        additional_dependencies: ["pydantic", "pydantic-settings"]

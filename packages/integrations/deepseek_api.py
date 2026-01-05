@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
-from packages.common_settings import settings
+from packages.common_settings.settings import settings
 
 
 class DeepSeekClient:

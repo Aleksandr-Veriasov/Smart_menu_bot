@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +13,7 @@ from starlette.staticfiles import StaticFiles
 from backend.app.admin.views import AdminAuth, setup_admin
 from backend.app.api.routers import api_router
 from packages.app_state import AppState
-from packages.common_settings import settings
+from packages.common_settings.settings import settings
 from packages.db.database import Database
 from packages.db.migrate_and_seed import ensure_admin
 from packages.logging_config import setup_logging
@@ -50,12 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 3) SQLAdmin c auth
     pepper = settings.security.password_pepper
     if pepper is None:
-        raise RuntimeError(
-            "PASSWORD_PEPPER не задан: не можем настроить AdminAuth."
-        )
-    authentication_backend = AdminAuth(
-        state.db, secret_key=pepper.get_secret_value()
-    )
+        raise RuntimeError("PASSWORD_PEPPER не задан: не можем настроить AdminAuth.")
+    authentication_backend = AdminAuth(state.db, secret_key=pepper.get_secret_value())
     admin = Admin(app, engine, authentication_backend=authentication_backend)
     setup_admin(admin)
     logger.info("Админка загружена")
@@ -100,9 +94,7 @@ if settings.fast_api.serve_from_app:
 # Session cookie для SQLAdmin auth
 pepper = settings.security.password_pepper
 if pepper is None:
-    raise RuntimeError(
-        "PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать."
-    )
+    raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать.")
 app.add_middleware(SessionMiddleware, secret_key=pepper.get_secret_value())
 
 # CORS

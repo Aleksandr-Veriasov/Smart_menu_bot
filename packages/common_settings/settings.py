@@ -7,7 +7,7 @@ import ssl
 from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, Tuple, get_args, get_origin
+from typing import Any, Literal
 
 from pydantic import (
     AnyUrl,
@@ -17,110 +17,15 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic.fields import FieldInfo
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings.sources import (
-    EnvSettingsSource,
-    PydanticBaseSettingsSource,
-)
 from sqlalchemy.engine import URL
+
+from packages.common_settings.base import BaseAppSettings
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_DIR = Path(__file__).resolve().parents[2]
 BASE_DIR = Path(os.getenv("PROJECT_ROOT", DEFAULT_BASE_DIR))
 APP_DIR = BASE_DIR / "app"
-
-
-class FileAwareEnvSource(EnvSettingsSource):
-    """
-    Источник ENV с поддержкой fallback на <ENV>_FILE.
-    Приоритет: ENV > ENV_FILE.
-    """
-
-    def get_field_value(
-        self, field: FieldInfo, field_name: str
-    ) -> Tuple[Any, str, bool]:
-        # 1) Берём стандартное значение из окружения
-        value, key, is_complex = super().get_field_value(field, field_name)
-
-        # 2) Если пусто — пробуем <KEY>_FILE
-        if value in (None, ""):
-            file_env = f"{key}_FILE"  # key уже учитывает env_prefix и alias
-            file_path = os.getenv(file_env)
-            if file_path:
-                p = Path(file_path).expanduser().resolve()
-                if not p.is_file():
-                    raise ValueError(f"{file_env} points to missing file: {p}")
-                value = p.read_text().strip()
-                # Содержимое файла — обычная строка (не JSON и т.п.)
-                is_complex = False
-
-        # 3) Если значение строка и pydantic считает его 'complex',
-        #    но строка НЕ похожа на JSON — отдаём как plain string
-        if isinstance(value, str):
-            s = value.strip()
-
-            # определяем, что поле — list[str]
-            origin = get_origin(field.annotation)
-            args = get_args(field.annotation)
-            is_list_of_str = (origin in (list, tuple)) and (
-                len(args) == 1 and args[0] is str
-            )
-
-            # строка 'не похожа' на JSON?
-            looks_like_json = (
-                s.startswith("[")
-                or s.startswith("{")
-                or s.startswith('"')
-                or s in ("null", "true", "false")
-                or (s and s[0] in "-0123456789")
-            )
-
-            if is_list_of_str and not looks_like_json:
-                # Превратим 'a,b,c' → ['a','b','c'] и оставим is_complex=True
-                parts = [x.strip() for x in s.split(",") if x.strip()]
-                value = json.dumps(parts)
-                is_complex = True  # пусть pydantic сам json.loads(...) сделает
-
-        return value, key, is_complex
-
-
-class BaseAppSettings(BaseSettings):
-    """Базовый класс настроек приложения с кастомным источником ENV.
-    Используется для переопределения источников конфигурации и
-    настройки их порядка.
-    """
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=False,
-        extra="ignore",
-        frozen=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[
-        PydanticBaseSettingsSource,
-        PydanticBaseSettingsSource,
-        PydanticBaseSettingsSource,
-        PydanticBaseSettingsSource,
-    ]:
-        # порядок источников:
-        # kwargs -> наш ENV/ENV_FILE -> .env -> secrets_dir
-        return (
-            init_settings,
-            FileAwareEnvSource(settings_cls),
-            dotenv_settings,
-            file_secret_settings,
-        )
 
 
 class SslMode(str, Enum):
@@ -146,10 +51,8 @@ class DatabaseSettings(BaseAppSettings):
     password: SecretStr = Field(..., alias="DB_PASSWORD")
     database_name: str = Field(..., alias="DB_NAME")
 
-    ssl_mode: Optional[SslMode] = Field(default=None, alias="DB_SSLMODE")
-    ssl_root_cert_file: Optional[str] = Field(
-        default=None, alias="DB_SSLROOTCERT"
-    )  # путь к CA
+    ssl_mode: SslMode | None = Field(default=None, alias="DB_SSLMODE")
+    ssl_root_cert_file: str | None = Field(default=None, alias="DB_SSLROOTCERT")  # путь к CA
 
     # Рантайм-флаги
     # dev-bootstrap: Base.metadata.create_all()
@@ -158,9 +61,7 @@ class DatabaseSettings(BaseAppSettings):
     pool_pre_ping: bool = Field(default=True, alias="DB_POOL_PRE_PING")
     # время жизни коннекта в пуле
     pool_recycle: int = Field(default=1800, alias="DB_POOL_RECYCLE")
-    run_migrations_on_startup: bool = Field(
-        default=True, alias="RUN_MIGRATIONS_ON_STARTUP"
-    )
+    run_migrations_on_startup: bool = Field(default=True, alias="RUN_MIGRATIONS_ON_STARTUP")
 
     @model_validator(mode="after")
     def _validate_required(self) -> DatabaseSettings:
@@ -182,9 +83,7 @@ class DatabaseSettings(BaseAppSettings):
         h = self.host.lower()
         return h in {"localhost", "127.0.0.1", "::1", "db"}
 
-    def _effective_ssl_mode(
-        self, *, use_async: bool = True
-    ) -> Optional[SslMode]:
+    def _effective_ssl_mode(self, *, use_async: bool = True) -> SslMode | None:
         """
         Если ssl_mode явно не задан в .env:
         - для локальных хостов — SSL не используем,
@@ -210,9 +109,7 @@ class DatabaseSettings(BaseAppSettings):
             if self.ssl_root_cert_file:
                 raw_query["sslrootcert"] = self.ssl_root_cert_file
 
-        query: dict[str, Sequence[str] | str] = {
-            k: v for k, v in raw_query.items()
-        }
+        query: dict[str, Sequence[str] | str] = {k: v for k, v in raw_query.items()}
 
         return URL.create(
             drivername=f"postgresql+{driver}",
@@ -224,9 +121,7 @@ class DatabaseSettings(BaseAppSettings):
             query=query,
         )
 
-    def connect_args_for_sqlalchemy(
-        self, *, use_async: bool = True
-    ) -> dict[str, Any]:
+    def connect_args_for_sqlalchemy(self, *, use_async: bool = True) -> dict[str, Any]:
         """
         Для asyncpg возвращаем SSL-настройки через ssl.SSLContext.
         Для psycopg (sync) ничего не нужно — всё в URL query.
@@ -282,10 +177,7 @@ class RedisSettings(BaseAppSettings):
     prefix: str = Field(default="myapp:dev", alias="REDIS_PREFIX")
 
     def dsn(self) -> str:
-        return (
-            f"redis://:{self.password.get_secret_value()}"
-            f"@{self.host}:{self.port}/{self.db}"
-        )
+        return f"redis://:{self.password.get_secret_value()}" f"@{self.host}:{self.port}/{self.db}"
 
 
 class TelegramSettings(BaseAppSettings):
@@ -319,7 +211,7 @@ class SentrySettings(BaseAppSettings):
     Используется для мониторинга и отслеживания ошибок.
     """
 
-    dsn: Optional[AnyUrl] = Field(default=None, alias="SENTRY_DSN")
+    dsn: AnyUrl | None = Field(default=None, alias="SENTRY_DSN")
 
 
 class AdminSettinds(BaseAppSettings):
@@ -329,17 +221,13 @@ class AdminSettinds(BaseAppSettings):
 
     login: str = Field(alias="ADMIN_LOGIN")
     password: SecretStr = Field(alias="ADMIN_PASSWORD")
-    create_on_startup: bool = Field(
-        default=True, alias="ADMIN_CREATE_ON_STARTUP"
-    )
+    create_on_startup: bool = Field(default=True, alias="ADMIN_CREATE_ON_STARTUP")
 
 
 class SecuritySettings(BaseAppSettings):
     """Конфигурация пароля"""
 
-    password_pepper: SecretStr | None = Field(
-        default=None, alias="PASSWORD_PEPPER"
-    )
+    password_pepper: SecretStr | None = Field(default=None, alias="PASSWORD_PEPPER")
 
 
 class WebHookSettings(BaseAppSettings):
@@ -373,10 +261,7 @@ class FastApiSettings(BaseAppSettings):
     serve_from_app: bool = Field(
         default=False,
         alias="SERVE_STATIC_FROM_APP",
-        description=(
-            "В dev=True (FastAPI монтирует /static и /media), "
-            "в prod=False (отдаёт Nginx)."
-        ),
+        description=("В dev=True (FastAPI монтирует /static и /media), " "в prod=False (отдаёт Nginx)."),
     )
     uvicorn_workers: int = Field(default=1, alias="UVICORN_WORKERS")
     mount_static_url: str = "/static"
@@ -392,7 +277,7 @@ class FastApiSettings(BaseAppSettings):
             return [x.strip() for x in v.split(",") if x.strip()]
         return v
 
-    def external_domain(self, *, debug: Optional[bool] = None) -> str:
+    def external_domain(self, *, debug: bool | None = None) -> str:
         """
         Если debug=True → всегда localhost.
         Если debug=False → первый публичный домен из allowed_hosts,
@@ -416,9 +301,7 @@ class Settings(BaseAppSettings):
     конфигурация БД, Telegram, DeepSeek и Sentry.
     """
 
-    env: Literal["local", "dev", "staging", "prod"] = Field(
-        default="prod", alias="APP_ENV"
-    )
+    env: Literal["local", "dev", "staging", "prod"] = Field(default="prod", alias="APP_ENV")
     debug: bool = Field(default=False, alias="DEBUG")
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -476,7 +359,4 @@ try:
     logger.debug("Config dump: %s", settings.safe_dict())
 except ValidationError as e:
     logger.critical("❌ Ошибка конфигурации: %s", e.errors())
-    raise SystemExit(
-        "Остановка: отсутствуют обязательные "
-        "переменные окружения или заданы неверно."
-    )
+    raise SystemExit("Остановка: отсутствуют обязательные " "переменные окружения или заданы неверно.") from e

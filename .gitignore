@@ -33,3 +33,5 @@ htmlcov/
 
 docker-compose.override.yml
 docker-compose.db.yml
+
+**/user.session
