@@ -178,7 +178,11 @@ class RecipeUser(Base):
         index=True,
     )
 
-    recipe: Mapped["Recipe"] = relationship(back_populates="recipe_users", lazy="selectin")
+    recipe: Mapped["Recipe"] = relationship(
+        back_populates="recipe_users",
+        lazy="selectin",
+        overlaps="linked_recipes,linked_users",
+    )
     category: Mapped["Category"] = relationship(back_populates="recipe_users", lazy="selectin")
 
 
