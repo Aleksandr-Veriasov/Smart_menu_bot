@@ -39,6 +39,7 @@ class User(Base):
         back_populates="linked_users",
         lazy="selectin",
         passive_deletes=True,
+        overlaps="recipe_users,linked_users",
     )
 
 
@@ -76,11 +77,13 @@ class Recipe(Base):
         back_populates="linked_recipes",
         lazy="selectin",
         passive_deletes=True,
+        overlaps="recipe_users,linked_recipes",
     )
     recipe_users: Mapped[list["RecipeUser"]] = relationship(
         back_populates="recipe",
         lazy="selectin",
         passive_deletes=True,
+        overlaps="linked_recipes,linked_users",
     )
 
     # Видео (один к одному)
