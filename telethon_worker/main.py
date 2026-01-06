@@ -26,6 +26,12 @@ class DownloadOut(BaseModel):
 def get_app() -> FastAPI:
     app = FastAPI(lifespan=telethon_client.lifespan)
 
+    @app.get("/health", tags=["healthy"])
+    async def healthcheck() -> dict:
+        if not telethon_client.client or not telethon_client.sem:
+            raise HTTPException(status_code=503, detail="Telethon client is not ready")
+        return {"status": "ok"}
+
     @app.post("/download", response_model=DownloadOut)
     async def download(payload: DownloadIn):
         if not telethon_client.client or not telethon_client.sem:

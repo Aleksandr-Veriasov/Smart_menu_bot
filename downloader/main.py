@@ -32,7 +32,7 @@ def get_app() -> FastAPI:
         version="0.1.0",
     )
 
-    @app.get("/health", tags=["system"])
+    @app.get("/health", tags=["healthy"])
     async def healthcheck() -> dict:
         return {"status": "ok"}
 
