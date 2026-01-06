@@ -1,0 +1,7 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+pydantic-settings==2.6.1
+Telethon==1.42.0
+requests==2.32.2
+sentry-sdk==2.29.1

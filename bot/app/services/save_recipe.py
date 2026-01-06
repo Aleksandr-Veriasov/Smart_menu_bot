@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,9 +13,9 @@ from packages.db.schemas import RecipeCreate
 
 def _to_name(x: object) -> str:
     if isinstance(x, dict):
-        return (x.get('name') or '').strip()
+        return (x.get("name") or "").strip()
     # если у тебя другой формат, добавь ветки
-    return str(x or '').strip()
+    return str(x or "").strip()
 
 
 async def save_recipe_service(
@@ -24,10 +24,10 @@ async def save_recipe_service(
     user_id: int,
     title: str,
     description: str | None,
-    category_id: str,
+    category_id: int,
     ingredients_raw: Iterable[object],
     video_url: str | None = None,
-) -> Optional[int]:
+) -> int | None:
     """
     Сохраняет рецепт:
     1) создаёт Recipe
@@ -44,19 +44,15 @@ async def save_recipe_service(
         RecipeCreate(
             user_id=user_id,
             title=title,
-            description=description or 'Не указано',
+            description=description or "Не указано",
             category_id=int(category_id),
         ),
     )
 
     try:
         names = [n for n in map(_to_name, ingredients_raw) if n]
-        id_by_name = await IngredientRepository.bulk_get_or_create(
-            session, names
-        )
-        await RecipeIngredientRepository.bulk_link(
-            session, int(recipe.id), id_by_name.values()
-        )
+        id_by_name = await IngredientRepository.bulk_get_or_create(session, names)
+        await RecipeIngredientRepository.bulk_link(session, int(recipe.id), id_by_name.values())
 
         if video_url:
             await VideoRepository.create(session, video_url, int(recipe.id))

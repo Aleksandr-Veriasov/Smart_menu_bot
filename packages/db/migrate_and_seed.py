@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 from alembic import command
 from alembic.config import Config
@@ -15,48 +14,57 @@ from packages.db.database import Database
 from packages.db.models import Admin
 from packages.security.passwords import hash_password
 
-ALEMBIC_INI_PATH = Path('/app/alembic.ini')
+ALEMBIC_INI_PATH = Path("/app/alembic.ini")
 
 
 def _make_alembic_config(db_url: str) -> Config:
     cfg = Config(str(ALEMBIC_INI_PATH))
-    cfg.set_main_option('sqlalchemy.url', db_url)
+    cfg.set_main_option("sqlalchemy.url", db_url)
     return cfg
 
 
-def _get_current_alembic_version(conn: Connection) -> Optional[str]:
-    """ Получаем текущую версию alembic из БД.
+def _get_current_alembic_version(conn: Connection) -> str | None:
+    """Получаем текущую версию alembic из БД.
     Если таблица alembic_version есть.
     Если таблицы нет, возвращаем None.
     Если таблица есть, но в ней нет записей, возвращаем пустую строку.
     """
-    exists = conn.execute(text("""
+    exists = (
+        conn.execute(
+            text(
+                """
         SELECT 1
         FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = 'alembic_version'
         LIMIT 1
-    """)).scalar() is not None
+    """
+            )
+        ).scalar()
+        is not None
+    )
 
     if not exists:
         return None
 
-    ver = conn.execute(
-        text('SELECT version_num FROM alembic_version LIMIT 1')
-    ).scalar()
-    return str(ver) if ver else ''
+    ver = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
+    return str(ver) if ver else ""
 
 
 def _has_user_tables(conn: Connection) -> bool:
-    """ Проверяем, есть ли в схеме public таблицы, кроме alembic_version
-     (чтобы понять, инициализирована ли БД пользователем)
+    """Проверяем, есть ли в схеме public таблицы, кроме alembic_version
+    (чтобы понять, инициализирована ли БД пользователем)
     """
-    count = conn.execute(text("""
+    count = conn.execute(
+        text(
+            """
         SELECT count(*)
         FROM information_schema.tables
         WHERE table_schema = 'public'
           AND table_type = 'BASE TABLE'
           AND table_name NOT IN ('alembic_version')
-    """)).scalar()
+    """
+        )
+    ).scalar()
     return (count or 0) > 0
 
 
@@ -119,17 +127,13 @@ async def ensure_admin(db: Database) -> None:
         return
 
     async with db.session() as session:  # AsyncSession
-        await _ensure_admin_in_session(
-            session, adm.login, adm.password.get_secret_value()
-        )
+        await _ensure_admin_in_session(session, adm.login, adm.password.get_secret_value())
 
 
-async def _ensure_admin_in_session(
-        session: AsyncSession, login: str, raw_password: str
-) -> None:
+async def _ensure_admin_in_session(session: AsyncSession, login: str, raw_password: str) -> None:
     # Ищем по логину
     res = await session.execute(select(Admin).where(Admin.login == login))
-    existing: Optional[Admin] = res.scalar_one_or_none()
+    existing: Admin | None = res.scalar_one_or_none()
     if existing:
         return
 

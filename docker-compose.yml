@@ -8,12 +8,58 @@ volumes:
   certbot_conf:
   static_data:
   media_data:
+  telethon_session:
 
 networks:
   app-net:
     driver: bridge
 
 services:
+  downloader:
+    build:
+      context: .
+      dockerfile: downloader/Dockerfile
+    container_name: downloader
+    user: "1001:1001"
+    env_file:
+      - .env
+    environment:
+      VIDEO_FOLDER: /app/videos
+      TELETHON_BASE_URL: http://telethon_worker:8090
+    volumes:
+      - ./videos:/app/videos
+      - ./data/instagram_downloader:/app/data/instagram
+    networks:
+      - app-net
+    expose:
+      - "8082"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - telethon_worker
+
+  telethon_worker:
+    build:
+      context: .
+      dockerfile: telethon_worker/Dockerfile
+    container_name: telethon_worker
+    user: "1001:1001"
+    env_file:
+      - .env
+    environment:
+      TELETHON_SESSION_PATH: /app/sessions/user.session
+      TELETHON_DOWNLOAD_DIR: /app/videos
+      TELETHON_TIMEOUT_SEC: "180"
+      TELETHON_CONCURRENCY: "1"
+    volumes:
+      - ./telethon_session:/app/sessions
+      - ./videos:/app/videos
+    networks:
+      - app-net
+    expose:
+      - "8090"
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     container_name: db
@@ -51,11 +97,13 @@ services:
       context: .
       dockerfile: bot/Dockerfile
     container_name: tgbot
+    user: "1001:1001"
     # restart: always
     env_file:
       - .env
     environment:
       ALLOWED_HOSTS: '["infrasprint1veriasov.ru","localhost","127.0.0.1"]'
+      DOWNLOADER_BASE_URL: http://downloader:8082
     volumes:
       - ./data:/app/data
       - ./audio:/app/audio
@@ -66,12 +114,14 @@ services:
     depends_on:
       - db
       - redis
+      - downloader
     
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: backend
+    user: "1001:1001"
     env_file: 
       - .env
     environment:

@@ -6,7 +6,7 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SaveRecipeState
-from bot.app.core.types import PTBContext
+from bot.app.core.types import AppState, PTBContext
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
 from bot.app.services.ingredients_parser import parse_ingredients
@@ -30,19 +30,28 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
+    data = cq.data or ""
+    try:
+        action, pipeline_id_str = data.rsplit(":", 1)
+        pipeline_id = int(pipeline_id_str)
+    except (ValueError, TypeError):
+        logger.error("Не удалось распарсить pipeline_id в start_save_recipe")
+        return ConversationHandler.END
     db = get_db(context)
-    state = context.bot_data['state']
-    service = CategoryService(db, state.redis)
+    app_state = context.bot_data.get("state")
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error("AppState или Redis недоступен в start_save_recipe")
+        return ConversationHandler.END
+    service = CategoryService(db, app_state.redis)
     categories = await service.get_all_category()
 
-    if context.user_data:
-        draft = context.user_data.get('recipe_draft', {})
-    title = draft.get('title', '')
+    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
+    draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
+    title = draft.get("title", "")
     await cq.edit_message_text(
-        f'🔖 <b>Выберете категорию для этого рецепта:</b>\n\n'
-        f'🍽 <b>Название рецепта:</b>\n{title}\n\n',
-        reply_markup=category_keyboard(categories, RecipeMode.SAVE),
-        parse_mode=ParseMode.HTML
+        f"🔖 <b>Выберете категорию для этого рецепта:</b>\n\n" f"🍽 <b>Название рецепта:</b>\n{title}\n\n",
+        reply_markup=category_keyboard(categories, RecipeMode.SAVE, pipeline_id=pipeline_id),
+        parse_mode=ParseMode.HTML,
     )
     return SaveRecipeState.CHOOSE_CATEGORY
 
@@ -52,25 +61,40 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    if context.user_data:
-        draft = context.user_data.get('recipe_draft', {})
-    category_slug = parse_category(cq.data or '')
+    data = cq.data or ""
+    try:
+        category_part, pipeline_id_str = data.rsplit(":", 1)
+        pipeline_id = int(pipeline_id_str)
+    except (ValueError, TypeError):
+        logger.error("Не удалось распарсить pipeline_id в save_recipe")
+        return ConversationHandler.END
 
-    title = draft.get('title', 'Не указано')
-    description = draft.get('recipe', 'Не указано')
-    ingredients = draft.get('ingredients', 'Не указано')
-    video_url = draft.get('video_file_id', '')
+    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
+    draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
+    category_slug = parse_category(category_part)
+    if not category_slug:
+        logger.error("Не удалось получить slug категории в save_recipe")
+        return ConversationHandler.END
+
+    title = draft.get("title", "Не указано")
+    description = draft.get("recipe", "Не указано")
+    ingredients = draft.get("ingredients", "Не указано")
+    video_url = draft.get("video_file_id", "")
     ingredients_raw = parse_ingredients(ingredients)
     user_id = cq.from_user.id if cq.from_user else None
+    if not user_id:
+        logger.error("Не удалось получить user_id в save_recipe")
+        return ConversationHandler.END
 
     db = get_db(context)
-    state = context.bot_data['state']
-    category_name = ''
+    app_state = context.bot_data.get("state")
+    if not isinstance(app_state, AppState) or app_state.redis is None:
+        logger.error("AppState или Redis недоступен в save_recipe")
+        return ConversationHandler.END
+    category_name = ""
     try:
-        service = CategoryService(db, state.redis)
-        category_id, category_name = (
-            await service.get_id_and_name_by_slug_cached(category_slug)
-        )
+        service = CategoryService(db, app_state.redis)
+        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
         async with db.session() as session:
             await save_recipe_service(
                 session,
@@ -81,25 +105,21 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
                 ingredients_raw=ingredients_raw,
                 video_url=video_url,
             )
-            await CategoryCacheRepository.invalidate_user_categories(
-                state.redis, user_id
-            )
-            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(
-                state.redis, user_id, category_id
-            )
+            await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
+            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
     except Exception as e:
-        logger.exception('Ошибка при сохранении рецепта: %s', e)
+        logger.exception("Ошибка при сохранении рецепта: %s", e)
         await cq.edit_message_text(
-            '❗️ Произошла ошибка при сохранении рецепта. Попробуйте позже.',
+            "❗️ Произошла ошибка при сохранении рецепта. Попробуйте позже.",
             reply_markup=home_keyboard(),
         )
         return ConversationHandler.END
     await cq.edit_message_text(
-        f'✅ Ваш рецепт успешно сохранен!\n\n'
-        f'🍽 <b>Название рецепта:</b>\n{title}\n\n'
-        f'🔖 <b>Категория:</b> {category_name}',
+        f"✅ Ваш рецепт успешно сохранен!\n\n"
+        f"🍽 <b>Название рецепта:</b>\n{title}\n\n"
+        f"🔖 <b>Категория:</b> {category_name}",
         parse_mode=ParseMode.HTML,
-        reply_markup=home_keyboard()
+        reply_markup=home_keyboard(),
     )
     return ConversationHandler.END
 
@@ -110,14 +130,22 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
     if not cq:
         return ConversationHandler.END
     await cq.answer()
-    user_id = cq.from_user.id
-    if context.user_data:
-        context.user_data.pop(user_id, None)
+    data = cq.data or ""
+    try:
+        action, pipeline_id_str = data.rsplit(":", 1)
+        pipeline_id = int(pipeline_id_str)
+    except (ValueError, TypeError):
+        logger.error("Не удалось распарсить pipeline_id в cancel_recipe_save")
+        return ConversationHandler.END
+
+    if context.user_data is not None:
+        pipelines = context.user_data.get("pipelines", {})
+        pipelines.pop(pipeline_id, None)
 
     await cq.edit_message_text(
-        'Рецепт не сохранен.',
+        "Рецепт не сохранен.",
         parse_mode=ParseMode.HTML,
-        reply_markup=home_keyboard()
+        reply_markup=home_keyboard(),
     )
     return ConversationHandler.END
 
@@ -125,29 +153,15 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
 def save_recipe_handlers() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(
-                start_save_recipe,
-                pattern='^save_recipe$'
-            ),
-            CallbackQueryHandler(
-                cancel_recipe_save,
-                pattern='^cancel_save_recipe$'
-            )
+            CallbackQueryHandler(start_save_recipe, pattern=r"^save_recipe:\d+$"),
+            CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"),
         ],
         states={
             SaveRecipeState.CHOOSE_CATEGORY: [
-                CallbackQueryHandler(
-                    save_recipe,
-                    pattern='^[a-z0-9][a-z0-9_-]*_save$'
-                )
+                CallbackQueryHandler(save_recipe, pattern=r"^[a-z0-9][a-z0-9_-]*_save:\d+$")
             ]
         },
-        fallbacks=[
-            CallbackQueryHandler(
-                cancel_recipe_save,
-                pattern='^cancel_save_recipe$'
-            )
-        ],
+        fallbacks=[CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$")],
         per_chat=True,
         per_user=True,
         per_message=True,

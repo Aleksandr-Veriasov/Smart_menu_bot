@@ -21,8 +21,10 @@ PTBContext: TypeAlias = CallbackContext[
 PTBApp: TypeAlias = Application[
     ExtBot[None],
     PTBContext,
-    dict[Any, Any],           # user_data
-    dict[Any, Any],           # chat_data
-    BotData,                  # bot_data
+    dict[Any, Any],  # user_data
+    dict[Any, Any],  # chat_data
+    BotData,  # bot_data
     JobQueue[PTBContext],
 ]
+
+__all__ = ["AppState", "BotData", "PTBContext", "PTBApp"]

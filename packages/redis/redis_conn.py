@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from redis.asyncio import Redis
 
 from packages.common_settings.settings import settings
 
-_redis: Optional[Redis] = None
+_redis: Redis | None = None
 
 
 async def get_redis() -> Redis:
@@ -14,7 +12,7 @@ async def get_redis() -> Redis:
     if _redis is None:
         _redis = Redis.from_url(
             settings.redis.dsn(),
-            encoding='utf-8',
+            encoding="utf-8",
             decode_responses=True,  # удобно для строк/JSON
             socket_timeout=5.0,
             socket_connect_timeout=3.0,

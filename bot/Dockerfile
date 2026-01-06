@@ -16,13 +16,7 @@ WORKDIR /app
 
 # Копируем зависимости
 COPY bot/requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
-
-# non-root пользователь и права
-RUN useradd -r -u 10002 -g users appuser \
- && mkdir -p /app/.cache \
- && chown -R appuser:users /app
-USER appuser
+RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 
 # Куда класть кэш моделей
 ENV XDG_CACHE_HOME=/app/.cache

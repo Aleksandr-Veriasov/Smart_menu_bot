@@ -14,15 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 1) зависимости (кэш слоя)
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 
 # 2) только нужный код
 COPY packages /app/packages
 COPY backend  /app/backend
-
-# non-root
-RUN useradd -r -u 10001 -g users appuser && chown -R appuser:users /app
-USER appuser
 
 EXPOSE 8000
 

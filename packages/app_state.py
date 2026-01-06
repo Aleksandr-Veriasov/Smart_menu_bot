@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from redis.asyncio import Redis
 
@@ -16,9 +16,10 @@ class AppState:
     Единый контейнер состояния приложения.
     Хранит долгоживущие ресурсы (БД и т.п.).
     """
+
     db: Database
     cleanup_task: Any | None = None  # сюда можно класть фоновые таски/хэндлы
-    redis: Optional[Redis] = None
+    redis: Redis | None = None
 
 
-__all__ = ['AppState']
+__all__ = ["AppState"]

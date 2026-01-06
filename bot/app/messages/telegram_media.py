@@ -23,7 +23,7 @@ async def send_video_to_channel(
     context: PTBContext,
     converted_video_path: str,
     *,
-    caption: str = '📹 Новое видео!',
+    caption: str = "📹 Новое видео!",
     max_retries: int = _MAX_RETRIES,
 ) -> str:
     """
@@ -31,14 +31,14 @@ async def send_video_to_channel(
     """
     p = Path(converted_video_path)
     if not p.is_file():
-        logger.error('Видео не найдено: %s', p)
-        return ''
+        logger.error("Видео не найдено: %s", p)
+        return ""
 
     for attempt in range(1, max_retries + 1):
         try:
             # Каждый раз открываем файл заново — после
             # неудачной попытки поток может быть «исчерпан»
-            with p.open('rb') as f:
+            with p.open("rb") as f:
                 msg = await context.bot.send_video(
                     chat_id=settings.telegram.chat_id,
                     video=InputFile(f, filename=p.name),
@@ -46,22 +46,26 @@ async def send_video_to_channel(
                     supports_streaming=True,
                     allow_sending_without_reply=True,
                     read_timeout=90,
-                    write_timeout=90
+                    write_timeout=90,
                 )
 
-            file_id = msg.video.file_id if msg.video else ''
+            file_id = msg.video.file_id if msg.video else ""
             logger.debug(
-                '✅ Видео отправлено (attempt=%s): file_id=%s, message_id=%s',
-                attempt, file_id, msg.message_id
+                "✅ Видео отправлено (attempt=%s): file_id=%s, message_id=%s",
+                attempt,
+                file_id,
+                msg.message_id,
             )
             return file_id
 
         except RetryAfter as e:
             # Telegram попросил подождать (Flood/429)
-            wait_for = max(float(getattr(e, 'retry_after', 1)), 1.0)
+            wait_for = max(float(getattr(e, "retry_after", 1)), 1.0)
             logger.warning(
-                '⏳ RetryAfter: ждём %.1fs (attempt %s/%s)',
-                wait_for, attempt, max_retries
+                "⏳ RetryAfter: ждём %.1fs (attempt %s/%s)",
+                wait_for,
+                attempt,
+                max_retries,
             )
             await asyncio.sleep(wait_for)
 
@@ -69,17 +73,17 @@ async def send_video_to_channel(
             # Классический таймаут сети/чтения
             if attempt >= max_retries:
                 logger.error(
-                    '❌ TimedOut. Попытки исчерпаны (%s/%s)',
-                    attempt, max_retries
+                    "❌ TimedOut. Попытки исчерпаны (%s/%s)",
+                    attempt,
+                    max_retries,
                 )
                 break
-            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(
-                0, _MAX_JITTER_SEC
-            )
+            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(0, _MAX_JITTER_SEC)
             logger.warning(
-                '⚠️ TimedOut при отправке видео. '
-                'Повтор через %.2fs (attempt %s/%s)',
-                backoff, attempt, max_retries
+                "⚠️ TimedOut при отправке видео. " "Повтор через %.2fs (attempt %s/%s)",
+                backoff,
+                attempt,
+                max_retries,
             )
             await asyncio.sleep(backoff)
 
@@ -87,35 +91,33 @@ async def send_video_to_channel(
             # Временные сетевые сбои (обрыв соединения и т.п.)
             if attempt >= max_retries:
                 logger.error(
-                    '❌ NetworkError: %s. Попытки исчерпаны (%s/%s)', e,
-                    attempt, max_retries
+                    "❌ NetworkError: %s. Попытки исчерпаны (%s/%s)",
+                    e,
+                    attempt,
+                    max_retries,
                 )
                 break
-            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(
-                0, _MAX_JITTER_SEC
-            )
+            backoff = _BASE_DELAY_SEC * (2 ** (attempt - 1)) + random.uniform(0, _MAX_JITTER_SEC)
             logger.warning(
-                '🌐 NetworkError: %s. Повтор через %.2fs (attempt %s/%s)',
-                e, backoff, attempt, max_retries
+                "🌐 NetworkError: %s. Повтор через %.2fs (attempt %s/%s)",
+                e,
+                backoff,
+                attempt,
+                max_retries,
             )
             await asyncio.sleep(backoff)
 
         except BadRequest as e:
             # Невалидные данные (например, файл слишком большой / неверные
             # параметры) — ретраить бессмысленно
-            logger.error(
-                '❌ BadRequest при отправке видео: %s', e, exc_info=True
-            )
-            return ''
+            logger.error("❌ BadRequest при отправке видео: %s", e, exc_info=True)
+            return ""
 
         except Exception as e:
             # Любая другая ошибка — логируем и выходим
             # (обычно нет смысла ретраить неизвестные исключения)
-            logger.error(
-                '💥 Неожиданная ошибка при отправке видео: %s', e,
-                exc_info=True
-            )
-            return ''
+            logger.error("💥 Неожиданная ошибка при отправке видео: %s", e, exc_info=True)
+            return ""
 
     # если все попытки ушли в ретраи, но успеха нет
-    return ''
+    return ""
