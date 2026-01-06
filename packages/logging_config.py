@@ -16,14 +16,15 @@ class DropMetricsUvicornAccessFilter(logging.Filter):
         if record.name != "uvicorn.access":
             return True
 
-        # Uvicorn помещает request_line в record
+        blocked_paths = ("/metrics", "/health", "/ping")
+
         request_line = record.__dict__.get("request_line", "")
-        if "/metrics" in request_line or "/helth" in request_line:
+        if any(p in request_line for p in blocked_paths):
             return False
 
         # Фолбэк: иногда request_line может отсутствовать, тогда смотрим message
         msg = record.getMessage()
-        if " /metrics " in msg or msg.endswith(" /metrics"):
+        if any(f" {p} " in msg or msg.endswith(f" {p}") for p in blocked_paths):
             return False
 
         return True
@@ -84,10 +85,11 @@ def setup_logging() -> None:
     except Exception:
         settings = None
 
-    debug = _env_bool("DEBUG", default=False)
-    # скрывать только запросы к /metrics (по умолчанию выключено)
-    drop_metrics_access_log = _env_bool("DROP_METRICS_ACCESS_LOG", default=False)
+    # Скрывать access-логи uvicorn для /metrics (и /health). По умолчанию включено,
+    # чтобы Prometheus/healthchecks не засоряли Loki.
+    drop_metrics_access_log = _env_bool("DROP_METRICS_ACCESS_LOG", default=True)
 
+    debug = _env_bool("DEBUG", default=False)
     if settings is not None:
         debug = bool(getattr(settings, "debug", debug))
 
@@ -101,6 +103,13 @@ def setup_logging() -> None:
     stream_handler.setFormatter(CustomFormatter())
     if drop_metrics_access_log:
         stream_handler.addFilter(DropMetricsUvicornAccessFilter())
+
+    # ВАЖНО: uvicorn часто настраивает собственный handler для `uvicorn.access`
+    # и выключает propagate, поэтому фильтр на root-handler может не сработать.
+    # Добавляем фильтр прямо на логгер `uvicorn.access`, чтобы гарантированно
+    # скрывать /metrics вне зависимости от конфигурации uvicorn.
+    if drop_metrics_access_log:
+        logging.getLogger("uvicorn.access").addFilter(DropMetricsUvicornAccessFilter())
 
     logging.basicConfig(
         level=level,
