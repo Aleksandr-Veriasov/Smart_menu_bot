@@ -70,7 +70,7 @@ class UserRead(UserBase):
     created_at: datetime
     # Важно: у тебя lazy='dynamic', поэтому здесь нужно прокинуть
     # конкретный список (recipe.query.all()) или использовать eager load.
-    recipes: list[RecipeShort] = Field(default_factory=list)
+    linked_recipes: list[RecipeShort] = Field(default_factory=list)
 
 
 # ===================== CATEGORY =====================
@@ -120,6 +120,7 @@ class IngredientRead(IngredientBase):
 
 class VideoBase(BaseModel):
     video_url: str
+    original_url: str | None = None
 
 
 class VideoCreate(VideoBase):
@@ -129,6 +130,7 @@ class VideoCreate(VideoBase):
 
 class VideoUpdate(BaseModel):
     video_url: str | None = None
+    original_url: str | None = None
     recipe_id: int | None = None  # на случай перевязки
 
 
@@ -169,9 +171,8 @@ class RecipeRead(RecipeBase):
 
     id: int
     created_at: datetime
-    user_id: int
-
-    category: CategoryShort
+    last_used_at: datetime | None = None
+    linked_users: list[UserShort] = Field(default_factory=list)
     ingredients: list[IngredientShort] = Field(default_factory=list)
     video: VideoShort | None = None
 

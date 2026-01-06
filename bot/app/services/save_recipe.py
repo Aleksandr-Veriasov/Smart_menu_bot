@@ -27,6 +27,7 @@ async def save_recipe_service(
     category_id: int,
     ingredients_raw: Iterable[object],
     video_url: str | None = None,
+    original_url: str | None = None,
 ) -> int | None:
     """
     Сохраняет рецепт:
@@ -55,7 +56,7 @@ async def save_recipe_service(
         await RecipeIngredientRepository.bulk_link(session, int(recipe.id), id_by_name.values())
 
         if video_url:
-            await VideoRepository.create(session, video_url, int(recipe.id))
+            await VideoRepository.create(session, video_url, int(recipe.id), original_url=original_url)
 
         await session.commit()
         return int(recipe.id)

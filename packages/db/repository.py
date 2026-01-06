@@ -4,6 +4,7 @@ import logging
 from collections.abc import Iterable
 from typing import Any, Generic, TypeVar
 
+import sqlalchemy as sa
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import ScalarResult
@@ -17,6 +18,7 @@ from packages.db.models import (
     Ingredient,
     Recipe,
     RecipeIngredient,
+    RecipeUser,
     User,
     Video,
 )
@@ -82,10 +84,19 @@ class RecipeRepository(BaseRepository[Recipe]):
 
     @classmethod
     async def create(cls, session: AsyncSession, recipe_create: RecipeCreate) -> Recipe:
-        data = recipe_create.model_dump(exclude_unset=True)
+        data = recipe_create.model_dump(exclude_unset=True, exclude={"ingredient_ids"})
+        user_id = data.pop("user_id", None)
+        category_id = data.pop("category_id", None)
         recipe = cls.model(**data)
         session.add(recipe)
         await session.flush()  # получим PK/дефолты, но без коммита
+        if user_id is not None and category_id is not None:
+            await RecipeUserRepository.link_user(
+                session,
+                int(recipe.id),
+                int(user_id),
+                int(category_id),
+            )
         await session.refresh(recipe)  # подхватить БД-дефолты/триггеры
         return recipe
 
@@ -104,19 +115,28 @@ class RecipeRepository(BaseRepository[Recipe]):
         return recipe
 
     @classmethod
-    async def update_category(cls, session: AsyncSession, recipe_id: int, category_id: int) -> str | None:
+    async def update_category(
+        cls,
+        session: AsyncSession,
+        recipe_id: int,
+        user_id: int,
+        category_id: int,
+    ) -> str | None:
         statement = (
-            update(cls.model)
-            .where(cls.model.id == recipe_id)
+            update(RecipeUser)
+            .where(
+                RecipeUser.recipe_id == recipe_id,
+                RecipeUser.user_id == user_id,
+            )
             .values(category_id=category_id)
-            .returning(cls.model.title)
+            .returning(RecipeUser.recipe_id)
         )
         result = await session.execute(statement)
         row = result.scalar_one_or_none()
-        logger.debug(f"Updated recipe {recipe_id} to category " f"{category_id}, title={row}")
+        logger.debug(f"Updated recipe {recipe_id} to category " f"{category_id}, row={row}")
         if row is None:
             raise ValueError("Recipe not found")
-        return row
+        return await cls.get_name_by_id(session, recipe_id)
 
     @classmethod
     async def update_title(cls, session: AsyncSession, recipe_id: int, title: str) -> None:
@@ -127,8 +147,17 @@ class RecipeRepository(BaseRepository[Recipe]):
         logger.debug(f"👉 Updated recipe {recipe_id} title to {title}")
 
     @classmethod
+    async def update_last_used_at(cls, session: AsyncSession, recipe_id: int) -> None:
+        statement = update(cls.model).where(cls.model.id == recipe_id).values(last_used_at=func.now())
+        await session.execute(statement)
+
+    @classmethod
     async def get_count_by_user(cls, session: AsyncSession, user_id: int) -> int:
-        statement = select(func.count(Recipe.id)).where(Recipe.user_id == user_id)
+        statement = (
+            select(func.count(Recipe.id))
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .where(RecipeUser.user_id == user_id)
+        )
         result = await session.execute(statement)
         count = result.scalar_one_or_none()
         return count or 0
@@ -137,7 +166,8 @@ class RecipeRepository(BaseRepository[Recipe]):
     async def get_recipes_id_by_category(cls, session: AsyncSession, user_id: int, category_id: int) -> list[int]:
         statement: Select[tuple[int]] = (
             select(Recipe.id)
-            .where(Recipe.user_id == user_id, Recipe.category_id == category_id)
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .where(RecipeUser.user_id == user_id, RecipeUser.category_id == category_id)
             .order_by(desc(Recipe.id))
         )
 
@@ -153,7 +183,6 @@ class RecipeRepository(BaseRepository[Recipe]):
             .where(Recipe.id == recipe_id)
             .options(
                 joinedload(Recipe.ingredients),
-                joinedload(Recipe.category),
                 joinedload(Recipe.video),
             )
         )
@@ -169,7 +198,8 @@ class RecipeRepository(BaseRepository[Recipe]):
         """
         statement = (
             select(Recipe.id, Recipe.title)
-            .where(Recipe.user_id == user_id, Recipe.category_id == category_id)
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .where(RecipeUser.user_id == user_id, RecipeUser.category_id == category_id)
             .order_by(Recipe.id)
         )
         result = await session.execute(statement)
@@ -197,11 +227,14 @@ class RecipeRepository(BaseRepository[Recipe]):
         await session.delete(recipe)
 
     @classmethod
-    async def get_category_id_by_recipe_id(cls, session: AsyncSession, recipe_id: int) -> int | None:
+    async def get_category_id_by_recipe_id(cls, session: AsyncSession, recipe_id: int, user_id: int) -> int | None:
         """
-        Получает ID категории по ID рецепта.
+        Получает ID категории по ID рецепта и пользователя.
         """
-        statement = select(Recipe.category_id).where(Recipe.id == recipe_id)
+        statement = select(RecipeUser.category_id).where(
+            RecipeUser.recipe_id == recipe_id,
+            RecipeUser.user_id == user_id,
+        )
         result = await session.execute(statement)
         category_id = result.scalar_one_or_none()
         return category_id
@@ -265,8 +298,8 @@ class CategoryRepository(BaseRepository[Category]):
                 cls.model.name.label("name"),
                 cls.model.slug.label("slug"),
             )
-            .join(Recipe, Recipe.category_id == cls.model.id)
-            .where(Recipe.user_id == user_id)
+            .join(RecipeUser, RecipeUser.category_id == cls.model.id)
+            .where(RecipeUser.user_id == user_id)
             .group_by(cls.model.id, cls.model.name, cls.model.slug)
             .order_by(cls.model.id)
         )
@@ -286,8 +319,21 @@ class VideoRepository(BaseRepository[Video]):
         return video_url
 
     @classmethod
-    async def create(cls, session: AsyncSession, video_url: str, recipe_id: int) -> Video:
-        video = cls.model(video_url=video_url, recipe_id=recipe_id)
+    async def get_by_original_url(cls, session: AsyncSession, original_url: str) -> Video | None:
+        statement = select(cls.model).where(cls.model.original_url == original_url)
+        result = await session.execute(statement)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def create(
+        cls,
+        session: AsyncSession,
+        video_url: str,
+        recipe_id: int,
+        *,
+        original_url: str | None = None,
+    ) -> Video:
+        video = cls.model(video_url=video_url, recipe_id=recipe_id, original_url=original_url)
         session.add(video)
         try:
             await session.flush()  # получим PK / дефолты
@@ -403,3 +449,43 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
             )
         )
         await session.execute(stmt)
+
+
+class RecipeUserRepository(BaseRepository[RecipeUser]):
+    model = RecipeUser
+
+    @classmethod
+    async def link_user(cls, session: AsyncSession, recipe_id: int, user_id: int, category_id: int) -> None:
+        stmt = (
+            pg_insert(RecipeUser)
+            .values(
+                {
+                    "recipe_id": int(recipe_id),
+                    "user_id": int(user_id),
+                    "category_id": int(category_id),
+                }
+            )
+            .on_conflict_do_nothing(
+                index_elements=[RecipeUser.recipe_id, RecipeUser.user_id],
+            )
+        )
+        await session.execute(stmt)
+
+    @classmethod
+    async def unlink_user(cls, session: AsyncSession, recipe_id: int, user_id: int) -> None:
+        statement = sa.delete(RecipeUser).where(RecipeUser.recipe_id == recipe_id, RecipeUser.user_id == user_id)
+        await session.execute(statement)
+
+    @classmethod
+    async def is_linked(cls, session: AsyncSession, recipe_id: int, user_id: int) -> bool:
+        statement = select(func.count(RecipeUser.id)).where(
+            RecipeUser.recipe_id == recipe_id, RecipeUser.user_id == user_id
+        )
+        result = await session.execute(statement)
+        return (result.scalar_one_or_none() or 0) > 0
+
+    @classmethod
+    async def get_any_category_id(cls, session: AsyncSession, recipe_id: int) -> int | None:
+        statement = select(RecipeUser.category_id).where(RecipeUser.recipe_id == recipe_id).limit(1)
+        result = await session.execute(statement)
+        return result.scalar_one_or_none()

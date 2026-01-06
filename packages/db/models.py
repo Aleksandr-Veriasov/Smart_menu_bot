@@ -34,11 +34,11 @@ class User(Base):
     last_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Связь с рецептами
-    recipes: Mapped[list["Recipe"]] = relationship(
-        back_populates="user",
+    linked_recipes: Mapped[list["Recipe"]] = relationship(
+        secondary="recipe_users",
+        back_populates="linked_users",
         lazy="selectin",
-        passive_deletes=True,  # чтобы ORM не ходил в БД перед удалением user
+        passive_deletes=True,
     )
 
 
@@ -66,18 +66,22 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
     title: Mapped[str] = mapped_column(String(2000), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Владелец
-    user: Mapped["User"] = relationship(back_populates="recipes", lazy="selectin")
+    linked_users: Mapped[list["User"]] = relationship(
+        secondary="recipe_users",
+        back_populates="linked_recipes",
+        lazy="selectin",
+        passive_deletes=True,
+    )
+    recipe_users: Mapped[list["RecipeUser"]] = relationship(
+        back_populates="recipe",
+        lazy="selectin",
+        passive_deletes=True,
+    )
 
     # Видео (один к одному)
     video: Mapped["Video | None"] = relationship(
@@ -88,16 +92,6 @@ class Recipe(Base):
         passive_deletes=True,
     )
 
-    # Категория
-    category_id: Mapped[int] = mapped_column(
-        Integer,
-        # защищаемся от удаления категории
-        ForeignKey("categories.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
-    category: Mapped["Category"] = relationship(back_populates="recipes", lazy="selectin")
-
     # Ингредиенты (многие-ко-многим)
     ingredients: Mapped[list["Ingredient"]] = relationship(
         secondary="recipe_ingredients",
@@ -105,6 +99,9 @@ class Recipe(Base):
         lazy="selectin",
         passive_deletes=True,
     )
+
+    def __str__(self):
+        return self.title
 
 
 class Ingredient(Base):
@@ -121,6 +118,9 @@ class Ingredient(Base):
         lazy="selectin",
         passive_deletes=True,
     )
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class RecipeIngredient(Base):
@@ -146,6 +146,39 @@ class RecipeIngredient(Base):
     )
 
 
+class RecipeUser(Base):
+    """Модель связи между рецептом и пользователями."""
+
+    __tablename__ = "recipe_users"
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "user_id", name="uq_recipe_user"),
+        Index("ix_recipe_users_recipe_id", "recipe_id"),
+        Index("ix_recipe_users_user_id", "user_id"),
+        Index("ix_recipe_users_category_id", "category_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    recipe_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("recipes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("categories.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    recipe: Mapped["Recipe"] = relationship(back_populates="recipe_users", lazy="selectin")
+    category: Mapped["Category"] = relationship(back_populates="recipe_users", lazy="selectin")
+
+
 class Video(Base):
     """Модель видео."""
 
@@ -159,8 +192,12 @@ class Video(Base):
         index=True,
     )
     video_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
     recipe: Mapped["Recipe"] = relationship(back_populates="video", lazy="selectin")
+
+    def __str__(self) -> str:
+        return self.video_url
 
 
 class Category(Base):
@@ -172,9 +209,11 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     slug: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
 
-    # Рецепты категории
-    recipes: Mapped[list["Recipe"]] = relationship(
+    recipe_users: Mapped[list["RecipeUser"]] = relationship(
         back_populates="category",
         lazy="selectin",
         passive_deletes=True,
     )
+
+    def __str__(self) -> str:
+        return self.name

@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class TelethonSettings(BaseAppSettings):
     """Настройки Telethon worker."""
 
+    debug: bool = Field(default=False, alias="DEBUG")
     api_id: int = Field(alias="TG_API_ID")
     api_hash: SecretStr = Field(alias="TG_API_HASH")
 
@@ -25,6 +26,7 @@ class TelethonSettings(BaseAppSettings):
 
     def safe_dict(self) -> dict[str, str | int | float]:
         return {
+            "debug": self.debug,
             "api_id": self.api_id,
             "api_hash": "***",
             "session_path": self.session_path,
