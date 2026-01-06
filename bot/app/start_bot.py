@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import cast
 
 from fastapi import FastAPI, HTTPException, Request
+from prometheus_fastapi_instrumentator import Instrumentator
 from telegram import Update
 from telegram.ext import Application
 
@@ -165,6 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 fastapi_app = FastAPI(title="Telegram Bot Webhook", lifespan=lifespan)
+Instrumentator().instrument(fastapi_app).expose(fastapi_app, endpoint="/metrics", include_in_schema=False)
 
 
 @fastapi_app.post(settings.webhooks.path())

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqladmin import Admin
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.middleware.sessions import SessionMiddleware
@@ -70,6 +71,8 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 _allowed = settings.fast_api.allowed_hosts
 if settings.debug and _allowed:

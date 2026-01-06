@@ -3,6 +3,7 @@ import logging
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import AnyUrl, BaseModel
 
 from packages.common_settings.telethon_settings import get_telethon_settings
@@ -25,6 +26,7 @@ class DownloadOut(BaseModel):
 @lru_cache
 def get_app() -> FastAPI:
     app = FastAPI(lifespan=telethon_client.lifespan)
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
     @app.get("/health", tags=["healthy"])
     async def healthcheck() -> dict:

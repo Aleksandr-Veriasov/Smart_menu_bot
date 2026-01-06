@@ -9,6 +9,9 @@ volumes:
   static_data:
   media_data:
   telethon_session:
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
 networks:
   app-net:
@@ -171,3 +174,60 @@ services:
     entrypoint: /bin/sh
     networks: 
       - app-net
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: loki
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: promtail
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-net
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.5
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://infrasprint1veriasov.ru/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app-net
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped

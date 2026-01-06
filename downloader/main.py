@@ -2,6 +2,7 @@ import logging
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, HttpUrl
 
 from downloader.telethon_service import download_video_via_telethon, telethon_base_url
@@ -31,6 +32,7 @@ def get_app() -> FastAPI:
         description="Сервис для скачивания Instagram/TikTok/Pinterest/YouTube Shorts",
         version="0.1.0",
     )
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
     @app.get("/health", tags=["healthy"])
     async def healthcheck() -> dict:

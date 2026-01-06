@@ -30,3 +30,4 @@ alembic==1.16.4
 requests==2.32.3
 psycopg==3.2.10
 psycopg-binary==3.2.10
+prometheus-fastapi-instrumentator==7.0.0

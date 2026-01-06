@@ -6,3 +6,4 @@ pydantic-settings==2.6.1
 yt-dlp
 httpx==0.28.1
 sentry-sdk==2.29.1
+prometheus-fastapi-instrumentator==7.0.0
