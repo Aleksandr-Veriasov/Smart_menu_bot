@@ -5,15 +5,16 @@ server:
 
 common:
   instance_addr: 0.0.0.0
-  path: /loki
+  path_prefix: /loki
   storage:
     filesystem:
       chunks_directory: /loki/chunks
       rules_directory: /loki/rules
   replication_factor: 1
-  ring:
-    kvstore:
-      store: inmemory
+
+ring:
+  kvstore:
+    store: inmemory
 
 schema_config:
   configs:
