@@ -57,6 +57,7 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
 
 
 async def save_recipe(update: Update, context: PTBContext) -> int:
+    """Обработка нажатия «Сохранить рецепт» — сохраняем рецепт в БД."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -80,6 +81,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     description = draft.get("recipe", "Не указано")
     ingredients = draft.get("ingredients", "Не указано")
     video_url = draft.get("video_file_id", "")
+    original_url = draft.get("original_url")
     ingredients_raw = parse_ingredients(ingredients)
     user_id = cq.from_user.id if cq.from_user else None
     if not user_id:
@@ -104,6 +106,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
                 category_id=category_id,
                 ingredients_raw=ingredients_raw,
                 video_url=video_url,
+                original_url=original_url,
             )
             await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
@@ -151,6 +154,7 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
 
 
 def save_recipe_handlers() -> ConversationHandler:
+    """Создает ConversationHandler для сохранения рецепта."""
     return ConversationHandler(
         entry_points=[
             CallbackQueryHandler(start_save_recipe, pattern=r"^save_recipe:\d+$"),

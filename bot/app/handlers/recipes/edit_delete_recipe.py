@@ -63,6 +63,7 @@ async def start_edit(update: Update, context: PTBContext) -> int:
 
 
 async def choose_field(update: Update, context: PTBContext) -> int:
+    """Выбираем, что редактировать."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -168,6 +169,7 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
 
 
 async def confirm_delete(update: Update, context: PTBContext) -> int:
+    """Подтверждение удаления рецепта."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -201,6 +203,7 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
 
 
 async def change_category(update: Update, context: PTBContext) -> int:
+    """Entry-point: колбэк вида change_category_{id}."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -230,6 +233,7 @@ async def change_category(update: Update, context: PTBContext) -> int:
 
 
 async def confirm_change_category(update: Update, context: PTBContext) -> int:
+    """Подтверждение изменения категории рецепта."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -258,7 +262,12 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
 
     category_id, _ = await service.get_id_and_name_by_slug_cached(category_slug)
     async with db.session() as session:
-        recipe_title = await RecipeRepository.update_category(session, recipe_id, category_id)
+        recipe_title = await RecipeRepository.update_category(
+            session,
+            recipe_id,
+            cq.from_user.id,
+            category_id,
+        )
     await CategoryCacheRepository.invalidate_user_categories(app_state.redis, cq.from_user.id)
     await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, cq.from_user.id, category_id)
     logger.debug(f"🗑️ Инвалидирован кэш категорий юзера {cq.from_user.id}")
@@ -273,6 +282,7 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
 
 
 async def cancel(update: Update, context: PTBContext) -> int:
+    """Отмена редактирования рецепта."""
     # поддержим и колбэк, и команду
     msg = update.effective_message
     if update.callback_query:
@@ -284,6 +294,7 @@ async def cancel(update: Update, context: PTBContext) -> int:
 
 
 def conversation_edit_recipe() -> ConversationHandler:
+    """ConversationHandler для редактирования и удаления рецепта."""
     return ConversationHandler(
         entry_points=[
             CallbackQueryHandler(start_edit, pattern=r"^edit_recipe_(\d+)$"),
@@ -310,7 +321,7 @@ def conversation_edit_recipe() -> ConversationHandler:
             EDRState.CONFIRM_CHANGE_CATEGORY: [
                 CallbackQueryHandler(
                     confirm_change_category,
-                    pattern="^[a-z0-9][a-z0-9_-]*_save$",
+                    pattern=r"^[a-z0-9][a-z0-9_-]*_save(?:\:\d+)?$",
                 ),
                 CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],

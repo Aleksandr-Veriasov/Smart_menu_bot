@@ -8,6 +8,10 @@ from telegram.ext import (
     filters,
 )
 
+from bot.app.handlers.recipes.add_existing_recipe import (
+    add_existing_recipe,
+    add_existing_recipe_choose_category,
+)
 from bot.app.handlers.recipes.edit_delete_recipe import conversation_edit_recipe
 from bot.app.handlers.recipes.pagination import handler_pagination
 from bot.app.handlers.recipes.recipes_menu import (
@@ -45,19 +49,13 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(user_help, pattern="^help$"))
     app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))
     app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
+    app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=r"^add_recipe:\d+$"))
+    app.add_handler(CallbackQueryHandler(add_existing_recipe_choose_category, pattern=r"^add_recipe:\d+:[a-z0-9_-]+$"))
     app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
     app.add_handler(CallbackQueryHandler(handler_pagination, pattern=r"^(next|prev)_\d+$"))
+    app.add_handler(CallbackQueryHandler(recipe_choice, pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$"))
     app.add_handler(
-        CallbackQueryHandler(
-            recipe_choice,
-            pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$",
-        )
-    )
-    app.add_handler(
-        CallbackQueryHandler(
-            recipes_from_category,
-            pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random|edit))?$",
-        )
+        CallbackQueryHandler(recipes_from_category, pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random|edit))?$")
     )
 
     logger.info("Все хендлеры зарегистрированы.")

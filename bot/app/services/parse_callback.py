@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # slug может содержать a-z, 0-9, _ и -
 CB_RE = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|edit|save))?$")
 
-CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save?$")
+CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save(?:\:\d+)?$")
 
 CB_RE_M = re.compile(r"^recipes(?:_(?P<mode>show|random|edit))?$")
 CB_CAT_MODE_ID = re.compile(r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$")

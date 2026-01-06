@@ -76,7 +76,7 @@ class UserAdmin(ModelView, model=User):  # type: ignore[call-arg]
         "first_name",
         "last_name",
         "created_at",
-        "recipes_count",
+        "linked_recipes_count",
     ]
     column_labels = {
         "id": "ID",
@@ -84,8 +84,8 @@ class UserAdmin(ModelView, model=User):  # type: ignore[call-arg]
         "first_name": "Имя",
         "last_name": "Фамилия",
         "created_at": "Создан",
-        "recipes_count": "Рецептов",
-        "recipes_name": "Рецепты",
+        "linked_recipes_count": "Доступных рецептов",
+        "linked_recipes_name": "Доступные рецепты",
     }
     column_sortable_list = ["id", "username", "created_at"]
     column_searchable_list = ["id", "username", "first_name", "last_name"]
@@ -96,7 +96,7 @@ class UserAdmin(ModelView, model=User):  # type: ignore[call-arg]
         "first_name",
         "last_name",
         "created_at",
-        "recipes_name",
+        "linked_recipes_name",
     ]
 
     form_columns = ["username", "first_name", "last_name"]
@@ -106,12 +106,14 @@ class UserAdmin(ModelView, model=User):  # type: ignore[call-arg]
     can_delete = False
 
     column_formatters = {
-        "recipes_count": lambda m, _: len(m.recipes or []),
+        "linked_recipes_count": lambda m, _: len(getattr(m, "linked_recipes", None) or []),
     }
 
     column_formatters_detail: ClassVar[Any] = {
-        "recipes_name": lambda m, _: (
-            Markup("<br>".join(escape(r.title) for r in (m.recipes or []))) if m.recipes else "—"
+        "linked_recipes_name": lambda m, _: (
+            Markup("<br>".join(escape(r.title) for r in (getattr(m, "linked_recipes", None) or [])))
+            if getattr(m, "linked_recipes", None)
+            else "—"
         ),
     }
 
@@ -140,7 +142,7 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
     can_delete = True
 
     column_formatters = {
-        "recipes_count": lambda m, _: len(m.recipes or []),
+        "recipes_count": lambda m, _: len(getattr(m, "recipe_users", None) or []),
     }
 
     async def on_model_change(
@@ -200,7 +202,6 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
         await CategoryCacheRepository.invalidate_by_slug(redis, str(model.slug))
 
 
-# ---------- Ingredient ----------
 class IngredientAdmin(ModelView, model=Ingredient):  # type: ignore[call-arg]
     name = "Ингредиент"
     name_plural = "Ингредиенты"
@@ -230,41 +231,50 @@ class IngredientAdmin(ModelView, model=Ingredient):  # type: ignore[call-arg]
 
     column_formatters_detail: ClassVar[Any] = {
         "recipes_name": lambda m, _: (
-            Markup("<br>".join(escape(r.title) for r in (m.recipes or []))) if m.recipes else "—"
+            Markup("<br>".join(escape(r.title) for r in (getattr(m, "recipes", None) or [])))
+            if getattr(m, "recipes", None)
+            else "—"
         ),
     }
 
 
-# ---------- Video ----------
 class VideoAdmin(ModelView, model=Video):  # type: ignore[call-arg]
     name = "Видео"
     name_plural = "Видео"
     icon = "fa-solid fa-video"
 
-    column_list = ["id", "recipe_title", "video_url"]
-    column_details_list = ["id", "recipe_title", "video_url"]
+    column_list = ["id", "recipe_title", "video_url", "original_url"]
+    column_details_list = ["id", "recipe_title", "video_url", "original_url"]
     column_labels = {
         "id": "ID",
         "recipe_title": "Рецепт",
         "video_url": "Ссылка",
+        "original_url": "Оригинальная ссылка",
     }
     column_sortable_list = ["id"]
-    column_searchable_list = ["video_url"]
+    column_searchable_list = ["video_url", "original_url"]
+    column_select_related = ["recipe"]
 
-    form_columns = ["recipe", "video_url"]
+    form_columns = ["recipe", "video_url", "original_url"]
 
     can_create = True
     can_edit = True
     can_delete = True
 
     column_formatters: ClassVar[Any] = {
-        "recipe_title": lambda m, _: (m.recipe.title if m.recipe else "—"),
+        "recipe_title": lambda m, _: (
+            m.recipe.title if m.recipe and m.recipe.title else (f"ID {m.recipe_id}" if m.recipe_id else "—")
+        ),
         "video_url": lambda m, _: (m.video_url if m.video_url else "—"),
+        "original_url": lambda m, _: (m.original_url if m.original_url else "—"),
     }
 
     column_formatters_detail: ClassVar[Any] = {
-        "recipe_title": lambda m, _: (m.recipe.title if m.recipe else "—"),
+        "recipe_title": lambda m, _: (
+            m.recipe.title if m.recipe and m.recipe.title else (f"ID {m.recipe_id}" if m.recipe_id else "—")
+        ),
         "video_url": lambda m, _: (m.video_url if m.video_url else "—"),
+        "original_url": lambda m, _: (m.original_url if m.original_url else "—"),
     }
 
     # выпадающий поиск по рецептам
@@ -273,7 +283,6 @@ class VideoAdmin(ModelView, model=Video):  # type: ignore[call-arg]
     }
 
 
-# ---------- Recipe ----------
 class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
     name = "Рецепт"
     name_plural = "Рецепты"
@@ -283,22 +292,26 @@ class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
     column_list = [
         "id",
         "title",
-        "category_name",
-        "user_username",
+        "linked_users_count",
+        "categories_count",
         "ingredients_count",
         "has_video",
         "created_at",
+        "last_used_at",
     ]
     column_labels = {
         "id": "ID",
         "title": "Название",
-        "category_name": "Категория",
-        "user_username": "Пользователь",
+        "linked_users_count": "Пользователей с доступом",
+        "categories_count": "Категорий",
         "ingredients_count": "Ингр., шт.",
         "has_video": "Видео",
         "created_at": "Создан",
+        "last_used_at": "Последнее использование",
         "ingredients_text": "Ингредиенты",
         "video_link": "Видео",
+        "linked_users_text": "Пользователи с доступом",
+        "categories_text": "Категории",
     }
     column_sortable_list = ["id", "title", "created_at"]
     column_searchable_list = ["title"]
@@ -308,17 +321,16 @@ class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
         "title",
         "description",
         "ingredients_text",
-        "category_name",
-        "user_username",
+        "linked_users_text",
+        "categories_text",
         "video_link",
         "created_at",
+        "last_used_at",
     ]
 
     form_columns = [
         "title",
         "description",
-        "user",
-        "category",
         "ingredients",
         "video",
     ]
@@ -328,15 +340,27 @@ class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
     can_delete = False
 
     column_formatters: ClassVar[Any] = {
-        "category_name": lambda m, _: (m.category.name if m.category else "—"),
-        "user_username": lambda m, _: ((m.user.username or f"ID {m.user.id}") if m.user else "—"),
+        "linked_users_count": lambda m, _: len(m.linked_users or []),
+        "categories_count": lambda m, _: len({ru.category_id for ru in (m.recipe_users or []) if ru.category_id}),
         "ingredients_count": lambda m, _: len(m.ingredients or []),
         "has_video": lambda m, _: "✓" if getattr(m, "video", None) else "—",
     }
 
     column_formatters_detail: ClassVar[Any] = {
-        "category_name": lambda m, _: (m.category.name if m.category else "—"),
-        "user_username": lambda m, _: ((m.user.username or f"ID {m.user.id}") if m.user else "—"),
+        "linked_users_text": lambda m, _: (
+            Markup("<br>".join(escape(u.username or f"ID {u.id}") for u in (m.linked_users or [])))
+            if m.linked_users
+            else "—"
+        ),
+        "categories_text": lambda m, _: (
+            Markup(
+                "<br>".join(
+                    escape(name) for name in sorted({ru.category.name for ru in (m.recipe_users or []) if ru.category})
+                )
+            )
+            if m.recipe_users
+            else "—"
+        ),
         "ingredients_text": lambda m, _: (
             Markup("<br>".join(escape(i.name) for i in (m.ingredients or []))) if m.ingredients else "—"
         ),
@@ -347,8 +371,6 @@ class RecipeAdmin(ModelView, model=Recipe):  # type: ignore[call-arg]
 
     # ajax-подгрузка полей в формах
     form_ajax_refs = {
-        "user": {"fields": ("username", "first_name", "last_name")},
-        "category": {"fields": ("name", "slug")},
         "ingredients": {"fields": ("name",), "page_size": 20},
     }
 

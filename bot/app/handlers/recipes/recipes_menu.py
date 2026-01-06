@@ -228,6 +228,8 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         video_url = await VideoRepository.get_video_url(session, int(recipe.id))
         if not video_url:
             video_url = None
+        await RecipeRepository.update_last_used_at(session, int(recipe.id))
+        await session.commit()
         ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)
         text = (
             f"🍽 <b>Название рецепта:</b> {recipe.title}\n\n"

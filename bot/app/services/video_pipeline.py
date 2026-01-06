@@ -59,10 +59,9 @@ async def process_video_pipeline(url: str, message: Message, context: PTBContext
 
     if context.user_data is not None:
         pipelines = context.user_data.setdefault("pipelines", {})
-        pipelines[pipeline_id] = {
-            "video_path": converted_path,
-            "video_upload_task": upload_task,
-        }
+        entry = pipelines.setdefault(pipeline_id, {})
+        entry["video_path"] = converted_path
+        entry["video_upload_task"] = upload_task
     await notifier.progress(60, "✅ Видео загружено. Распознаём текст...")
 
     audio_path = extract_audio(converted_path, AUDIO_FOLDER)
@@ -104,6 +103,7 @@ async def process_video_pipeline(url: str, message: Message, context: PTBContext
             ingredients,
             video_file_id,
             pipeline_id,
+            original_url=url,
         )
     else:
         await notifier.error("Не удалось извлечь данные из видео.")

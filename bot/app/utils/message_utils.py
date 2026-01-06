@@ -28,6 +28,8 @@ async def random_recipe(db: Database, redis: Redis, user_id: int, category_slug:
             return "", ""
         else:
             video_url = await VideoRepository().get_video_url(session, int(recipe.id))
+            await RecipeRepository.update_last_used_at(session, int(recipe.id))
+            await session.commit()
             logger.debug(f"◀️ {video_url} - video URL для рецепта {recipe.title}")
             # Формируем список ингредиентов
             ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)

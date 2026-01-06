@@ -69,6 +69,11 @@ async def lifespan(app: FastAPI):
     global client, sem
 
     settings = get_telethon_settings()
+    if settings.debug:
+        logger.info("Telethon клиент отключен (DEBUG=true).")
+        yield
+        return
+
     api_id = settings.api_id
     api_hash = settings.api_hash.get_secret_value()
     session_path = settings.session_path

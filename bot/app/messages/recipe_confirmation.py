@@ -29,6 +29,7 @@ async def send_recipe_confirmation(
     ingredients: str | Iterable[str],
     video_file_id: str,
     pipeline_id: int,
+    original_url: str | None = None,
 ) -> None:
     """
     Отправляет пользователю видео (по file_id) и сообщение с рецептом
@@ -41,11 +42,14 @@ async def send_recipe_confirmation(
     if context.user_data is not None:
         pipelines = context.user_data.setdefault("pipelines", {})
         entry = pipelines.setdefault(pipeline_id, {})
+        if original_url is None:
+            original_url = entry.get("original_url")
         entry["recipe_draft"] = {
             "title": title,
             "recipe": recipe,
             "video_file_id": video_file_id,
             "ingredients": (list(ingredients) if not isinstance(ingredients, str) else ingredients),
+            "original_url": original_url,
         }
     video_msg = None
     logger.debug(f"video_file_id = {video_file_id} ,title = {title},")

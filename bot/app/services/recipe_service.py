@@ -4,7 +4,7 @@ from contextlib import suppress
 from redis.asyncio import Redis
 
 from packages.db.database import Database
-from packages.db.repository import RecipeRepository
+from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
 from packages.redis.repository import RecipeCacheRepository
@@ -43,11 +43,12 @@ class RecipeService:
         return rows
 
     async def delete_recipe(self, user_id: int, recipe_id: int) -> None:
-        """Удаляет рецепт и инвалидирует кэш."""
+        """Удаляет связь рецепт-пользователь и инвалидирует кэш."""
         async with self.db.session() as session:
-            category_id = await RecipeRepository.get_category_id_by_recipe_id(session, recipe_id)
+            category_id = await RecipeRepository.get_category_id_by_recipe_id(session, recipe_id, user_id)
             logger.debug(f"👉 Рецепт {recipe_id} category_id: {category_id}")
-            await RecipeRepository.delete(session, recipe_id)
+            await RecipeUserRepository.unlink_user(session, recipe_id, user_id)
+            await session.commit()
         if category_id is not None:
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
             # Обновляем кэш рецептов
@@ -56,7 +57,7 @@ class RecipeService:
     async def update_recipe_title(self, user_id: int, recipe_id: int, new_title: str) -> None:
         """Обновляет название рецепта и инвалидирует кэш."""
         async with self.db.session() as session:
-            category_id = await RecipeRepository.get_category_id_by_recipe_id(session, recipe_id)
+            category_id = await RecipeRepository.get_category_id_by_recipe_id(session, recipe_id, user_id)
             logger.debug(f"👉 Рецепт {recipe_id} category_id: {category_id}")
             await RecipeRepository.update_title(session, recipe_id, new_title)
         if category_id is not None:
