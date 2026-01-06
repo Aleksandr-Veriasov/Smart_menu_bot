@@ -128,7 +128,7 @@ services:
     env_file: 
       - .env
     environment:
-      ALLOWED_HOSTS: '["infrasprint1veriasov.ru","localhost","127.0.0.1"]'
+      ALLOWED_HOSTS: '["infrasprint1veriasov.ru","localhost","127.0.0.1","backend"]'
     volumes:
       - static_data:/app/app/static
       - media_data:/app/app/media
@@ -213,6 +213,31 @@ services:
       - app-net
     depends_on:
       - loki
+    restart: unless-stopped
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - app-net
     restart: unless-stopped
 
   grafana:
