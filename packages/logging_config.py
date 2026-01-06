@@ -8,6 +8,27 @@ import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 
+class DropMetricsUvicornAccessFilter(logging.Filter):
+    """Скрывает access-логи uvicorn только для /metrics, чтобы не засорять Loki."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Uvicorn подписывает access-логи на логгер с именем "uvicorn.access"
+        if record.name != "uvicorn.access":
+            return True
+
+        # Uvicorn помещает request_line в record
+        request_line = record.__dict__.get("request_line", "")
+        if "/metrics" in request_line or "/helth" in request_line:
+            return False
+
+        # Фолбэк: иногда request_line может отсутствовать, тогда смотрим message
+        msg = record.getMessage()
+        if " /metrics " in msg or msg.endswith(" /metrics"):
+            return False
+
+        return True
+
+
 class CustomFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__(fmt="[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d" " - %(name)s - %(message)s")
@@ -64,6 +85,9 @@ def setup_logging() -> None:
         settings = None
 
     debug = _env_bool("DEBUG", default=False)
+    # скрывать только запросы к /metrics (по умолчанию выключено)
+    drop_metrics_access_log = _env_bool("DROP_METRICS_ACCESS_LOG", default=False)
+
     if settings is not None:
         debug = bool(getattr(settings, "debug", debug))
 
@@ -75,6 +99,8 @@ def setup_logging() -> None:
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(level)
     stream_handler.setFormatter(CustomFormatter())
+    if drop_metrics_access_log:
+        stream_handler.addFilter(DropMetricsUvicornAccessFilter())
 
     logging.basicConfig(
         level=level,
