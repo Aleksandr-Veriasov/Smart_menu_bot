@@ -7,6 +7,7 @@ from telegram.error import BadRequest
 
 from bot.app.core.types import AppState, PTBContext
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
+from packages.common_settings.settings import settings
 from packages.redis.repository import RecipeCacheRepository
 
 # Включаем логирование
@@ -50,7 +51,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     except ValueError:
         page = 0
 
-    per_page = int(state.get("recipes_per_page", 5)) if state else 5
+    per_page = settings.telegram.recipes_per_page
     total_pages = int(state.get("recipes_total_pages", 1)) if state else 1
     page = max(0, min(page, max(0, total_pages - 1)))
     mode = state.get("mode", "show")
@@ -62,7 +63,6 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
             items,
             page=page,
             per_page=per_page,
-            edit=bool(state.get("is_editing", False)),
             category_slug=category_slug,
             mode=mode,
         )

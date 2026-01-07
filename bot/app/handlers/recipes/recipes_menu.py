@@ -162,9 +162,8 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
         context.user_data = state
     # state['recipes_items'] = pairs  # [(id, title)]
     state["recipes_page"] = 0
-    state["recipes_per_page"] = settings.telegram.recipes_per_page
-    state["recipes_total_pages"] = (len(pairs) + state["recipes_per_page"] - 1) // state["recipes_per_page"]
-    state["is_editing"] = mode == RecipeMode.EDIT
+    recipes_per_page = settings.telegram.recipes_per_page
+    state["recipes_total_pages"] = (len(pairs) + recipes_per_page - 1) // recipes_per_page
     state["category_name"] = category_name
     state["category_slug"] = category_slug
     state["category_id"] = category_id
@@ -174,8 +173,7 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     markup = build_recipes_list_keyboard(
         pairs,
         page=0,
-        per_page=state["recipes_per_page"],
-        edit=state["is_editing"],
+        per_page=recipes_per_page,
         category_slug=category_slug,
         mode=mode,
     )

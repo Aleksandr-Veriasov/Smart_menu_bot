@@ -1,50 +1,41 @@
-import logging
 from collections.abc import Callable
 
 from telegram import (
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.keyboards.builders import InlineKB
-
-logger = logging.getLogger(__name__)
+from packages.common_settings.settings import settings
 
 
 def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     """Создание кнопок для стартового сообщения и домой."""
+    kb = InlineKB()
     if new_user:
-        keyboard = [
-            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
-            [InlineKeyboardButton("❓ Помощь", callback_data="help")],
-        ]
+        kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        kb.button(text="❓ Помощь", callback_data="help")
     else:
-        keyboard = [
-            [InlineKeyboardButton("📖 Рецепты", callback_data="recipes_show")],
-            [InlineKeyboardButton("🎲 Случайные рецепты", callback_data="recipes_random")],
-            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
-            [InlineKeyboardButton("✏️ Редактировать рецепт", callback_data="recipes_edit")],
-        ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    return reply_markup
+        kb.button(text="📖 Рецепты", callback_data="recipes_show")
+        kb.button(text="🎲 Случайные рецепты", callback_data="recipes_random")
+        kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        kb.button(text="✏️ Редактировать рецепт", callback_data="recipes_edit")
+    return kb.adjust(1)
 
 
 def help_keyboard() -> InlineKeyboardMarkup:
     """Создание кнопок для помощи."""
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("🏠 На главную", callback_data="start")],
-            [InlineKeyboardButton("🍳 Загрузить рецепт", callback_data="upload_recipe")],
-        ]
+    return (
+        InlineKB()
+        .button(text="🏠 На главную", callback_data="start")
+        .button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        .adjust(1)
     )
-    return keyboard
 
 
 def home_keyboard() -> InlineKeyboardMarkup:
     """Создание кнопок для домашнего меню."""
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 На главную", callback_data="start")]])
-    return keyboard
+    return InlineKB().button(text="🏠 На главную", callback_data="start").adjust(1)
 
 
 def category_keyboard(
@@ -56,7 +47,7 @@ def category_keyboard(
 ) -> InlineKeyboardMarkup:
     """Создание кнопок для выбора категории рецептов."""
     suffix = mode.value
-    rows: list[list[InlineKeyboardButton]] = []
+    kb = InlineKB()
 
     for cat in categories:
         name = (cat.get("name") or "").strip()
@@ -67,22 +58,20 @@ def category_keyboard(
             cb = callback_builder(slug)
         else:
             cb = f"{slug}_{suffix}:{pipeline_id}" if mode is RecipeMode.SAVE else f"{slug}_{suffix}"
-        rows.append([InlineKeyboardButton(name, callback_data=cb)])
+        kb.button(text=name, callback_data=cb)
 
     if mode is RecipeMode.SAVE:
-        rows.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_save_recipe")])
+        kb.button(text="❌ Отмена", callback_data="cancel_save_recipe")
     else:
-        rows.append([InlineKeyboardButton("🔙 Назад", callback_data="start")])
-    reply_markup = InlineKeyboardMarkup(rows)
-    return reply_markup
+        kb.button(text="🔙 Назад", callback_data="start")
+    return kb.adjust(1)
 
 
 def build_recipes_list_keyboard(
     items: list[dict[str, int | str]],
     page: int = 0,
     *,
-    per_page: int = 5,
-    edit: bool = False,
+    per_page: int = settings.telegram.recipes_per_page,
     category_slug: str,
     mode: RecipeMode = RecipeMode.SHOW,
 ) -> InlineKeyboardMarkup:
@@ -92,88 +81,76 @@ def build_recipes_list_keyboard(
     end = min(total, start + per_page)
     current = items[start:end]
     suffix = mode.value
+    kb = InlineKB()
 
-    rows = []
     for recipe in current:
         callback = f'{category_slug}_{suffix}_{recipe["id"]}'
-
-        button = InlineKeyboardButton(text=f'▪️ {recipe["title"]}', callback_data=callback)
-
-        rows.append([button])
+        kb.button(text=f'▪️ {recipe["title"]}', callback_data=callback)
 
     # пагинация
     if end < total:
-        rows.append([InlineKeyboardButton("Далее ⏩", callback_data=f"next_{page + 1}")])
+        kb.button(text="Далее ⏩", callback_data=f"next_{page + 1}")
     if page > 0:
-        rows.append([InlineKeyboardButton("⏪ Назад", callback_data=f"prev_{page - 1}")])
+        kb.button(text="⏪ Назад", callback_data=f"prev_{page - 1}")
 
     # домой/меню (если нужно)
-    rows.append([InlineKeyboardButton("🏠 В меню", callback_data="start")])
+    kb.button(text="📚 К категориям", callback_data=f"recipes_{suffix}")
+    kb.button(text="🏠 В меню", callback_data="start")
 
-    return InlineKeyboardMarkup(rows)
+    return kb.adjust(1)
 
 
 def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для редактирования рецепта."""
-    return InlineKeyboardMarkup(
-        [
-            # [
-            #     InlineKeyboardButton(
-            #         "✏️ Редактировать рецепт",
-            #         callback_data=f"edit_recipe_{recipe_id}",
-            #     )
-            # ],
-            [InlineKeyboardButton("🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")],
-            [
-                InlineKeyboardButton(
-                    "🔄 Изменить категорию",
-                    callback_data=f"change_category_{recipe_id}",
-                )
-            ],
-            [InlineKeyboardButton("⏪ Назад", callback_data=f"next_{page}")],
-            [InlineKeyboardButton("🏠 На главную", callback_data="start")],
-        ]
+    return (
+        InlineKB()
+        # .button(text="✏️ Редактировать рецепт", callback_data=f"edit_recipe_{recipe_id}")
+        .button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
+        .button(text="🔄 Изменить категорию", callback_data=f"change_category_{recipe_id}")
+        .button(text="⏪ Назад", callback_data=f"next_{page}")
+        .button(text="🏠 На главную", callback_data="start")
+        .adjust(1)
     )
 
 
 def choice_recipe_keyboard(page: int, recipe_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("⏪ Назад", callback_data=f"next_{page}")],
-            [InlineKeyboardButton("🔗 Ссылка на рецепт", callback_data=f"share_recipe_{recipe_id}")],
-            [InlineKeyboardButton("🏠 На главную", callback_data="start")],
-        ]
+    return (
+        InlineKB()
+        .button(text="⏪ Назад", callback_data=f"next_{page}")
+        .button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
+        .button(text="🏠 На главную", callback_data="start")
+        .adjust(1)
     )
 
 
 def keyboard_choose_field() -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора поля для редактирования."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("📝 Изменить название", callback_data="f:title")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="cancel")],
-        ]
+    return (
+        InlineKB()
+        .button(text="📝 Изменить название", callback_data="f:title")
+        .button(text="❌ Отмена", callback_data="cancel")
+        .adjust(1)
     )
 
 
 def keyboard_save() -> InlineKeyboardMarkup:
     """Создание клавиатуры для сохранения изменений."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("✅ Сохранить", callback_data="save_changes")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="cancel")],
-        ]
+    return (
+        InlineKB()
+        .button(text="✅ Сохранить", callback_data="save_changes")
+        .button(text="❌ Отмена", callback_data="cancel")
+        .adjust(1)
     )
 
 
 def keyboard_delete() -> InlineKeyboardMarkup:
     """Создание клавиатуры для удаления рецепта."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("🗑 Удалить", callback_data="delete")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="cancel")],
-        ]
+    return (
+        InlineKB()
+        .button(text="🗑 Удалить", callback_data="delete")
+        .button(text="❌ Отмена", callback_data="cancel")
+        .adjust(1)
     )
 
 
@@ -192,28 +169,19 @@ def keyboard_save_cancel_delete(func: str = "") -> InlineKeyboardMarkup:
 
 def keyboard_save_recipe(pipeline_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для сохранения рецепта."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("✅ Сохранить рецепт", callback_data=f"save_recipe:{pipeline_id}")],
-            [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_save_recipe:{pipeline_id}")],
-        ]
+    return (
+        InlineKB()
+        .button(text="✅ Сохранить рецепт", callback_data=f"save_recipe:{pipeline_id}")
+        .button(text="❌ Отмена", callback_data=f"cancel_save_recipe:{pipeline_id}")
+        .adjust(1)
     )
 
 
 def add_recipe_keyboard(recipe_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для добавления рецепта к себе."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")],
-            [InlineKeyboardButton("🏠 На главную", callback_data="start")],
-        ]
-    )
-
-
-def add_recipe_category_keyboard(categories: list[dict[str, str]], recipe_id: int) -> InlineKeyboardMarkup:
-    """Создание клавиатуры для выбора категории при добавлении рецепта."""
-    return category_keyboard(
-        categories,
-        mode=RecipeMode.SHOW,
-        callback_builder=lambda slug: f"add_recipe:{recipe_id}:{slug}",
+    return (
+        InlineKB()
+        .button(text="➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")
+        .button(text="🏠 На главную", callback_data="start")
+        .adjust(1)
     )

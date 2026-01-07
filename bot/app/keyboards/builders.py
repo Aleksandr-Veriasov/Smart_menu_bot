@@ -14,10 +14,12 @@ class InlineKB:
         callback_data: str | None = None,
         url: str | None = None,
     ) -> InlineKB:
+        """Добавление кнопки в клавиатуру."""
         self._buttons.append(InlineKeyboardButton(text=text, callback_data=callback_data, url=url))
         return self
 
     def adjust(self, *widths: int) -> InlineKeyboardMarkup:
+        """Создание InlineKeyboardMarkup с заданной шириной рядов."""
         rows, i = [], 0
         if not widths:
             widths = (1,)

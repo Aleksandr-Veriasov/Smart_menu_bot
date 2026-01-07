@@ -3,7 +3,7 @@ from telegram import Update
 from bot.app.core.types import AppState, PTBContext
 from bot.app.handlers.user import START_TEXT_NEW_USER
 from bot.app.keyboards.inlines import (
-    add_recipe_category_keyboard,
+    category_keyboard,
     home_keyboard,
     start_keyboard,
 )
@@ -38,7 +38,10 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
     categories = await service.get_all_category()
     await cq.edit_message_text(
         "Выберите категорию для добавления рецепта:",
-        reply_markup=add_recipe_category_keyboard(categories, recipe_id),
+        reply_markup=category_keyboard(
+            categories,
+            callback_builder=lambda slug: f"add_recipe:{recipe_id}:{slug}",
+        ),
     )
 
 
