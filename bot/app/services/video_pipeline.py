@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 
 from telegram import Message
 
@@ -17,6 +18,13 @@ from packages.media.video_downloader import async_download_video_and_description
 AUDIO_FOLDER = "audio/"
 
 logger = logging.getLogger(__name__)
+
+
+def _with_pipeline_suffix(path: str, pipeline_id: int) -> str:
+    p = Path(path)
+    if not p.suffix:
+        return f"{path}_{pipeline_id}"
+    return str(p.with_name(f"{p.stem}_{pipeline_id}{p.suffix}"))
 
 
 async def process_video_pipeline(url: str, message: Message, context: PTBContext, pipeline_id: int) -> None:
@@ -46,6 +54,18 @@ async def process_video_pipeline(url: str, message: Message, context: PTBContext
         await notifier.error("Не удалось скачать видео. Отправьте ссылку ещё раз.")
         return
     logger.debug(f"Описание скачанного видео: {description}")
+    original_path = video_path
+    video_path_with_suffix = _with_pipeline_suffix(video_path, pipeline_id)
+    try:
+        Path(video_path).rename(video_path_with_suffix)
+        video_path = video_path_with_suffix
+    except Exception as exc:
+        logger.warning(
+            "Не удалось переименовать видео %s -> %s: %s",
+            original_path,
+            video_path_with_suffix,
+            exc,
+        )
     convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
     await notifier.progress(40, "Видео конвертировано")
 

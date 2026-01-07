@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import re
 
@@ -54,7 +52,9 @@ async def video_link(update: Update, context: PTBContext) -> None:
     if await handle_existing_recipe(message, context, url):
         return
 
-    pipeline_id = message.message_id  # или f"{message.chat_id}:{message.message_id}"
+    chat_id = message.chat_id
+    # Уникальный pipeline_id на основе (chat_id, message_id) через конкатенацию
+    pipeline_id = int(f"{abs(chat_id)}{message.message_id:010d}")
 
     # Можем пометить, что пайплайн запущен
     pipelines = context.user_data.setdefault("pipelines", {}) if context.user_data else {}
