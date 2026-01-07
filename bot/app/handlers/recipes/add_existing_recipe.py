@@ -1,8 +1,14 @@
 from telegram import Update
 
 from bot.app.core.types import AppState, PTBContext
-from bot.app.keyboards.inlines import add_recipe_category_keyboard, home_keyboard
+from bot.app.handlers.user import START_TEXT_NEW_USER
+from bot.app.keyboards.inlines import (
+    add_recipe_category_keyboard,
+    home_keyboard,
+    start_keyboard,
+)
 from bot.app.services.category_service import CategoryService
+from bot.app.services.user_service import UserService
 from bot.app.utils.context_helpers import get_db
 from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
@@ -58,11 +64,13 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
         await cq.edit_message_text("Redis недоступен, попробуйте позже.", reply_markup=home_keyboard())
         return
 
-    service = CategoryService(db, app_state.redis)
-    category_id, _ = await service.get_id_and_name_by_slug_cached(slug)
+    category_service = CategoryService(db, app_state.redis)
+    category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)
 
+    message_text = "✅ Рецепт успешно сохранён."
     async with db.session() as session:
         if await RecipeUserRepository.is_linked(session, recipe_id, user_id):
+            message_text = "ℹ️ Рецепт уже есть у вас, обновили категорию."
             await RecipeRepository.update_category(session, recipe_id, user_id, category_id)
         else:
             await RecipeUserRepository.link_user(session, recipe_id, user_id, category_id)
@@ -71,4 +79,16 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
     await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
     await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
 
-    await cq.edit_message_reply_markup(reply_markup=home_keyboard())
+    await cq.edit_message_text(message_text, reply_markup=home_keyboard())
+
+    user_service = UserService(db, app_state.redis)
+    recipes_count = await user_service.ensure_user_exists_and_count(cq.from_user)
+    if recipes_count <= 1:
+        tg_user = update.effective_user
+        if tg_user and update.effective_message:
+            text = START_TEXT_NEW_USER.format(user=tg_user)
+            await update.effective_message.reply_text(
+                text,
+                reply_markup=start_keyboard(new_user=True),
+                parse_mode="HTML",
+            )

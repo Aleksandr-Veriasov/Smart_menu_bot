@@ -1,24 +1,69 @@
 import base64
 import hashlib
 import logging
+import os
+from html import escape
 
 from telegram import Update
+from telegram.constants import ParseMode
 
 from bot.app.core.types import PTBContext
+from bot.app.keyboards.inlines import add_recipe_keyboard
+from bot.app.utils.context_helpers import get_db
 from packages.common_settings.settings import settings
+from packages.db.repository import RecipeRepository, VideoRepository
 
 logger = logging.getLogger(__name__)
 
-_SLUG_LENGTH = 10
+_NONCE_LEN = 8
 
 
-def _share_slug(recipe_id: str) -> str:
+def _pepper_bytes() -> bytes:
+    """Возвращает секретный ключ (pepper) в байтах."""
     pepper = settings.security.password_pepper
-    pepper_value = pepper.get_secret_value() if pepper else ""
-    material = f"{recipe_id}:{pepper_value}".encode()
-    digest = hashlib.sha256(material).digest()
-    slug = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-    return slug[:_SLUG_LENGTH]
+    if not pepper:
+        raise RuntimeError("PASSWORD_PEPPER не задан")
+    return pepper.get_secret_value().encode("utf-8")
+
+
+def _keystream(pepper: bytes, nonce: bytes, length: int) -> bytes:
+    """Генерирует поток ключей для шифрования/дешифрования."""
+    out = bytearray()
+    counter = 0
+    while len(out) < length:
+        counter_bytes = counter.to_bytes(4, "big", signed=False)
+        block = hashlib.sha256(pepper + nonce + counter_bytes).digest()
+        out.extend(block)
+        counter += 1
+    return bytes(out[:length])
+
+
+def _encrypt_recipe_id(recipe_id: str) -> str:
+    """Шифрует recipe_id в токен для шаринга."""
+    pepper = _pepper_bytes()
+    nonce = os.urandom(_NONCE_LEN)
+    plaintext = recipe_id.encode("utf-8")
+    stream = _keystream(pepper, nonce, len(plaintext))
+    ciphertext = bytes(a ^ b for a, b in zip(plaintext, stream, strict=False))
+    token = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii").rstrip("=")
+    return token
+
+
+def _decrypt_recipe_id(token: str) -> str | None:
+    """Дешифрует токен и возвращает recipe_id или None, если не удалось."""
+    try:
+        padding = "=" * (-len(token) % 4)
+        raw = base64.urlsafe_b64decode(token + padding)
+        if len(raw) <= _NONCE_LEN:
+            return None
+        nonce = raw[:_NONCE_LEN]
+        ciphertext = raw[_NONCE_LEN:]
+        pepper = _pepper_bytes()
+        stream = _keystream(pepper, nonce, len(ciphertext))
+        plaintext = bytes(a ^ b for a, b in zip(ciphertext, stream, strict=False))
+        return plaintext.decode("utf-8").strip()
+    except Exception:
+        return None
 
 
 async def build_recipe_share_link(
@@ -35,8 +80,8 @@ async def build_recipe_share_link(
     if not recipe_id_str:
         raise ValueError("recipe_id пустой")
 
-    slug = _share_slug(recipe_id_str)
-    payload = f"{payload_prefix}_{slug}"
+    token = _encrypt_recipe_id(recipe_id_str)
+    payload = f"{payload_prefix}_{token}"
 
     username = context.bot.username
     if not username:
@@ -52,6 +97,7 @@ async def build_recipe_share_link(
 
 
 async def share_recipe_link_handler(update: Update, context: PTBContext) -> None:
+    """Хэндлер для обработки нажатия кнопки шаринга рецепта."""
     cq = update.callback_query
     if not cq:
         return
@@ -63,5 +109,57 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
         raise ValueError("recipe_id пустой")
 
     url = await build_recipe_share_link(context, recipe_id)
-    if cq.message:
-        await cq.message.reply_text(url)
+    title_html = "Рецепт"
+    desc_html = "—"
+    db = get_db(context)
+    async with db.session() as session:
+        recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
+        if recipe and recipe.title:
+            title_html = escape(recipe.title)
+        if recipe and recipe.description:
+            desc_raw = recipe.description.strip()
+            if len(desc_raw) > 150:
+                desc_raw = f"{desc_raw[:147]}..."
+            desc_html = escape(desc_raw) if desc_raw else "—"
+    msg = update.effective_message
+    if msg:
+        await msg.reply_text(
+            f"🍽 <b>Название рецепта:</b> {title_html}\n\n" f"📝 <b>Рецепт:</b>\n{desc_html}\n\n" f"Весь рецепт: {url}",
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+
+async def handle_shared_start(update: Update, context: PTBContext, token: str) -> bool:
+    """Обрабатывает старт с шаренной ссылкой рецепта."""
+    recipe_id = _decrypt_recipe_id(token)
+    if not recipe_id or not recipe_id.isdigit():
+        return False
+
+    db = get_db(context)
+    async with db.session() as session:
+        recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
+        if not recipe:
+            return False
+        video_url = await VideoRepository.get_video_url(session, int(recipe.id))
+        ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)
+        title_html = escape(recipe.title or "Без названия")
+        description_html = escape(recipe.description or "—")
+        text = (
+            f"🍽 <b>Название рецепта:</b> {title_html}\n\n"
+            f"📝 <b>Рецепт:</b>\n{description_html}\n\n"
+            f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
+        )
+
+    msg = update.effective_message
+    if msg:
+        if video_url:
+            await msg.reply_video(video_url)
+        await msg.reply_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+            reply_markup=add_recipe_keyboard(int(recipe_id)),
+        )
+
+    return True

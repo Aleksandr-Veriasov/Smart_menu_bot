@@ -141,7 +141,7 @@ def choice_recipe_keyboard(page: int, recipe_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("⏪ Назад", callback_data=f"next_{page}")],
-            [InlineKeyboardButton("📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")],
+            [InlineKeyboardButton("🔗 Ссылка на рецепт", callback_data=f"share_recipe_{recipe_id}")],
             [InlineKeyboardButton("🏠 На главную", callback_data="start")],
         ]
     )

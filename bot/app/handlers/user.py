@@ -5,6 +5,7 @@ import logging
 from telegram import Update
 
 from bot.app.core.types import PTBContext
+from bot.app.handlers.recipes.share_link import handle_shared_start
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
 from bot.app.services.user_service import UserService
 from bot.app.utils.context_helpers import get_db
@@ -71,6 +72,12 @@ async def user_start(update: Update, context: PTBContext) -> None:
     if not state.redis:
         logger.error("Redis недоступен в функции start")
         return
+
+    args = context.args or []
+    if args and args[0].startswith("share_"):
+        token = args[0].removeprefix("share_")
+        if await handle_shared_start(update, context, token):
+            return
 
     db = get_db(context)
     service = UserService(db, state.redis)
