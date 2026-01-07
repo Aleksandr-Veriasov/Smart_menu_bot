@@ -21,6 +21,7 @@ from bot.app.handlers.recipes.recipes_menu import (
     upload_recipe,
 )
 from bot.app.handlers.recipes.save_recipe import save_recipe_handlers
+from bot.app.handlers.recipes.share_link import share_recipe_link_handler
 from bot.app.handlers.user import user_help, user_start
 from bot.app.handlers.video import video_link
 
@@ -57,5 +58,6 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(
         CallbackQueryHandler(recipes_from_category, pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random|edit))?$")
     )
+    app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=r"^share_recipe_\d+$"))
 
     logger.info("Все хендлеры зарегистрированы.")

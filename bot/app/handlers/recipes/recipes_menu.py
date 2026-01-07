@@ -217,7 +217,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         keyboard = recipe_edit_keyboard(recipe_id, page)
     else:
         recipe_id = int(data.split("_")[2])
-        keyboard = choice_recipe_keyboard(page)
+        keyboard = choice_recipe_keyboard(page, recipe_id)
 
     db = get_db(context)
     async with db.session() as session:

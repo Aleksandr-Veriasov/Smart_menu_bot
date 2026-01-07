@@ -136,11 +136,12 @@ def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
     )
 
 
-def choice_recipe_keyboard(page: int) -> InlineKeyboardMarkup:
+def choice_recipe_keyboard(page: int, recipe_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("⏪ Назад", callback_data=f"next_{page}")],
+            [InlineKeyboardButton("📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")],
             [InlineKeyboardButton("🏠 На главную", callback_data="start")],
         ]
     )

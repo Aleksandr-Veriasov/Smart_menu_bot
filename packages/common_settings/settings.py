@@ -182,8 +182,7 @@ class RedisSettings(BaseAppSettings):
 
 class TelegramSettings(BaseAppSettings):
     """
-    Конфигурация Telegram бота: токен и ID чата.
-    Используется для отправки уведомлений и логов.
+    Конфигурация Telegram бота: токен и ID чата. Используется для отправки уведомлений и логов.
     """
 
     bot_token: SecretStr = Field(alias="TELEGRAM_BOT_TOKEN")
@@ -196,8 +195,7 @@ class TelegramSettings(BaseAppSettings):
 
 class DeepSeekSettings(BaseAppSettings):
     """
-    Конфигурация DeepSeek API: ключ API.
-    Используется для доступа к DeepSeek сервисам.
+    Конфигурация DeepSeek API: ключ API. Используется для доступа к DeepSeek сервисам.
     """
 
     api_key: SecretStr = Field(alias="DEEPSEEK_API_KEY")
