@@ -97,7 +97,10 @@ async def build_recipe_share_link(
 
 
 async def share_recipe_link_handler(update: Update, context: PTBContext) -> None:
-    """Хэндлер для обработки нажатия кнопки шаринга рецепта."""
+    """
+    Хэндлер для обработки нажатия кнопки шаринга рецепта.
+    Entry-point: r"^share_recipe_\\d+$""
+    """
     cq = update.callback_query
     if not cq:
         return

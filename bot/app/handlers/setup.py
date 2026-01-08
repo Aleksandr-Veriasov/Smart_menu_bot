@@ -18,7 +18,6 @@ from bot.app.handlers.recipes.recipes_menu import (
     recipe_choice,
     recipes_from_category,
     recipes_menu,
-    upload_recipe,
 )
 from bot.app.handlers.recipes.save_recipe import save_recipe_handlers
 from bot.app.handlers.recipes.search_recipes import search_recipes_conversation
@@ -52,7 +51,7 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(MessageHandler(filters.Regex(video_link_pattern) & filters.TEXT, video_link))
     app.add_handler(CallbackQueryHandler(user_help, pattern="^help$"))
     app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))
-    app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
+    # app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=r"^add_recipe:\d+$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe_choose_category, pattern=r"^add_recipe:\d+:[a-z0-9_-]+$"))
     app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))

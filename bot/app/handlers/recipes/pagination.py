@@ -20,7 +20,7 @@ _PAGE_RE = re.compile(r"^(next|prev)_(\d+)$")
 async def handler_pagination(update: Update, context: PTBContext) -> None:
     """
     Обрабатывает нажатия кнопок пагинации.
-    Entry-point: next_ / prev_
+    Entry-point: r"^(next|prev)_\\d+$")
     """
     cq = update.callback_query
     if not cq:

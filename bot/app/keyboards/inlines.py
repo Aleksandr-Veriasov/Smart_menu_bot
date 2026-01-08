@@ -13,12 +13,13 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     """Создание кнопок для стартового сообщения и домой."""
     kb = InlineKB()
     if new_user:
-        kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        # kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        # TODO добавить кнопку случайного рецепта для новых пользователей
         kb.button(text="❓ Помощь", callback_data="help")
     else:
         kb.button(text="📖 Рецепты", callback_data="recipes_show")
         kb.button(text="🎲 Случайные рецепты", callback_data="recipes_random")
-        kb.button(text="⏬ Загрузить рецепт", callback_data="upload_recipe")
+        # kb.button(text="⏬ Загрузить рецепт", callback_data="upload_recipe")
         kb.button(text="🔍 Поиск рецептов", callback_data="search_recipes")
         kb.button(text="✏️ Редактировать рецепт", callback_data="recipes_edit")
     return kb.adjust(1)

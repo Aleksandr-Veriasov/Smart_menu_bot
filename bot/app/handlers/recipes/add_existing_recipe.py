@@ -15,7 +15,10 @@ from packages.redis.repository import CategoryCacheRepository, RecipeCacheReposi
 
 
 async def add_existing_recipe(update: Update, context: PTBContext) -> None:
-    """Хэндлер для начала процесса добавления существующего рецепта пользователю."""
+    """
+    Хэндлер для начала процесса добавления существующего рецепта пользователю.
+    Entry-point: r"^add_recipe:\\d+$"
+    """
     cq = update.callback_query
     if not cq or not cq.data:
         return
@@ -46,7 +49,10 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
 
 
 async def add_existing_recipe_choose_category(update: Update, context: PTBContext) -> None:
-    """Хэндлер для выбора категории при добавлении существующего рецепта пользователю."""
+    """
+    Хэндлер для выбора категории при добавлении существующего рецепта пользователю.
+    Entry-point: r"^add_recipe:\\d+:[a-z0-9_-]+$"
+    """
     cq = update.callback_query
     if not cq or not cq.data:
         return
