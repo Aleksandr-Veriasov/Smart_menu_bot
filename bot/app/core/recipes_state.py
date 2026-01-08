@@ -11,3 +11,9 @@ class EDRState(IntEnum):  # EditDeleteRecipeState
 
 class SaveRecipeState(IntEnum):
     CHOOSE_CATEGORY = 0
+
+
+class SearchRecipeState(IntEnum):
+    CHOOSE_TYPE = 0
+    WAIT_TITLE = 1
+    WAIT_INGREDIENT = 2

@@ -6,3 +6,4 @@ class RecipeMode(Enum):
     RANDOM = "random"
     EDIT = "edit"
     SAVE = "save"
+    SEARCH = "search"

@@ -29,11 +29,18 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
 
     # Берём user_data; если у вас есть свой хелпер — можно использовать его
     state = context.user_data
-    app_state = context.bot_data.get("state")
-    if not state or not isinstance(app_state, AppState) or app_state.redis is None:
+    if not state:
         return
-    category_id = state.get("category_id", 0)
-    items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(app_state.redis, cq.from_user.id, category_id)
+
+    items = state.get("search_items")
+    if not items:
+        app_state = context.bot_data.get("state")
+        if not isinstance(app_state, AppState) or app_state.redis is None:
+            return
+        category_id = state.get("category_id", 0)
+        items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(
+            app_state.redis, cq.from_user.id, category_id
+        )
     if not items:
         if cq.message:
             with suppress(BadRequest):
@@ -66,12 +73,16 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
             category_slug=category_slug,
             mode=mode,
         )
-        title = state.get("category_name", "категория")
+        list_title = state.get("list_title")
+        if list_title:
+            title = list_title
+        else:
+            title = f'Выберите рецепт из категории «{state.get("category_name", "категория")}»:'
 
     if cq.message:
         try:
             await cq.edit_message_text(
-                f"Выберите рецепт из категории «{title}»:",
+                title,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
                 reply_markup=markup,

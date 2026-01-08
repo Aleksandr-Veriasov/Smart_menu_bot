@@ -207,6 +207,45 @@ class RecipeRepository(BaseRepository[Recipe]):
         return [{"id": int(row.id), "title": str(row.title)} for row in rows]
 
     @classmethod
+    async def search_ids_and_titles_by_title(
+        cls, session: AsyncSession, user_id: int, query: str
+    ) -> list[dict[str, int | str]]:
+        """
+        Ищет рецепты пользователя по названию.
+        """
+        pattern = f"%{query}%"
+        statement = (
+            select(Recipe.id, Recipe.title)
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .where(RecipeUser.user_id == user_id, Recipe.title.ilike(pattern))
+            .order_by(Recipe.id)
+        )
+        result = await session.execute(statement)
+        rows = result.all()
+        return [{"id": int(row.id), "title": str(row.title)} for row in rows]
+
+    @classmethod
+    async def search_ids_and_titles_by_ingredient(
+        cls, session: AsyncSession, user_id: int, query: str
+    ) -> list[dict[str, int | str]]:
+        """
+        Ищет рецепты пользователя по ингредиенту.
+        """
+        pattern = f"%{query}%"
+        statement = (
+            select(Recipe.id, Recipe.title)
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .join(RecipeIngredient, RecipeIngredient.recipe_id == Recipe.id)
+            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .where(RecipeUser.user_id == user_id, Ingredient.name.ilike(pattern))
+            .distinct()
+            .order_by(Recipe.id)
+        )
+        result = await session.execute(statement)
+        rows = result.all()
+        return [{"id": int(row.id), "title": str(row.title)} for row in rows]
+
+    @classmethod
     async def get_name_by_id(cls, session: AsyncSession, recipe_id: int) -> str | None:
         """
         Получает название рецепта по его ID.

@@ -21,6 +21,7 @@ from bot.app.handlers.recipes.recipes_menu import (
     upload_recipe,
 )
 from bot.app.handlers.recipes.save_recipe import save_recipe_handlers
+from bot.app.handlers.recipes.search_recipes import search_recipes_conversation
 from bot.app.handlers.recipes.share_link import share_recipe_link_handler
 from bot.app.handlers.user import user_help, user_start
 from bot.app.handlers.video import video_link
@@ -46,6 +47,8 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(conversation_edit_recipe())
     # pattern='^save_recipe$'
     app.add_handler(save_recipe_handlers())
+    # pattern='^search_recipes$'
+    app.add_handler(search_recipes_conversation())
     app.add_handler(MessageHandler(filters.Regex(video_link_pattern) & filters.TEXT, video_link))
     app.add_handler(CallbackQueryHandler(user_help, pattern="^help$"))
     app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))

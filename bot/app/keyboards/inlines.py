@@ -18,7 +18,8 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     else:
         kb.button(text="📖 Рецепты", callback_data="recipes_show")
         kb.button(text="🎲 Случайные рецепты", callback_data="recipes_random")
-        kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        kb.button(text="⏬ Загрузить рецепт", callback_data="upload_recipe")
+        kb.button(text="🔍 Поиск рецептов", callback_data="search_recipes")
         kb.button(text="✏️ Редактировать рецепт", callback_data="recipes_edit")
     return kb.adjust(1)
 
@@ -80,7 +81,7 @@ def build_recipes_list_keyboard(
     start = max(0, page) * per_page
     end = min(total, start + per_page)
     current = items[start:end]
-    suffix = mode.value
+    suffix = RecipeMode.SHOW.value if mode is RecipeMode.SEARCH else mode.value
     kb = InlineKB()
 
     for recipe in current:
@@ -94,7 +95,8 @@ def build_recipes_list_keyboard(
         kb.button(text="⏪ Назад", callback_data=f"prev_{page - 1}")
 
     # домой/меню (если нужно)
-    kb.button(text="📚 К категориям", callback_data=f"recipes_{suffix}")
+    if mode is not RecipeMode.SEARCH:
+        kb.button(text="📚 К категориям", callback_data=f"recipes_{suffix}")
     kb.button(text="🏠 В меню", callback_data="start")
 
     return kb.adjust(1)
@@ -120,16 +122,6 @@ def choice_recipe_keyboard(page: int, recipe_id: int) -> InlineKeyboardMarkup:
         .button(text="⏪ Назад", callback_data=f"next_{page}")
         .button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
         .button(text="🏠 На главную", callback_data="start")
-        .adjust(1)
-    )
-
-
-def keyboard_choose_field() -> InlineKeyboardMarkup:
-    """Создание клавиатуры для выбора поля для редактирования."""
-    return (
-        InlineKB()
-        .button(text="📝 Изменить название", callback_data="f:title")
-        .button(text="❌ Отмена", callback_data="cancel")
         .adjust(1)
     )
 
@@ -185,3 +177,19 @@ def add_recipe_keyboard(recipe_id: int) -> InlineKeyboardMarkup:
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
     )
+
+
+def search_recipes_type_keyboard() -> InlineKeyboardMarkup:
+    """Создание клавиатуры для выбора типа поиска."""
+    return (
+        InlineKB()
+        .button(text="🔎 По названию", callback_data="search:title")
+        .button(text="🥦 По ингредиентам", callback_data="search:ingredient")
+        .button(text="❌ Отмена", callback_data="cancel")
+        .adjust(1)
+    )
+
+
+def cancel_keyboard() -> InlineKeyboardMarkup:
+    """Создание клавиатуры с кнопкой отмены."""
+    return InlineKB().button(text="❌ Отмена", callback_data="cancel").adjust(1)
