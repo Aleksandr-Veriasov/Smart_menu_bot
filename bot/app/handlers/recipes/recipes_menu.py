@@ -119,9 +119,12 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     if mode.value == "random":
         video_url, text = await random_recipe(db, app_state.redis, user_id, category_slug)
 
-        if cq.message:
+        if cq.message and update.effective_chat:
             with suppress(BadRequest):
-                await cq.message.delete()
+                await context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=cq.message.message_id,
+                )
             if not text:
                 await cq.edit_message_text(
                     "👉 🍽 Здесь появится ваш рецепт, " "когда вы что-нибудь сохраните.",
@@ -219,9 +222,12 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     data = cq.data or ""
     category_slug = data.split("_", 1)[0]  # breakfast|main|salad
     logger.debug(f"🗑 {category_slug} - category_slug")
-    if cq.message:
+    if cq.message and update.effective_chat:
         with suppress(BadRequest):
-            await cq.message.delete()
+            await context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=cq.message.message_id,
+            )
     state = context.user_data
     if state:
         page = state.get("recipes_page", 0)

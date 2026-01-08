@@ -201,12 +201,12 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
     service = RecipeService(db, app_state.redis)
     await service.delete_recipe(cq.from_user.id, recipe_id)
 
-    if cq.message:
-        chat_id = cq.message.chat_id
+    if cq.message and update.effective_chat:
+        chat_id = update.effective_chat.id
         if isinstance(app_state, AppState) and app_state.redis is not None:
             await delete_all_user_messages(context, app_state.redis, cq.from_user.id, chat_id)
         with suppress(BadRequest):
-            await cq.message.delete()
+            await context.bot.delete_message(chat_id=chat_id, message_id=cq.message.message_id)
         sent = await context.bot.send_message(
             chat_id=chat_id,
             text="✅ Рецепт успешно удалён.",

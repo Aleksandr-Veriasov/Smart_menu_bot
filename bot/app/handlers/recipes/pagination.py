@@ -33,9 +33,9 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     if not state:
         return
 
+    app_state = context.bot_data.get("state")
     items = state.get("search_items")
     if not items:
-        app_state = context.bot_data.get("state")
         if not isinstance(app_state, AppState) or app_state.redis is None:
             return
         category_id = state.get("category_id", 0)
@@ -81,12 +81,12 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
             title = f'Выберите рецепт из категории «{state.get("category_name", "категория")}»:'
 
     if cq.message:
-        if isinstance(app_state, AppState) and app_state.redis is not None:
+        if isinstance(app_state, AppState) and app_state.redis is not None and update.effective_chat:
             if await collapse_user_messages(
                 context,
                 app_state.redis,
                 cq.from_user.id,
-                cq.message.chat_id,
+                update.effective_chat.id,
                 title,
                 markup,
                 disable_web_page_preview=True,
