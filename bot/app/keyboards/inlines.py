@@ -95,8 +95,7 @@ def build_recipes_list_keyboard(
     if page > 0:
         kb.button(text="⏪ Назад", callback_data=f"prev_{page - 1}")
 
-    # домой/меню (если нужно)
-    if mode is not RecipeMode.SEARCH:
+    if mode is not RecipeMode.SEARCH:  # TODO для поиска сделать возможность повторного поиска
         kb.button(text="📚 К категориям", callback_data=f"recipes_{suffix}")
     kb.button(text="🏠 В меню", callback_data="start")
 

@@ -4,10 +4,11 @@ import logging
 import time
 from typing import Any
 
-from telegram import Bot
+from telegram import Bot, Message
 from telegram.error import BadRequest
 
 from bot.app.core.types import PTBContext
+from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.notifications.base import Notifier
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class TelegramNotifier(Notifier):
         *,
         min_edit_interval: float = 0.9,
         context: PTBContext,
+        source_message: Message | None = None,
     ):
         self.bot = bot
         self.chat_id = chat_id
@@ -43,6 +45,7 @@ class TelegramNotifier(Notifier):
         self._closed = False
         self._last_pct: int | None = None
         self._last_text: str = ""
+        self._source_message = source_message
 
     # ---------- публичный контракт ----------
 
@@ -51,6 +54,8 @@ class TelegramNotifier(Notifier):
             msg = await self.bot.send_message(self.chat_id, text)
             self.message_id = msg.message_id
             self.user_data["progress_msg_id"] = self.message_id
+            if self._source_message is not None:
+                await append_message_id_to_cache(self._source_message, self.context, msg.message_id)
         else:
             try:
                 await self.bot.edit_message_text(
@@ -66,6 +71,8 @@ class TelegramNotifier(Notifier):
                 if "message to edit not found" or "message can't be edited" in msq_str:
                     new_msg = await self.bot.send_message(self.chat_id, text)
                     self.message_id = new_msg.message_id
+                    if self._source_message is not None:
+                        await append_message_id_to_cache(self._source_message, self.context, new_msg.message_id)
                     return
                 raise
 
@@ -91,7 +98,10 @@ class TelegramNotifier(Notifier):
 
     async def _safe_send(self, text: str) -> Any | None:
         try:
-            return await self.bot.send_message(self.chat_id, text)
+            msg = await self.bot.send_message(self.chat_id, text)
+            if msg and self._source_message is not None:
+                await append_message_id_to_cache(self._source_message, self.context, msg.message_id)
+            return msg
         except Exception as e:
             logger.warning("Не удалось отправить сообщение в Telegram: %s", e)
             return None

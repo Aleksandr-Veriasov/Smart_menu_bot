@@ -19,6 +19,7 @@ from bot.app.keyboards.inlines import (
     search_recipes_type_keyboard,
 )
 from bot.app.utils.context_helpers import get_db
+from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.common_settings.settings import settings
 from packages.db.repository import RecipeRepository
 
@@ -71,11 +72,13 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
     query = (msg.text or "").strip()
     if not query:
-        await msg.reply_text("Пусто. Введите слово ещё раз.")
+        reply = await msg.reply_text("Пусто. Введите слово ещё раз.")
+        await append_message_id_to_cache(update, context, reply.message_id)
         return SearchRecipeState.WAIT_TITLE
     user_id = update.effective_user.id if update.effective_user else None
     if not user_id:
-        await msg.reply_text("Не удалось определить пользователя.", reply_markup=home_keyboard())
+        reply = await msg.reply_text("Не удалось определить пользователя.", reply_markup=home_keyboard())
+        await append_message_id_to_cache(update, context, reply.message_id)
         return ConversationHandler.END
 
     db = get_db(context)
@@ -83,11 +86,12 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         items = await RecipeRepository.search_ids_and_titles_by_title(session, user_id, query)
 
     if not items:
-        await msg.reply_text(
+        no_results_msg = await msg.reply_text(
             f"Ничего не найдено по названию: <b>{query}</b>",
             reply_markup=home_keyboard(),
             parse_mode=ParseMode.HTML,
         )
+        await append_message_id_to_cache(update, context, no_results_msg.message_id)
         return ConversationHandler.END
 
     state = context.user_data
@@ -111,12 +115,13 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         category_slug="search",
         mode=RecipeMode.SEARCH,
     )
-    await msg.reply_text(
+    results_msg = await msg.reply_text(
         f"Результаты поиска по названию: <b>{query}</b>",
         parse_mode=ParseMode.HTML,
         reply_markup=markup,
         disable_web_page_preview=True,
     )
+    await append_message_id_to_cache(update, context, results_msg.message_id)
     return ConversationHandler.END
 
 
@@ -127,11 +132,13 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
     query = (msg.text or "").strip()
     if not query:
-        await msg.reply_text("Пусто. Введите ингредиент ещё раз.")
+        reply = await msg.reply_text("Пусто. Введите ингредиент ещё раз.")
+        await append_message_id_to_cache(update, context, reply.message_id)
         return SearchRecipeState.WAIT_INGREDIENT
     user_id = update.effective_user.id if update.effective_user else None
     if not user_id:
-        await msg.reply_text("Не удалось определить пользователя.", reply_markup=home_keyboard())
+        reply = await msg.reply_text("Не удалось определить пользователя.", reply_markup=home_keyboard())
+        await append_message_id_to_cache(update, context, reply.message_id)
         return ConversationHandler.END
 
     db = get_db(context)
@@ -139,11 +146,12 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         items = await RecipeRepository.search_ids_and_titles_by_ingredient(session, user_id, query)
 
     if not items:
-        await msg.reply_text(
+        no_results_msg = await msg.reply_text(
             f"Ничего не найдено по ингредиенту: <b>{query}</b>",
             reply_markup=home_keyboard(),
             parse_mode=ParseMode.HTML,
         )
+        await append_message_id_to_cache(update, context, no_results_msg.message_id)
         return ConversationHandler.END
 
     state = context.user_data
@@ -167,12 +175,13 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         category_slug="search",
         mode=RecipeMode.SEARCH,
     )
-    await msg.reply_text(
+    results_msg = await msg.reply_text(
         f"Результаты поиска по ингредиенту: <b>{query}</b>",
         parse_mode=ParseMode.HTML,
         reply_markup=markup,
         disable_web_page_preview=True,
     )
+    await append_message_id_to_cache(update, context, results_msg.message_id)
     return ConversationHandler.END
 
 

@@ -10,6 +10,7 @@ from bot.app.keyboards.inlines import (
 from bot.app.services.category_service import CategoryService
 from bot.app.services.user_service import UserService
 from bot.app.utils.context_helpers import get_db
+from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
 
@@ -96,8 +97,9 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
         tg_user = update.effective_user
         if tg_user and update.effective_message:
             text = START_TEXT_NEW_USER.format(user=tg_user)
-            await update.effective_message.reply_text(
+            reply = await update.effective_message.reply_text(
                 text,
                 reply_markup=start_keyboard(new_user=True),
                 parse_mode="HTML",
             )
+            await append_message_id_to_cache(update, context, reply.message_id)

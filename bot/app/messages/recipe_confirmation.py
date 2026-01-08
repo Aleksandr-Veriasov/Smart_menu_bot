@@ -10,6 +10,7 @@ from telegram.error import NetworkError, TimedOut
 
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import keyboard_save_recipe
+from bot.app.utils.message_cache import append_message_id_to_cache
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
@@ -57,12 +58,15 @@ async def send_recipe_confirmation(
     if video_file_id:
         logger.debug("Пытаемся отправить видео пользователю (file_id=%s)", video_file_id)
         video_msg = await send_video_with_wait(message, video_file_id, total_timeout=10.0, check_interval=2.0)
+        if video_msg is not None:
+            await append_message_id_to_cache(message, context, video_msg.message_id)
 
     # 2) Если не успели — мягкий фолбэк двумя сообщениями
     if video_msg is None and video_file_id:
-        await message.reply_text(
+        warn_msg = await message.reply_text(
             "⚠️ Видео подготовлено, но его отправка заняла слишком долго. " "Ниже отправляю текст рецепта.",
         )
+        await append_message_id_to_cache(message, context, warn_msg.message_id)
 
     # 3) Текст (экранируем только пользовательские поля)
     title_html = escape(title).strip() or "Без названия"
@@ -77,12 +81,13 @@ async def send_recipe_confirmation(
 
     try:
         # Первый кусок — с кнопками
-        await message.reply_text(
+        reply = await message.reply_text(
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=keyboard_save_recipe(pipeline_id=pipeline_id),
             disable_web_page_preview=True,
         )
+        await append_message_id_to_cache(message, context, reply.message_id)
         logger.debug("Сообщение с рецептом успешно отправлено.")
     except Exception as e:
         logger.error("Ошибка при отправке текста рецепта: %s", e, exc_info=True)

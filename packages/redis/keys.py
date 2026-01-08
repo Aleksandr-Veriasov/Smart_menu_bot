@@ -41,3 +41,7 @@ class RedisKeys:
     @classmethod
     def user_recipes_ids_and_titles(cls, user_id: int | str, category_id: int | str) -> str:
         return f"{cls.PREFIX}:user:{user_id}:category" f":{category_id}:recipes_ids_titles"
+
+    @classmethod
+    def user_last_recipe_messages(cls, user_id: int | str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:last_recipe_messages"

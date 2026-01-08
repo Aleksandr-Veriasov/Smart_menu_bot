@@ -1,7 +1,9 @@
 import logging
+from contextlib import suppress
 
 from telegram import Update
 from telegram.constants import ParseMode
+from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
@@ -21,6 +23,10 @@ from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
 from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.context_helpers import get_db
+from bot.app.utils.message_cache import (
+    append_message_id_to_cache,
+    delete_all_user_messages,
+)
 from packages.db.repository import RecipeRepository
 from packages.redis.repository import (
     CategoryCacheRepository,
@@ -86,18 +92,20 @@ async def handle_title(update: Update, context: PTBContext) -> int:
     if msg:
         title = (msg.text or "").strip()
         if not title:
-            await msg.reply_text("Пусто. Введите название ещё раз.")
+            reply = await msg.reply_text("Пусто. Введите название ещё раз.")
+            await append_message_id_to_cache(update, context, reply.message_id)
             return EDRState.WAIT_TITLE
         state = context.user_data
         if state is None:
             state = {}
             context.user_data = state
         state.setdefault("edit", {})["title"] = title
-        await msg.reply_text(
+        reply = await msg.reply_text(
             f"Сохранить название:\n<b>{title}</b>",
             reply_markup=keyboard_save_cancel_delete(func="handle_title"),
             parse_mode=ParseMode.HTML,
         )
+        await append_message_id_to_cache(update, context, reply.message_id)
         return EDRState.CONFIRM_TITLE
     return ConversationHandler.END
 
@@ -116,7 +124,8 @@ async def save_changes(update: Update, context: PTBContext) -> int:
 
     if not recipe_id or not title:
         if msg:
-            await msg.reply_text("Нет изменений для сохранения.")
+            reply = await msg.reply_text("Нет изменений для сохранения.")
+            await append_message_id_to_cache(update, context, reply.message_id)
         return ConversationHandler.END
 
     db = get_db(context)
@@ -192,11 +201,25 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
     service = RecipeService(db, app_state.redis)
     await service.delete_recipe(cq.from_user.id, recipe_id)
 
-    await cq.edit_message_text(
-        "✅ Рецепт успешно удалён.",
-        reply_markup=home_keyboard(),
-        parse_mode=ParseMode.HTML,
-    )
+    if cq.message:
+        chat_id = cq.message.chat_id
+        if isinstance(app_state, AppState) and app_state.redis is not None:
+            await delete_all_user_messages(context, app_state.redis, cq.from_user.id, chat_id)
+        with suppress(BadRequest):
+            await cq.message.delete()
+        sent = await context.bot.send_message(
+            chat_id=chat_id,
+            text="✅ Рецепт успешно удалён.",
+            reply_markup=home_keyboard(),
+            parse_mode=ParseMode.HTML,
+        )
+        await append_message_id_to_cache(update, context, sent.message_id)
+    else:
+        await cq.edit_message_text(
+            "✅ Рецепт успешно удалён.",
+            reply_markup=home_keyboard(),
+            parse_mode=ParseMode.HTML,
+        )
     if context.user_data is not None:
         context.user_data.pop("delete", None)
     return ConversationHandler.END

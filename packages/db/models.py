@@ -147,6 +147,7 @@ class RecipeIngredient(Base):
         ForeignKey("ingredients.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # TODO добавить поле количества и единицы измерения
 
 
 class RecipeUser(Base):

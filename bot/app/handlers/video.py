@@ -6,6 +6,7 @@ from telegram import Message, MessageEntity, Update
 from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.check_existing_recipe import handle_existing_recipe
 from bot.app.services.video_pipeline import process_video_pipeline
+from bot.app.utils.message_cache import append_message_id_to_cache
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,8 @@ async def video_link(update: Update, context: PTBContext) -> None:
         return
     url = extract_first_url(message)
     if not url:
-        await message.reply_text("❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.")
+        reply = await message.reply_text("❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.")
+        await append_message_id_to_cache(update, context, reply.message_id)
         return
 
     if await handle_existing_recipe(message, context, url):

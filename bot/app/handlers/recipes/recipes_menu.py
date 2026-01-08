@@ -21,6 +21,7 @@ from bot.app.utils.context_helpers import get_db
 from bot.app.utils.message_utils import random_recipe
 from packages.common_settings.settings import settings
 from packages.db.repository import RecipeRepository, VideoRepository
+from packages.redis.repository import RecipeMessageCacheRepository
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
@@ -119,6 +120,8 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
         video_url, text = await random_recipe(db, app_state.redis, user_id, category_slug)
 
         if cq.message:
+            with suppress(BadRequest):
+                await cq.message.delete()
             if not text:
                 await cq.edit_message_text(
                     "👉 🍽 Здесь появится ваш рецепт, " "когда вы что-нибудь сохраните.",
@@ -127,14 +130,24 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
                 return
             # показываем видео и текст отдельными сообщениями
             if update.effective_message:
+                message_ids: list[int] = []
                 if video_url:
-                    await update.effective_message.reply_video(video_url)
-                await update.effective_message.reply_text(
+                    video_msg = await update.effective_message.reply_video(video_url)
+                    message_ids.append(video_msg.message_id)
+                text_msg = await update.effective_message.reply_text(
                     text,
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                     reply_markup=home_keyboard(),
                 )
+                message_ids.append(text_msg.message_id)
+                if message_ids and update.effective_chat:
+                    await RecipeMessageCacheRepository.append_user_message_ids(
+                        app_state.redis,
+                        cq.from_user.id,
+                        update.effective_chat.id,
+                        message_ids,
+                    )
             return
 
     # DEFAULT/EDIT — вытягиваем список и кладём в user_data
@@ -206,6 +219,9 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     data = cq.data or ""
     category_slug = data.split("_", 1)[0]  # breakfast|main|salad
     logger.debug(f"🗑 {category_slug} - category_slug")
+    if cq.message:
+        with suppress(BadRequest):
+            await cq.message.delete()
     state = context.user_data
     if state:
         page = state.get("recipes_page", 0)
@@ -217,6 +233,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         recipe_id = int(data.split("_")[2])
         keyboard = choice_recipe_keyboard(page, recipe_id)
 
+    app_state = context.bot_data.get("state")
     db = get_db(context)
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, recipe_id)
@@ -234,13 +251,24 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
             f"📝 <b>Рецепт:</b>\n{recipe.description}\n\n"
             f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
         )
+        message_ids: list[int] = []
         if video_url and update.effective_message:
-            await update.effective_message.reply_video(video_url)
+            video_msg = await update.effective_message.reply_video(video_url)
+            message_ids.append(video_msg.message_id)
 
         if update.effective_message:
-            await update.effective_message.reply_text(
+            text_msg = await update.effective_message.reply_text(
                 text,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
                 reply_markup=keyboard,
+            )
+            message_ids.append(text_msg.message_id)
+
+        if message_ids and isinstance(app_state, AppState) and app_state.redis is not None and update.effective_chat:
+            await RecipeMessageCacheRepository.append_user_message_ids(
+                app_state.redis,
+                cq.from_user.id,
+                update.effective_chat.id,
+                message_ids,
             )

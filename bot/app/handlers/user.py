@@ -9,6 +9,10 @@ from bot.app.handlers.recipes.share_link import handle_shared_start
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
 from bot.app.services.user_service import UserService
 from bot.app.utils.context_helpers import get_db
+from bot.app.utils.message_cache import (
+    append_message_id_to_cache,
+    collapse_user_messages,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +91,16 @@ async def user_start(update: Update, context: PTBContext) -> None:
     text = text_new_user if new_user else START_TEXT_USER
     keyboard = start_keyboard(new_user)
 
+    if update.effective_chat and await collapse_user_messages(
+        context,
+        state.redis,
+        tg_user.id,
+        update.effective_chat.id,
+        text,
+        keyboard,
+    ):
+        return
+
     cq = update.callback_query
     if cq:
         await cq.answer()  # убираем «часики»
@@ -101,11 +115,12 @@ async def user_start(update: Update, context: PTBContext) -> None:
     # Если это не callback_query, то обычное сообщение
     msg = update.effective_message
     if msg:
-        await msg.reply_text(
+        reply = await msg.reply_text(
             text,
             reply_markup=keyboard,
             parse_mode="HTML",
         )
+        await append_message_id_to_cache(update, context, reply.message_id)
 
 
 async def user_help(update: Update, context: PTBContext) -> None:
@@ -127,9 +142,10 @@ async def user_help(update: Update, context: PTBContext) -> None:
     # 2) Обычная команда /help как сообщение
     msg = update.effective_message
     if msg:
-        await msg.reply_text(
+        reply = await msg.reply_text(
             HELP_TEXT,
             parse_mode="HTML",
             disable_web_page_preview=True,
             reply_markup=help_keyboard(),
         )
+        await append_message_id_to_cache(update, context, reply.message_id)

@@ -4,6 +4,7 @@ from telegram.constants import ParseMode
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import add_recipe_keyboard, home_keyboard
 from bot.app.utils.context_helpers import get_db
+from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.db.repository import (
     RecipeRepository,
     RecipeUserRepository,
@@ -12,6 +13,10 @@ from packages.db.repository import (
 
 
 async def handle_existing_recipe(message: Message, context: PTBContext, url: str) -> bool:
+    """
+    Проверяет, существует ли рецепт с данным URL, и отправляет его пользователю.
+    Возвращает True, если рецепт найден и отправлен, иначе False.
+    """
     db = get_db(context)
     async with db.session() as session:
         existing = await VideoRepository.get_by_original_url(session, url)
@@ -28,7 +33,8 @@ async def handle_existing_recipe(message: Message, context: PTBContext, url: str
             await session.commit()
 
         if existing.video_url:
-            await message.reply_video(existing.video_url)
+            video_msg = await message.reply_video(existing.video_url)
+            await append_message_id_to_cache(message, context, video_msg.message_id)
 
         ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)
         text = (
@@ -41,10 +47,11 @@ async def handle_existing_recipe(message: Message, context: PTBContext, url: str
             already_linked = await RecipeUserRepository.is_linked(session, int(recipe.id), int(user_id))
         reply_markup = home_keyboard() if already_linked else add_recipe_keyboard(int(recipe.id))
         header = "Этот рецепт у Вас уже сохранён ✅" if already_linked else "Этот рецепт уже есть в нашем каталоге ✅"
-        await message.reply_text(
+        reply = await message.reply_text(
             f"{header}\n\n{text}",
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
             reply_markup=reply_markup,
         )
+        await append_message_id_to_cache(message, context, reply.message_id)
         return True

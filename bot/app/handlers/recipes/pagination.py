@@ -7,6 +7,7 @@ from telegram.error import BadRequest
 
 from bot.app.core.types import AppState, PTBContext
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
+from bot.app.utils.message_cache import collapse_user_messages
 from packages.common_settings.settings import settings
 from packages.redis.repository import RecipeCacheRepository
 
@@ -80,6 +81,17 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
             title = f'Выберите рецепт из категории «{state.get("category_name", "категория")}»:'
 
     if cq.message:
+        if isinstance(app_state, AppState) and app_state.redis is not None:
+            if await collapse_user_messages(
+                context,
+                app_state.redis,
+                cq.from_user.id,
+                cq.message.chat_id,
+                title,
+                markup,
+                disable_web_page_preview=True,
+            ):
+                return
         try:
             await cq.edit_message_text(
                 title,
