@@ -83,6 +83,17 @@ class RecipeRepository(BaseRepository[Recipe]):
     model = Recipe
 
     @classmethod
+    async def create_basic(cls, session: AsyncSession, title: str, description: str | None) -> Recipe:
+        recipe = cls.model(
+            title=title,
+            description=description,
+        )
+        session.add(recipe)
+        await session.flush()
+        await session.refresh(recipe)
+        return recipe
+
+    @classmethod
     async def create(cls, session: AsyncSession, recipe_create: RecipeCreate) -> Recipe:
         data = recipe_create.model_dump(exclude_unset=True, exclude={"ingredient_ids"})
         user_id = data.pop("user_id", None)

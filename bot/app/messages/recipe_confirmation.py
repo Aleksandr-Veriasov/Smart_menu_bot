@@ -10,6 +10,9 @@ from telegram.error import NetworkError, TimedOut
 
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import keyboard_save_recipe
+from bot.app.services.ingredients_parser import parse_ingredients
+from bot.app.services.save_recipe import save_recipe_draft_service
+from bot.app.utils.context_helpers import get_db
 from bot.app.utils.message_cache import append_message_id_to_cache
 
 # Включаем логирование
@@ -91,6 +94,28 @@ async def send_recipe_confirmation(
         logger.debug("Сообщение с рецептом успешно отправлено.")
     except Exception as e:
         logger.error("Ошибка при отправке текста рецепта: %s", e, exc_info=True)
+        return
+
+    ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
+    db = get_db(context)
+    try:
+        async with db.session() as session:
+            recipe_id = await save_recipe_draft_service(
+                session,
+                title=title,
+                description=recipe,
+                ingredients_raw=ingredients_raw,
+                video_url=video_file_id,
+                original_url=original_url,
+            )
+    except Exception as e:
+        logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
+        return
+
+    if context.user_data is not None:
+        pipelines = context.user_data.setdefault("pipelines", {})
+        entry = pipelines.setdefault(pipeline_id, {})
+        entry["recipe_id"] = recipe_id
 
 
 async def _try_reply_video(message: Message, file_id: str) -> Message | None:

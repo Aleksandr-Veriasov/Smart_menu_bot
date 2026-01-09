@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import Field
 
-from packages.common_settings.settings import BaseAppSettings
+from packages.common_settings.base import BaseAppSettings
 
 
 class DummySettings(BaseAppSettings):
@@ -121,3 +121,86 @@ class TestFileAwareEnvSource:
         settings = DummySettings()
 
         assert settings.simple == "not,a,json,list"
+
+    def test_env_value_takes_priority_over_file(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Если ENV задан, *_FILE не используется."""
+
+        secret_file: Path = tmp_path / "simple.txt"
+        secret_file.write_text("from_file\n", encoding="utf-8")
+
+        monkeypatch.setenv("SIMPLE", "from_env")
+        monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
+
+        settings = DummySettings()
+
+        assert settings.simple == "from_env"
+
+    def test_empty_env_falls_back_to_file(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Пустая строка в ENV должна дать fallback на *_FILE."""
+
+        secret_file: Path = tmp_path / "simple.txt"
+        secret_file.write_text("from_file\n", encoding="utf-8")
+
+        monkeypatch.setenv("SIMPLE", "")
+        monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
+
+        settings = DummySettings()
+
+        assert settings.simple == "from_file"
+
+    def test_list_value_csv_string_parsed_to_list(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CSV-строка должна превратиться в list[str] для list-поля."""
+
+        monkeypatch.setenv("SIMPLE", "dummy")
+        monkeypatch.delenv("SIMPLE_FILE", raising=False)
+
+        monkeypatch.setenv("LIST_VALUE", "a, b, c")
+        monkeypatch.delenv("LIST_VALUE_FILE", raising=False)
+
+        settings = DummySettings()
+
+        assert settings.list_value == ["a", "b", "c"]
+
+    def test_optional_value_is_none_when_unset(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """OPTIONAL_VALUE остается None, если ENV и *_FILE не заданы."""
+
+        monkeypatch.setenv("SIMPLE", "dummy")
+        monkeypatch.delenv("SIMPLE_FILE", raising=False)
+
+        monkeypatch.delenv("OPTIONAL_VALUE", raising=False)
+        monkeypatch.delenv("OPTIONAL_VALUE_FILE", raising=False)
+
+        settings = DummySettings()
+
+        assert settings.optional_value is None
+
+    def test_empty_file_value_kept_as_empty_string(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Пустой файл дает пустую строку для обязательного поля."""
+
+        secret_file: Path = tmp_path / "simple_empty.txt"
+        secret_file.write_text("\n", encoding="utf-8")
+
+        monkeypatch.delenv("SIMPLE", raising=False)
+        monkeypatch.setenv("SIMPLE_FILE", str(secret_file))
+
+        settings = DummySettings()
+
+        assert settings.simple == ""
