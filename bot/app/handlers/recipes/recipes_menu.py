@@ -176,6 +176,10 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     if state is None:
         state = {}
         context.user_data = state
+    if category_slug != "search":
+        state.pop("search_items", None)
+        state.pop("list_title", None)
+        state.pop("search", None)
     # state['recipes_items'] = pairs  # [(id, title)]
     state["recipes_page"] = 0
     recipes_per_page = settings.telegram.recipes_per_page
