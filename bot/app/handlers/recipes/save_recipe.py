@@ -9,11 +9,9 @@ from bot.app.core.recipes_state import SaveRecipeState
 from bot.app.core.types import AppState, PTBContext
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
-from bot.app.services.ingredients_parser import parse_ingredients
 from bot.app.services.parse_callback import parse_category
 from bot.app.services.save_recipe import (
     link_recipe_to_user_service,
-    save_recipe_service,
 )
 from bot.app.utils.context_helpers import get_db
 from packages.redis.repository import (
@@ -49,7 +47,8 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     categories = await service.get_all_category()
 
     pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
-    draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
+    entry = pipelines.get(pipeline_id, {})
+    draft = entry.get("recipe_draft", {})
     title = draft.get("title", "")
     await cq.edit_message_text(
         f"🔖 <b>Выберете категорию для этого рецепта:</b>\n\n" f"🍽 <b>Название рецепта:</b>\n{title}\n\n",
@@ -60,7 +59,7 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
 
 
 async def save_recipe(update: Update, context: PTBContext) -> int:
-    """Обработка нажатия «Сохранить рецепт» — сохраняем рецепт в БД."""
+    """Обработка нажатия «Сохранить рецепт» — привязка к пользователю и категории."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -82,14 +81,17 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
 
     recipe_id = draft.get("recipe_id")
     title = draft.get("title", "Не указано")
-    description = draft.get("recipe", "Не указано")
-    ingredients = draft.get("ingredients", "Не указано")
-    video_url = draft.get("video_file_id", "")
-    original_url = draft.get("original_url")
-    ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
     user_id = cq.from_user.id if cq.from_user else None
     if not user_id:
         logger.error("Не удалось получить user_id в save_recipe")
+        return ConversationHandler.END
+
+    if not recipe_id:
+        logger.warning("Recipe draft not found in save_recipe (pipeline_id=%s, draft=%s)", pipeline_id, draft)
+        await cq.edit_message_text(
+            "❗️ Не удалось найти черновик рецепта. Пожалуйста, отправьте ссылку заново.",
+            reply_markup=home_keyboard(),
+        )
         return ConversationHandler.END
 
     db = get_db(context)
@@ -102,24 +104,12 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         service = CategoryService(db, app_state.redis)
         category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
         async with db.session() as session:
-            if recipe_id:
-                await link_recipe_to_user_service(
-                    session,
-                    recipe_id=int(recipe_id),
-                    user_id=user_id,
-                    category_id=category_id,
-                )
-            else:
-                await save_recipe_service(
-                    session,
-                    user_id=user_id,
-                    title=title,
-                    description=description,
-                    category_id=category_id,
-                    ingredients_raw=ingredients_raw,
-                    video_url=video_url,
-                    original_url=original_url,
-                )
+            await link_recipe_to_user_service(
+                session,
+                recipe_id=int(recipe_id),
+                user_id=user_id,
+                category_id=category_id,
+            )
             await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
     except Exception as e:
@@ -136,6 +126,9 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         parse_mode=ParseMode.HTML,
         reply_markup=home_keyboard(),
     )
+    if context.user_data is not None:
+        pipelines = context.user_data.get("pipelines", {})
+        pipelines.pop(pipeline_id, None)
     return ConversationHandler.END
 
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from packages.common_settings.settings import settings
 
 

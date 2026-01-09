@@ -110,12 +110,17 @@ async def send_recipe_confirmation(
             )
     except Exception as e:
         logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
+        if context.user_data is not None:
+            pipelines = context.user_data.setdefault("pipelines", {})
+            entry = pipelines.setdefault(pipeline_id, {})
+            entry["save_error"] = str(e)
         return
 
     if context.user_data is not None:
         pipelines = context.user_data.setdefault("pipelines", {})
         entry = pipelines.setdefault(pipeline_id, {})
-        entry["recipe_id"] = recipe_id
+        recipe_draft = entry.setdefault("recipe_draft", {})
+        recipe_draft["recipe_id"] = recipe_id
 
 
 async def _try_reply_video(message: Message, file_id: str) -> Message | None:

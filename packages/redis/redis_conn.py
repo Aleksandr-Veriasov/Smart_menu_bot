@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from redis.asyncio import Redis
 
 from packages.common_settings.settings import settings

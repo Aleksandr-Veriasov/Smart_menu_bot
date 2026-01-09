@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from collections.abc import Iterable
 from typing import Any, Generic, TypeVar
@@ -370,9 +368,11 @@ class VideoRepository(BaseRepository[Video]):
 
     @classmethod
     async def get_by_original_url(cls, session: AsyncSession, original_url: str) -> Video | None:
-        statement = select(cls.model).where(cls.model.original_url == original_url)
+        statement = (
+            select(cls.model).where(cls.model.original_url == original_url).order_by(cls.model.id.desc()).limit(1)
+        )
         result = await session.execute(statement)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     @classmethod
     async def create(
