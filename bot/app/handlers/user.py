@@ -91,6 +91,9 @@ async def user_start(update: Update, context: PTBContext) -> None:
     text = text_new_user if new_user else START_TEXT_USER
     keyboard = start_keyboard(new_user)
 
+    if update.callback_query:
+        await update.callback_query.answer()
+
     if update.effective_chat and await collapse_user_messages(
         context,
         state.redis,
