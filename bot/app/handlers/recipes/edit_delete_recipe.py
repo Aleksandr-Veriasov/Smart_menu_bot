@@ -20,7 +20,7 @@ from bot.app.keyboards.inlines import (
     keyboard_save_cancel_delete,
 )
 from bot.app.services.category_service import CategoryService
-from bot.app.services.parse_callback import parse_category
+from bot.app.services.parse_callback import parse_change_category
 from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.context_helpers import get_db, get_db_and_redis, get_redis_cli
 from bot.app.utils.message_cache import (
@@ -266,7 +266,11 @@ async def change_category(update: Update, context: PTBContext) -> int:
     await cq.edit_message_text(
         "🏷️ Выберете новую категорию:",
         parse_mode=ParseMode.HTML,
-        reply_markup=category_keyboard(category, RecipeMode.SAVE),
+        reply_markup=category_keyboard(
+            category,
+            RecipeMode.EDIT,
+            callback_builder=lambda slug: f"change_category:{slug}",
+        ),
     )
     return EDRState.CONFIRM_CHANGE_CATEGORY
 
@@ -297,7 +301,7 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
     if not recipe_id:
         await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
-    category_slug = parse_category(cq.data or "")
+    category_slug = parse_change_category(cq.data or "")
     if not category_slug:
         logger.error("Не удалось получить slug категории в confirm_change_category")
         return ConversationHandler.END
@@ -368,7 +372,7 @@ def conversation_edit_recipe() -> ConversationHandler:
             EDRState.CONFIRM_CHANGE_CATEGORY: [
                 CallbackQueryHandler(
                     confirm_change_category,
-                    pattern=r"^[a-z0-9][a-z0-9_-]*_save(?:\:\d+)?$",
+                    pattern=r"^change_category:[a-z0-9][a-z0-9_-]*$",
                 ),
                 CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
