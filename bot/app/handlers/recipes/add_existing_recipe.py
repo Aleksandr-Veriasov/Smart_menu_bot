@@ -1,6 +1,6 @@
 from telegram import Update
 
-from bot.app.core.types import AppState, PTBContext
+from bot.app.core.types import PTBContext
 from bot.app.handlers.user import START_TEXT_NEW_USER
 from bot.app.keyboards.inlines import (
     category_keyboard,
@@ -9,7 +9,7 @@ from bot.app.keyboards.inlines import (
 )
 from bot.app.services.category_service import CategoryService
 from bot.app.services.user_service import UserService
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
@@ -32,13 +32,8 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
     if not user_id:
         return
 
-    db = get_db(context)
-    app_state = context.bot_data.get("state")
-    if not isinstance(app_state, AppState) or app_state.redis is None:
-        await cq.edit_message_text("Redis недоступен, попробуйте позже.", reply_markup=home_keyboard())
-        return
-
-    service = CategoryService(db, app_state.redis)
+    db, redis = get_db_and_redis(context)
+    service = CategoryService(db, redis)
     categories = await service.get_all_category()
     await cq.edit_message_text(
         "Выберите категорию для добавления рецепта:",
@@ -68,13 +63,8 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
     if not user_id:
         return
 
-    db = get_db(context)
-    app_state = context.bot_data.get("state")
-    if not isinstance(app_state, AppState) or app_state.redis is None:
-        await cq.edit_message_text("Redis недоступен, попробуйте позже.", reply_markup=home_keyboard())
-        return
-
-    category_service = CategoryService(db, app_state.redis)
+    db, redis = get_db_and_redis(context)
+    category_service = CategoryService(db, redis)
     category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)
 
     message_text = "✅ Рецепт успешно сохранён."
@@ -86,12 +76,12 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
             await RecipeUserRepository.link_user(session, recipe_id, user_id, category_id)
         await session.commit()
 
-    await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
-    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
+    await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
+    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
 
     await cq.edit_message_text(message_text, reply_markup=home_keyboard())
 
-    user_service = UserService(db, app_state.redis)
+    user_service = UserService(db, redis)
     recipes_count = await user_service.ensure_user_exists_and_count(cq.from_user)
     if recipes_count <= 1:
         tg_user = update.effective_user

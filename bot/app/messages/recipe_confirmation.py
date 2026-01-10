@@ -12,8 +12,9 @@ from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import keyboard_save_recipe
 from bot.app.services.ingredients_parser import parse_ingredients
 from bot.app.services.save_recipe import save_recipe_draft_service
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db, get_redis_cli
 from bot.app.utils.message_cache import append_message_id_to_cache
+from packages.redis.repository import PipelineDraftCacheRepository
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
@@ -33,28 +34,52 @@ async def send_recipe_confirmation(
     ingredients: str | Iterable[str],
     video_file_id: str,
     pipeline_id: int,
-    original_url: str | None = None,
 ) -> None:
     """
     Отправляет пользователю видео (по file_id) и сообщение с рецептом
     + инлайн-кнопки подтверждения/отмены. Данные для последующего сохранения
-    кладём в context.user_data.
+    кладём в Redis-черновик.
     """
     if message.from_user is None:
         logger.warning("Пользователь не найден (from_user is None)")
         return
-    if context.user_data is not None:
-        pipelines = context.user_data.setdefault("pipelines", {})
-        entry = pipelines.setdefault(pipeline_id, {})
-        if original_url is None:
-            original_url = entry.get("original_url")
-        entry["recipe_draft"] = {
-            "title": title,
-            "recipe": recipe,
-            "video_file_id": video_file_id,
-            "ingredients": (list(ingredients) if not isinstance(ingredients, str) else ingredients),
+    user_id = message.from_user.id
+    redis = get_redis_cli(context)
+    draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or {}
+    original_url = draft.get("original_url")
+    ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
+    db = get_db(context)
+    try:
+        async with db.session() as session:
+            recipe_id = await save_recipe_draft_service(
+                session,
+                title=title,
+                description=recipe,
+                ingredients_raw=ingredients_raw,
+                video_url=video_file_id,
+                original_url=original_url,
+            )
+    except Exception as e:
+        logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
+        error_draft = {
             "original_url": original_url,
+            "video_file_id": video_file_id,
+            "save_error": str(e),
         }
+        await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, error_draft)
+        return
+
+    draft = {
+        "title": title,
+        "recipe": recipe,
+        "ingredients": (list(ingredients) if not isinstance(ingredients, str) else ingredients),
+        "original_url": original_url,
+        "video_file_id": video_file_id,
+        "recipe_id": recipe_id,
+    }
+    await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, draft)
+    logger.debug("Черновик рецепта сохранен (pipeline_id=%s, recipe_id=%s)", pipeline_id, recipe_id)
+
     video_msg = None
     logger.debug(f"video_file_id = {video_file_id} ,title = {title},")
     # 1) Видео (если есть file_id) — ждём до 10 сек
@@ -95,32 +120,6 @@ async def send_recipe_confirmation(
     except Exception as e:
         logger.error("Ошибка при отправке текста рецепта: %s", e, exc_info=True)
         return
-
-    ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
-    db = get_db(context)
-    try:
-        async with db.session() as session:
-            recipe_id = await save_recipe_draft_service(
-                session,
-                title=title,
-                description=recipe,
-                ingredients_raw=ingredients_raw,
-                video_url=video_file_id,
-                original_url=original_url,
-            )
-    except Exception as e:
-        logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
-        if context.user_data is not None:
-            pipelines = context.user_data.setdefault("pipelines", {})
-            entry = pipelines.setdefault(pipeline_id, {})
-            entry["save_error"] = str(e)
-        return
-
-    if context.user_data is not None:
-        pipelines = context.user_data.setdefault("pipelines", {})
-        entry = pipelines.setdefault(pipeline_id, {})
-        recipe_draft = entry.setdefault("recipe_draft", {})
-        recipe_draft["recipe_id"] = recipe_id
 
 
 async def _try_reply_video(message: Message, file_id: str) -> Message | None:

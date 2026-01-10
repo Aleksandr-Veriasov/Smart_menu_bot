@@ -6,16 +6,15 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SaveRecipeState
-from bot.app.core.types import AppState, PTBContext
+from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
-from bot.app.services.save_recipe import (
-    link_recipe_to_user_service,
-)
-from bot.app.utils.context_helpers import get_db
+from bot.app.services.save_recipe import link_recipe_to_user_service
+from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
 from packages.redis.repository import (
     CategoryCacheRepository,
+    PipelineDraftCacheRepository,
     RecipeCacheRepository,
 )
 
@@ -33,23 +32,25 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     await cq.answer()
     data = cq.data or ""
     try:
-        action, pipeline_id_str = data.rsplit(":", 1)
+        _, pipeline_id_str = data.rsplit(":", 1)
         pipeline_id = int(pipeline_id_str)
     except (ValueError, TypeError):
         logger.error("Не удалось распарсить pipeline_id в start_save_recipe")
         return ConversationHandler.END
-    db = get_db(context)
-    app_state = context.bot_data.get("state")
-    if not isinstance(app_state, AppState) or app_state.redis is None:
-        logger.error("AppState или Redis недоступен в start_save_recipe")
+    try:
+        db, redis = get_db_and_redis(context)
+    except RuntimeError as e:
+        logger.error("Ошибка при получении Redis/DB в save_recipe: %s", e)
         return ConversationHandler.END
-    service = CategoryService(db, app_state.redis)
+    service = CategoryService(db, redis)
     categories = await service.get_all_category()
 
-    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
-    entry = pipelines.get(pipeline_id, {})
-    draft = entry.get("recipe_draft", {})
-    title = draft.get("title", "")
+    user_id = cq.from_user.id if cq.from_user else None
+    if not user_id:
+        logger.error("Не удалось получить user_id в start_save_recipe")
+        return ConversationHandler.END
+    entry = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or {}
+    title = entry.get("title", "")
     await cq.edit_message_text(
         f"🔖 <b>Выберете категорию для этого рецепта:</b>\n\n" f"🍽 <b>Название рецепта:</b>\n{title}\n\n",
         reply_markup=category_keyboard(categories, RecipeMode.SAVE, pipeline_id=pipeline_id),
@@ -72,36 +73,35 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         logger.error("Не удалось распарсить pipeline_id в save_recipe")
         return ConversationHandler.END
 
-    pipelines = context.user_data.get("pipelines", {}) if context.user_data is not None else {}
-    draft = pipelines.get(pipeline_id, {}).get("recipe_draft", {})
+    user_id = cq.from_user.id if cq.from_user else None
+    if not user_id:
+        logger.error("Не удалось получить user_id в save_recipe")
+        return ConversationHandler.END
+    try:
+        db, redis = get_db_and_redis(context)
+    except RuntimeError as e:
+        logger.error("Ошибка при получении Redis/DB в save_recipe: %s", e)
+        return ConversationHandler.END
+    entry = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or {}
     category_slug = parse_category(category_part)
     if not category_slug:
         logger.error("Не удалось получить slug категории в save_recipe")
         return ConversationHandler.END
 
-    recipe_id = draft.get("recipe_id")
-    title = draft.get("title", "Не указано")
-    user_id = cq.from_user.id if cq.from_user else None
-    if not user_id:
-        logger.error("Не удалось получить user_id в save_recipe")
-        return ConversationHandler.END
+    recipe_id = entry.get("recipe_id")
+    title = entry.get("title", "Не указано")
 
     if not recipe_id:
-        logger.warning("Recipe draft not found in save_recipe (pipeline_id=%s, draft=%s)", pipeline_id, draft)
+        logger.warning("Черновик рецепта не найден в save_recipe (pipeline_id=%s, draft=%s)", pipeline_id, entry)
         await cq.edit_message_text(
             "❗️ Не удалось найти черновик рецепта. Пожалуйста, отправьте ссылку заново.",
             reply_markup=home_keyboard(),
         )
         return ConversationHandler.END
 
-    db = get_db(context)
-    app_state = context.bot_data.get("state")
-    if not isinstance(app_state, AppState) or app_state.redis is None:
-        logger.error("AppState или Redis недоступен в save_recipe")
-        return ConversationHandler.END
     category_name = ""
     try:
-        service = CategoryService(db, app_state.redis)
+        service = CategoryService(db, redis)
         category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
         async with db.session() as session:
             await link_recipe_to_user_service(
@@ -110,8 +110,8 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
                 user_id=user_id,
                 category_id=category_id,
             )
-            await CategoryCacheRepository.invalidate_user_categories(app_state.redis, user_id)
-            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(app_state.redis, user_id, category_id)
+            await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
+            await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await cq.edit_message_text(
@@ -126,9 +126,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         parse_mode=ParseMode.HTML,
         reply_markup=home_keyboard(),
     )
-    if context.user_data is not None:
-        pipelines = context.user_data.get("pipelines", {})
-        pipelines.pop(pipeline_id, None)
+    await PipelineDraftCacheRepository.delete(redis, user_id, pipeline_id)
     return ConversationHandler.END
 
 
@@ -140,15 +138,20 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
     await cq.answer()
     data = cq.data or ""
     try:
-        action, pipeline_id_str = data.rsplit(":", 1)
+        _, pipeline_id_str = data.rsplit(":", 1)
         pipeline_id = int(pipeline_id_str)
     except (ValueError, TypeError):
         logger.error("Не удалось распарсить pipeline_id в cancel_recipe_save")
         return ConversationHandler.END
 
-    if context.user_data is not None:
-        pipelines = context.user_data.get("pipelines", {})
-        pipelines.pop(pipeline_id, None)
+    user_id = cq.from_user.id if cq.from_user else None
+    if user_id:
+        try:
+            redis = get_redis_cli(context)
+        except RuntimeError as e:
+            logger.error("Ошибка при получении Redis в cancel_recipe_save: %s", e)
+            return ConversationHandler.END
+        await PipelineDraftCacheRepository.delete(redis, user_id, pipeline_id)
 
     await cq.edit_message_text(
         "Рецепт не сохранен.",

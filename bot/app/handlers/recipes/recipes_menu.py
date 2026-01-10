@@ -17,11 +17,14 @@ from bot.app.keyboards.inlines import (
 from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category_mode, parse_mode
 from bot.app.services.recipe_service import RecipeService
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db, get_db_and_redis
 from bot.app.utils.message_utils import random_recipe
 from packages.common_settings.settings import settings
 from packages.db.repository import RecipeRepository, VideoRepository
-from packages.redis.repository import RecipeMessageCacheRepository
+from packages.redis.repository import (
+    RecipeActionCacheRepository,
+    RecipeMessageCacheRepository,
+)
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
@@ -108,16 +111,14 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     logger.debug(f"⏩⏩ category_slug = {category_slug}, mode = {mode}")
 
     user_id = cq.from_user.id
-    db = get_db(context)
-    app_state = context.bot_data.get("state")
-    if not isinstance(app_state, AppState) or app_state.redis is None:
-        logger.error("AppState или Redis недоступен в recipes_menu")
-        return
+    db, redis = get_db_and_redis(context)
     text = ""
 
     # RANDOM — отдельный сценарий (без user_data)
+    # TODO добавить кнопку "Ещё один случайный рецепт" на экран результата
+    # TODO внести в отдельный хендлер
     if mode.value == "random":
-        video_url, text = await random_recipe(db, app_state.redis, user_id, category_slug)
+        video_url, text = await random_recipe(db, redis, user_id, category_slug)
 
         if cq.message and update.effective_chat:
             with suppress(BadRequest):
@@ -146,21 +147,21 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
                 message_ids.append(text_msg.message_id)
                 if message_ids and update.effective_chat:
                     await RecipeMessageCacheRepository.append_user_message_ids(
-                        app_state.redis,
+                        redis,
                         cq.from_user.id,
                         update.effective_chat.id,
                         message_ids,
                     )
             return
 
-    # DEFAULT/EDIT — вытягиваем список и кладём в user_data
+    # DEFAULT/EDIT — вытягиваем список и кладём в Redis
     pairs: list[dict[str, str | int]] = []
-    service = CategoryService(db, app_state.redis)
+    service = CategoryService(db, redis)
     category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
     logger.debug(f"📼 category_id = {category_id}")
-    service_rec = RecipeService(db, app_state.redis)
+    service_recipe = RecipeService(db, redis)
     if category_id:
-        pairs = await service_rec.get_all_recipes_ids_and_titles(user_id, category_id)
+        pairs = await service_recipe.get_all_recipes_ids_and_titles(user_id, category_id)
         logger.debug(f"📼 pairs = {pairs}")
 
     if not pairs:
@@ -171,23 +172,18 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
             )
         return
 
-    # сохраняем состояние в user_data
-    state = context.user_data
-    if state is None:
-        state = {}
-        context.user_data = state
-    if category_slug != "search":
-        state.pop("search_items", None)
-        state.pop("list_title", None)
-        state.pop("search", None)
-    # state['recipes_items'] = pairs  # [(id, title)]
-    state["recipes_page"] = 0
+    # сохраняем состояние в Redis
     recipes_per_page = settings.telegram.recipes_per_page
-    state["recipes_total_pages"] = (len(pairs) + recipes_per_page - 1) // recipes_per_page
-    state["category_name"] = category_name
-    state["category_slug"] = category_slug
-    state["category_id"] = category_id
-    state["mode"] = mode
+    recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
+    state = {
+        "recipes_page": 0,
+        "recipes_total_pages": recipes_total_pages,
+        "category_name": category_name,
+        "category_slug": category_slug,
+        "category_id": category_id,
+        "mode": mode.value,
+    }
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
 
     # рисуем первую страницу
     markup = build_recipes_list_keyboard(
@@ -232,19 +228,17 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
                 chat_id=update.effective_chat.id,
                 message_id=cq.message.message_id,
             )
-    state = context.user_data
-    if state:
-        page = state.get("recipes_page", 0)
+    db, redis = get_db_and_redis(context)
+    state = await RecipeActionCacheRepository.get(redis, cq.from_user.id, "recipes_state") or {}
+    page = int(state.get("recipes_page", 0))
     if data.startswith(f"{category_slug}_edit_"):
         # Редактирование рецепта
         recipe_id = int(data.split("_")[2])
         keyboard = recipe_edit_keyboard(recipe_id, page)
     else:
         recipe_id = int(data.split("_")[2])
-        keyboard = choice_recipe_keyboard(page, recipe_id)
+        keyboard = choice_recipe_keyboard(recipe_id, page)
 
-    app_state = context.bot_data.get("state")
-    db = get_db(context)
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, recipe_id)
         if not recipe:
@@ -275,9 +269,9 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
             )
             message_ids.append(text_msg.message_id)
 
-        if message_ids and isinstance(app_state, AppState) and app_state.redis is not None and update.effective_chat:
+        if message_ids and redis is not None and update.effective_chat:
             await RecipeMessageCacheRepository.append_user_message_ids(
-                app_state.redis,
+                redis,
                 cq.from_user.id,
                 update.effective_chat.id,
                 message_ids,

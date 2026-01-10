@@ -6,7 +6,9 @@ from telegram import Message, MessageEntity, Update
 from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.check_existing_recipe import handle_existing_recipe
 from bot.app.services.video_pipeline import process_video_pipeline
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import append_message_id_to_cache
+from packages.redis.repository import PipelineDraftCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +57,21 @@ async def video_link(update: Update, context: PTBContext) -> None:
         return
 
     chat_id = message.chat_id
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        logger.error("Не удалось получить user_id в video_link")
+        return
     # Уникальный pipeline_id на основе (chat_id, message_id) через конкатенацию
     pipeline_id = int(f"{abs(chat_id)}{message.message_id:010d}")
 
     # Можем пометить, что пайплайн запущен
-    pipelines = context.user_data.setdefault("pipelines", {}) if context.user_data else {}
-    pipelines[pipeline_id] = {"status": "started", "original_url": url}
+    redis = get_redis_cli(context)
+    await PipelineDraftCacheRepository.set(
+        redis,
+        user_id,
+        pipeline_id,
+        {"status": "started", "original_url": url},
+    )
 
     logger.debug(f"Пользователь отправил ссылку: {url}, pipeline_id={pipeline_id}")
     context.application.create_task(process_video_pipeline(url, message, context, pipeline_id=pipeline_id))

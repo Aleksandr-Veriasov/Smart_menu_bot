@@ -43,3 +43,19 @@ class RedisKeys:
     @classmethod
     def user_last_recipe_messages(cls, user_id: int | str) -> str:
         return f"{cls.PREFIX}:user:{user_id}:last_recipe_messages"
+
+    @classmethod
+    def user_pipeline_draft(cls, user_id: int | str, pipeline_id: int | str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:pipeline:{pipeline_id}"
+
+    @classmethod
+    def user_pipeline_ids(cls, user_id: int | str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:pipeline_ids"
+
+    @classmethod
+    def user_recipe_action(cls, user_id: int | str, action: str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:recipe_action:{action}"
+
+    @classmethod
+    def user_progress_message(cls, user_id: int | str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:progress_message"

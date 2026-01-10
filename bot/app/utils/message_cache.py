@@ -3,13 +3,14 @@ from contextlib import suppress
 from telegram import Message, Update
 from telegram.error import BadRequest
 
-from bot.app.core.types import AppState, PTBContext
+from bot.app.core.types import PTBContext
+from bot.app.utils.context_helpers import get_redis_cli
 from packages.redis.repository import RecipeMessageCacheRepository
 
 
 async def append_message_id_to_cache(source: Update | Message, context: PTBContext, message_id: int) -> None:
     """Добавляет message_id в кэш сообщений пользователя."""
-    app_state = context.bot_data.get("state")
+    redis = get_redis_cli(context)
     chat_id = None
     user_id = None
     if isinstance(source, Update):
@@ -18,9 +19,9 @@ async def append_message_id_to_cache(source: Update | Message, context: PTBConte
     elif isinstance(source, Message):
         chat_id = source.chat_id
         user_id = source.from_user.id if source.from_user else None
-    if isinstance(app_state, AppState) and app_state.redis is not None and chat_id is not None and user_id is not None:
+    if redis is not None and chat_id is not None and user_id is not None:
         await RecipeMessageCacheRepository.append_user_message_ids(
-            app_state.redis,
+            redis,
             user_id,
             chat_id,
             [message_id],

@@ -6,11 +6,12 @@ from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.share_link import handle_shared_start
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
 from bot.app.services.user_service import UserService
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import (
     append_message_id_to_cache,
     collapse_user_messages,
 )
+from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,8 @@ HELP_TEXT = (
 async def user_start(update: Update, context: PTBContext) -> None:
     """Обработчик команды /start"""
     tg_user = update.effective_user
-    state = context.bot_data["state"]
     if not tg_user:
         logger.error("update.effective_user отсутствует в функции start")
-        return
-
-    if not state.redis:
-        logger.error("Redis недоступен в функции start")
         return
 
     args = context.args or []
@@ -80,9 +76,11 @@ async def user_start(update: Update, context: PTBContext) -> None:
         if await handle_shared_start(update, context, token):
             return
 
-    db = get_db(context)
-    service = UserService(db, state.redis)
+    db, redis = get_db_and_redis(context)
+    service = UserService(db, redis)
     count = await service.ensure_user_exists_and_count(tg_user)
+
+    await RecipeActionCacheRepository.delete_all(redis, tg_user.id)
 
     new_user = True if count == 0 else False
     text_new_user = START_TEXT_NEW_USER.format(user=tg_user)
@@ -94,7 +92,7 @@ async def user_start(update: Update, context: PTBContext) -> None:
 
     if update.effective_chat and await collapse_user_messages(
         context,
-        state.redis,
+        redis,
         tg_user.id,
         update.effective_chat.id,
         text,

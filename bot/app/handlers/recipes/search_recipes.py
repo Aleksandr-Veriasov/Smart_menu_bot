@@ -18,10 +18,11 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     search_recipes_type_keyboard,
 )
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
 from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.common_settings.settings import settings
 from packages.db.repository import RecipeRepository
+from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         await append_message_id_to_cache(update, context, reply.message_id)
         return ConversationHandler.END
 
-    db = get_db(context)
+    db, redis = get_db_and_redis(context)
     async with db.session() as session:
         items = await RecipeRepository.search_ids_and_titles_by_title(session, user_id, query)
 
@@ -94,19 +95,19 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         await append_message_id_to_cache(update, context, no_results_msg.message_id)
         return ConversationHandler.END
 
-    state = context.user_data
-    if state is None:
-        state = {}
-        context.user_data = state
-    state["search"] = {"type": "title", "query": query}
-    state["search_items"] = items
-    state["recipes_page"] = 0
     recipes_per_page = settings.telegram.recipes_per_page
-    state["recipes_total_pages"] = (len(items) + recipes_per_page - 1) // recipes_per_page
-    state["category_slug"] = "search"
-    state["category_id"] = 0
-    state["mode"] = RecipeMode.SEARCH
-    state["list_title"] = f"Результаты поиска по названию: «{query}»"
+    recipes_total_pages = (len(items) + recipes_per_page - 1) // recipes_per_page
+    state = {
+        "search": {"type": "title", "query": query},
+        "search_items": items,
+        "recipes_page": 0,
+        "recipes_total_pages": recipes_total_pages,
+        "category_slug": "search",
+        "category_id": 0,
+        "mode": RecipeMode.SEARCH.value,
+        "list_title": f"Результаты поиска по названию: «{query}»",
+    }
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
 
     markup = build_recipes_list_keyboard(
         items,
@@ -141,7 +142,7 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         await append_message_id_to_cache(update, context, reply.message_id)
         return ConversationHandler.END
 
-    db = get_db(context)
+    db, redis = get_db_and_redis(context)
     async with db.session() as session:
         items = await RecipeRepository.search_ids_and_titles_by_ingredient(session, user_id, query)
 
@@ -154,19 +155,19 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         await append_message_id_to_cache(update, context, no_results_msg.message_id)
         return ConversationHandler.END
 
-    state = context.user_data
-    if state is None:
-        state = {}
-        context.user_data = state
-    state["search"] = {"type": "ingredient", "query": query}
-    state["search_items"] = items
-    state["recipes_page"] = 0
     recipes_per_page = settings.telegram.recipes_per_page
-    state["recipes_total_pages"] = (len(items) + recipes_per_page - 1) // recipes_per_page
-    state["category_slug"] = "search"
-    state["category_id"] = 0
-    state["mode"] = RecipeMode.SEARCH
-    state["list_title"] = f"Результаты поиска по ингредиенту: «{query}»"
+    recipes_total_pages = (len(items) + recipes_per_page - 1) // recipes_per_page
+    state = {
+        "search": {"type": "ingredient", "query": query},
+        "search_items": items,
+        "recipes_page": 0,
+        "recipes_total_pages": recipes_total_pages,
+        "category_slug": "search",
+        "category_id": 0,
+        "mode": RecipeMode.SEARCH.value,
+        "list_title": f"Результаты поиска по ингредиенту: «{query}»",
+    }
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
 
     markup = build_recipes_list_keyboard(
         items,
@@ -192,10 +193,10 @@ async def cancel_search(update: Update, context: PTBContext) -> int:
         await update.callback_query.answer()
     if msg:
         await msg.edit_text("Поиск отменен.", reply_markup=home_keyboard())
-    if context.user_data is not None:
-        context.user_data.pop("search", None)
-        context.user_data.pop("search_items", None)
-        context.user_data.pop("list_title", None)
+    user_id = update.effective_user.id if update.effective_user else None
+    if user_id:
+        redis = get_redis_cli(context)
+        await RecipeActionCacheRepository.delete(redis, user_id, "recipes_state")
     return ConversationHandler.END
 
 

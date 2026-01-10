@@ -1,6 +1,7 @@
+import inspect
 import uuid
 from collections.abc import Awaitable
-from typing import Any, cast
+from typing import TypeVar
 
 from redis.asyncio import Redis
 
@@ -18,4 +19,13 @@ async def release_lock(r: Redis, name: str, token: str) -> None:
       return redis.call('DEL', KEYS[1])
     else return 0 end
     """
-    await cast("Awaitable[Any]", r.eval(script, 1, name, token))
+    await _maybe_await(r.eval(script, 1, name, token))
+
+
+T = TypeVar("T")
+
+
+async def _maybe_await(value: Awaitable[T] | T) -> T:
+    if inspect.isawaitable(value):
+        return await value
+    return value

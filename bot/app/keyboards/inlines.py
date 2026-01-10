@@ -115,7 +115,7 @@ def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
     )
 
 
-def choice_recipe_keyboard(page: int, recipe_id: int) -> InlineKeyboardMarkup:
+def choice_recipe_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
     return (
         InlineKB()

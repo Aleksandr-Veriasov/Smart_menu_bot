@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
+from packages.redis.utils import _maybe_await
 
 logger = logging.getLogger(__name__)
 
@@ -263,3 +264,93 @@ class RecipeMessageCacheRepository:
     async def clear_user_message_ids(cls, r: Redis, user_id: int) -> None:
         """Удаляет запись message_ids пользователя."""
         await r.delete(RedisKeys.user_last_recipe_messages(user_id))
+
+
+class PipelineDraftCacheRepository:
+
+    @classmethod
+    async def get(cls, r: Redis, user_id: int, pipeline_id: int) -> dict | None:
+        raw = await r.get(RedisKeys.user_pipeline_draft(user_id, pipeline_id))
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    @classmethod
+    async def set(cls, r: Redis, user_id: int, pipeline_id: int, payload: dict) -> None:
+        value = json.dumps(payload, ensure_ascii=False)
+        await r.setex(
+            RedisKeys.user_pipeline_draft(user_id, pipeline_id),
+            ttl.PIPELINE_DRAFT,
+            value,
+        )
+        await _maybe_await(r.sadd(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
+        await _maybe_await(r.expire(RedisKeys.user_pipeline_ids(user_id), ttl.PIPELINE_DRAFT))
+
+    @classmethod
+    async def delete(cls, r: Redis, user_id: int, pipeline_id: int) -> None:
+        await r.delete(RedisKeys.user_pipeline_draft(user_id, pipeline_id))
+        await _maybe_await(r.srem(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
+
+    @classmethod
+    async def list_ids(cls, r: Redis, user_id: int) -> list[int]:
+        raw = await _maybe_await(r.smembers(RedisKeys.user_pipeline_ids(user_id)))
+        return [int(x) for x in raw if isinstance(x, (int | str)) and str(x).isdigit()]
+
+
+class RecipeActionCacheRepository:
+
+    @classmethod
+    async def delete_all(cls, r: Redis, user_id: int) -> None:
+        for action in ("recipes_state", "edit", "delete", "change_category"):
+            await cls.delete(r, user_id, action)
+
+    @classmethod
+    async def get(cls, r: Redis, user_id: int, action: str) -> dict | None:
+        raw = await r.get(RedisKeys.user_recipe_action(user_id, action))
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    @classmethod
+    async def set(cls, r: Redis, user_id: int, action: str, payload: dict) -> None:
+        value = json.dumps(payload, ensure_ascii=False)
+        await r.setex(RedisKeys.user_recipe_action(user_id, action), ttl.RECIPE_ACTION, value)
+
+    @classmethod
+    async def delete(cls, r: Redis, user_id: int, action: str) -> None:
+        await r.delete(RedisKeys.user_recipe_action(user_id, action))
+
+
+class ProgressMessageCacheRepository:
+
+    @classmethod
+    async def get(cls, r: Redis, user_id: int) -> dict | None:
+        raw = await r.get(RedisKeys.user_progress_message(user_id))
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    @classmethod
+    async def set(cls, r: Redis, user_id: int, payload: dict) -> None:
+        value = json.dumps(payload, ensure_ascii=False)
+        await r.setex(
+            RedisKeys.user_progress_message(user_id),
+            ttl.RECIPE_ACTION,
+            value,
+        )
+
+    @classmethod
+    async def delete(cls, r: Redis, user_id: int) -> None:
+        await r.delete(RedisKeys.user_progress_message(user_id))

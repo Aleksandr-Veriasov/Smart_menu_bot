@@ -5,11 +5,13 @@ from contextlib import suppress
 from telegram import Update
 from telegram.error import BadRequest
 
-from bot.app.core.types import AppState, PTBContext
+from bot.app.core.recipes_mode import RecipeMode
+from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import collapse_user_messages
 from packages.common_settings.settings import settings
-from packages.redis.repository import RecipeCacheRepository
+from packages.redis.repository import RecipeActionCacheRepository, RecipeCacheRepository
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
@@ -28,20 +30,18 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
         return
     await cq.answer()
 
-    # Берём user_data; если у вас есть свой хелпер — можно использовать его
-    state = context.user_data
+    user_id = cq.from_user.id if cq.from_user else None
+    if not user_id:
+        return
+    redis = get_redis_cli(context)
+    state = await RecipeActionCacheRepository.get(redis, user_id, "recipes_state")
     if not state:
         return
 
-    app_state = context.bot_data.get("state")
     items = state.get("search_items")
     if not items:
-        if not isinstance(app_state, AppState) or app_state.redis is None:
-            return
         category_id = state.get("category_id", 0)
-        items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(
-            app_state.redis, cq.from_user.id, category_id
-        )
+        items = await RecipeCacheRepository.get_all_recipes_ids_and_titles(redis, user_id, category_id)
     if not items:
         if cq.message:
             with suppress(BadRequest):
@@ -60,32 +60,36 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
         page = 0
 
     per_page = settings.telegram.recipes_per_page
-    total_pages = int(state.get("recipes_total_pages", 1)) if state else 1
+    total_pages = int(state.get("recipes_total_pages", 1))
     page = max(0, min(page, max(0, total_pages - 1)))
-    mode = state.get("mode", "show")
-    if state:
-        state["recipes_page"] = page
-        category_slug = state.get("category_slug", "recipes")
-        logger.debug(f'🗑 {state["recipes_page"]} - category_slug')
-        markup = build_recipes_list_keyboard(
-            items,
-            page=page,
-            per_page=per_page,
-            category_slug=category_slug,
-            mode=mode,
-        )
-        list_title = state.get("list_title")
-        if list_title:
-            title = list_title
-        else:
-            title = f'Выберите рецепт из категории «{state.get("category_name", "категория")}»:'
+    mode_raw = state.get("mode", RecipeMode.SHOW.value)
+    try:
+        mode = RecipeMode(mode_raw)
+    except Exception:
+        mode = RecipeMode.SHOW
+    state["recipes_page"] = page
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
+    category_slug = state.get("category_slug", "recipes")
+    logger.debug("🗑 %s - category_slug", state["recipes_page"])
+    markup = build_recipes_list_keyboard(
+        items,
+        page=page,
+        per_page=per_page,
+        category_slug=category_slug,
+        mode=mode,
+    )
+    list_title = state.get("list_title")
+    if list_title:
+        title = list_title
+    else:
+        title = f'Выберите рецепт из категории «{state.get("category_name", "категория")}»:'
 
     if cq.message:
-        if isinstance(app_state, AppState) and app_state.redis is not None and update.effective_chat:
+        if update.effective_chat:
             if await collapse_user_messages(
                 context,
-                app_state.redis,
-                cq.from_user.id,
+                redis,
+                user_id,
                 update.effective_chat.id,
                 title,
                 markup,

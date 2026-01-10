@@ -41,89 +41,86 @@ async def process_video_pipeline(url: str, message: Message, context: PTBContext
     9) Чистим временные файлы
     """
     chat_id = message.chat_id if hasattr(message, "chat_id") else message.chat.id
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        logger.error("Не удалось получить user_id в process_video_pipeline")
+        return
 
     notifier = TelegramNotifier(context.bot, chat_id, context=context, source_message=message)
     notifier.message_id = None
-    # стартовое сообщение (создастся и запомнится message_id)
-    await notifier.info("🔄 Скачиваю видео и описание... Пожалуйста, подождите.")
-
-    # дальше обычный ход
-    video_path, description = await async_download_video_and_description(url)
-    await notifier.progress(20, "📼 Видео скачано")
-    if not video_path:
-        await notifier.error("Не удалось скачать видео. Отправьте ссылку ещё раз.")
-        return
-    logger.debug(f"Описание скачанного видео: {description}")
-    original_path = video_path
-    video_path_with_suffix = _with_pipeline_suffix(video_path, pipeline_id)
     try:
-        Path(video_path).rename(video_path_with_suffix)
-        video_path = video_path_with_suffix
-    except Exception as exc:
-        logger.warning(
-            "Не удалось переименовать видео %s -> %s: %s",
-            original_path,
-            video_path_with_suffix,
-            exc,
-        )
-    convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
-    await notifier.progress(40, "Видео конвертировано")
+        # стартовое сообщение (создастся и запомнится message_id)
+        await notifier.info("🔄 Скачиваю видео и описание... Пожалуйста, подождите.")
 
-    def _cleanup_src_video_after_convert(t: asyncio.Task) -> None:
-        safe_remove(video_path)
+        # дальше обычный ход
+        video_path, description = await async_download_video_and_description(url)
+        await notifier.progress(20, "📼 Видео скачано")
+        if not video_path:
+            await notifier.error("Не удалось скачать видео. Отправьте ссылку ещё раз.")
+            return
+        logger.debug(f"Описание скачанного видео: {description}")
+        original_path = video_path
+        video_path_with_suffix = _with_pipeline_suffix(video_path, pipeline_id)
+        try:
+            Path(video_path).rename(video_path_with_suffix)
+            video_path = video_path_with_suffix
+        except Exception as exc:
+            logger.warning(
+                "Не удалось переименовать видео %s -> %s: %s",
+                original_path,
+                video_path_with_suffix,
+                exc,
+            )
+        convert_task = asyncio.create_task(async_convert_to_mp4(video_path))
+        await notifier.progress(40, "Видео конвертировано")
 
-    convert_task.add_done_callback(_cleanup_src_video_after_convert)
-    converted_path = await convert_task
+        def _cleanup_src_video_after_convert(t: asyncio.Task) -> None:
+            safe_remove(video_path)
 
-    upload_task: asyncio.Task[str | None] = asyncio.create_task(send_video_to_channel(context, converted_path))
+        convert_task.add_done_callback(_cleanup_src_video_after_convert)
+        converted_path = await convert_task
 
-    if context.user_data is not None:
-        pipelines = context.user_data.setdefault("pipelines", {})
-        entry = pipelines.setdefault(pipeline_id, {})
-        entry["video_path"] = converted_path
-        entry["video_upload_task"] = upload_task
-    await notifier.progress(60, "✅ Видео загружено. Распознаём текст...")
+        upload_task: asyncio.Task[str | None] = asyncio.create_task(send_video_to_channel(context, converted_path))
+        await notifier.progress(60, "✅ Видео загружено. Распознаём текст...")
 
-    audio_path = extract_audio(converted_path, AUDIO_FOLDER)
-    transcribe_task = asyncio.create_task(async_transcribe_audio(audio_path))
+        audio_path = extract_audio(converted_path, AUDIO_FOLDER)
+        transcribe_task = asyncio.create_task(async_transcribe_audio(audio_path))
 
-    def _cleanup_audio_after_done(_task: asyncio.Task) -> None:
-        safe_remove(audio_path)
+        def _cleanup_audio_after_done(_task: asyncio.Task) -> None:
+            safe_remove(audio_path)
 
-    transcribe_task.add_done_callback(_cleanup_audio_after_done)
-    transcript = await transcribe_task
+        transcribe_task.add_done_callback(_cleanup_audio_after_done)
+        transcript = await transcribe_task
 
-    await notifier.progress(80, "🧠 Подготавливаем рецепт через AI... " "Рецепт практически готов!")
+        await notifier.progress(80, "🧠 Подготавливаем рецепт через AI... " "Рецепт практически готов!")
 
-    title, recipe, ingredients = await extract_recipes(description, transcript)
+        title, recipe, ingredients = await extract_recipes(description, transcript)
 
-    video_file_id: str | None = None
-    try:
-        # если аплоад уже успел — получим результат мгновенно
-        # таймаут можно убрать, если не нужен контроль зависания
-        video_file_id = await upload_task
-    except Exception:
-        # не валим весь процесс: просто не будет превью из канала
-        # (при желании можно notifier.info(...) или notifier.error(...))
-        video_file_id = None
+        video_file_id: str | None = None
+        try:
+            # если аплоад уже успел — получим результат мгновенно
+            # таймаут можно убрать, если не нужен контроль зависания
+            video_file_id = await upload_task
+        except Exception:
+            # не валим весь процесс: просто не будет превью из канала
+            # (при желании можно notifier.info(...) или notifier.error(...))
+            video_file_id = None
 
-    if context.user_data is not None and video_file_id:
-        pipelines = context.user_data.setdefault("pipelines", {})
-        entry = pipelines.setdefault(pipeline_id, {})
-        entry["video_file_id"] = video_file_id
-        safe_remove(converted_path)
+        if video_file_id:
+            safe_remove(converted_path)
 
-    if title and recipe and video_file_id:
-        await notifier.progress(100, "Готово ✅")
-        await send_recipe_confirmation(
-            message,
-            context,
-            title,
-            recipe,
-            ingredients,
-            video_file_id,
-            pipeline_id,
-            original_url=url,
-        )
-    else:
-        await notifier.error("Не удалось извлечь данные из видео.")
+        if title and recipe and video_file_id:
+            await notifier.progress(100, "Готово ✅")
+            await send_recipe_confirmation(
+                message,
+                context,
+                title,
+                recipe,
+                ingredients,
+                video_file_id,
+                pipeline_id,
+            )
+        else:
+            await notifier.error("Не удалось извлечь данные из видео.")
+    finally:
+        await notifier.finalize()

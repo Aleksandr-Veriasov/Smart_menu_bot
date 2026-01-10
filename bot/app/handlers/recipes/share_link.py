@@ -7,9 +7,9 @@ from html import escape
 from telegram import Update
 from telegram.constants import ParseMode
 
-from bot.app.core.types import AppState, PTBContext
+from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import add_recipe_keyboard, home_keyboard
-from bot.app.utils.context_helpers import get_db
+from bot.app.utils.context_helpers import get_db, get_db_and_redis
 from bot.app.utils.message_cache import append_message_id_to_cache
 from packages.common_settings.settings import settings
 from packages.db.repository import RecipeRepository, VideoRepository
@@ -116,7 +116,7 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
     url = await build_recipe_share_link(context, recipe_id)
     title_html = "Рецепт"
     desc_html = "—"
-    db = get_db(context)
+    db, redis = get_db_and_redis(context)
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
         if recipe and recipe.title:
@@ -134,10 +134,9 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
             disable_web_page_preview=True,
             reply_markup=home_keyboard(),
         )
-        app_state = context.bot_data.get("state")
-        if isinstance(app_state, AppState) and app_state.redis is not None and update.effective_chat and cq.from_user:
+        if redis is not None and update.effective_chat and cq.from_user:
             await RecipeMessageCacheRepository.append_user_message_ids(
-                app_state.redis,
+                redis,
                 cq.from_user.id,
                 update.effective_chat.id,
                 [text_msg.message_id],
