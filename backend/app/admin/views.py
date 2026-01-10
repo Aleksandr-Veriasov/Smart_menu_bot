@@ -434,6 +434,8 @@ class RedisKeysAdmin(BaseView):
         keys_text = [
             (k.decode("utf-8", errors="replace") if isinstance(k, (bytes | bytearray)) else str(k)) for k in collected
         ]
+        keys_text.sort()
+        total_keys = await redis.dbsize()
         ttls: list[int] = []
         if keys_text:
             pipe = redis.pipeline()
@@ -470,10 +472,11 @@ class RedisKeysAdmin(BaseView):
                 "next_page": next_page,
                 "has_more": has_more,
                 "base_path": base_path,
+                "total_keys": total_keys,
             },
         )
 
-    @expose("/redis-keys/value", methods=["GET"], identity="redis-keys")
+    @expose("/redis-keys/value", methods=["GET"])
     async def value(self, request: Request) -> JSONResponse:
         redis = await get_redis()
         if not redis:
@@ -494,7 +497,7 @@ class RedisKeysAdmin(BaseView):
 
         return JSONResponse({"missing": False, "value": value_text})
 
-    @expose("/redis-keys/delete", methods=["GET", "POST"], identity="redis-keys")
+    @expose("/redis-keys/delete", methods=["GET", "POST"])
     async def remove_key(self, request: Request) -> RedirectResponse:
         if request.method == "GET":
             base_path = request.url.path.rsplit("/", 1)[0]
