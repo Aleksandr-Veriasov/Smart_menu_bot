@@ -76,53 +76,78 @@ def get_app() -> FastAPI:
                     description = ""
                     edit_timeout_sec = settings.edit_timeout_sec
 
-                    logger.info(f"Ищу кнопку получения текста поста: button_text={desired_button_text}")
+                    button_wait_sec = 20
+                    logger.info(
+                        f"Ищу кнопку получения текста поста: "
+                        f"button_text={desired_button_text} wait_sec={button_wait_sec}"
+                    )
 
                     button_msg = None
                     button_coords = None
+                    description_candidate = ""
 
                     # Ждем следующее сообщение(я) от SaveAsBot, пока не увидим inline-кнопку
+                    loop = asyncio.get_running_loop()
+                    start_ts = loop.time()
                     while True:
-                        msg = await conv.get_response()
+                        remaining = button_wait_sec - (loop.time() - start_ts)
+                        if remaining <= 0:
+                            break
+                        try:
+                            msg = await asyncio.wait_for(conv.get_response(), timeout=remaining)
+                        except asyncio.TimeoutError:
+                            break
                         logger.info("Получено сообщение от бота (поиск кнопки текста поста)")
                         coords = telethon_client.find_button_coords(msg, desired_button_text)
                         if coords:
                             button_msg = msg
                             button_coords = coords
                             break
+                        text = (msg.message or "").strip()
+                        if text and not description_candidate:
+                            description_candidate = text
+                            logger.info("Получено сообщение с текстом без кнопки, " "сохраняю как кандидат на описание")
 
-                    # Важно: SaveAsBot после клика обычно НЕ присылает новое сообщение,
-                    # а РЕДАКТИРУЕТ то же сообщение с кнопкой. Поэтому ждём edit.
-                    assert button_msg is not None and button_coords is not None
-                    edit_task = asyncio.create_task(
-                        telethon_client.wait_for_message_edit(
-                            telethon_client.client,
-                            target_bot,
-                            button_msg.id,
-                            timeout_sec=edit_timeout_sec,
+                    if not button_msg or not button_coords:
+                        if description_candidate:
+                            description = description_candidate
+                            logger.info("Кнопка не найдена за timeout, использую описание из текста")
+                            logger.info("Итог: найден текст без кнопки")
+                        else:
+                            logger.info("Кнопка не найдена за timeout и текста нет, использую caption видео")
+                            logger.info("Итог: не найдено ни кнопки, ни текста")
+                    else:
+                        logger.info("Итог: найдена кнопка")
+                        # Важно: SaveAsBot после клика обычно НЕ присылает новое сообщение,
+                        # а РЕДАКТИРУЕТ то же сообщение с кнопкой. Поэтому ждём edit.
+                        edit_task = asyncio.create_task(
+                            telethon_client.wait_for_message_edit(
+                                telethon_client.client,
+                                target_bot,
+                                button_msg.id,
+                                timeout_sec=edit_timeout_sec,
+                            )
                         )
-                    )
 
-                    await button_msg.click(*button_coords)
-                    logger.info(
-                        f"Нажала кнопку получения текста поста: "
-                        f"coords={button_coords} button_msg_id={button_msg.id}"
-                    )
+                        await button_msg.click(*button_coords)
+                        logger.info(
+                            f"Нажала кнопку получения текста поста: "
+                            f"coords={button_coords} button_msg_id={button_msg.id}"
+                        )
 
-                    edited = await edit_task
-                    logger.info("Сообщение отредактировано ботом")
+                        edited = await edit_task
+                        logger.info("Сообщение отредактировано ботом")
 
-                    text = (edited.message or "").strip()
-                    if text:
-                        description = text
-                        logger.info(f"Получен текст поста: description_len={len(description)}")
+                        text = (edited.message or "").strip()
+                        if text:
+                            description = text
+                            logger.info(f"Получен текст поста: description_len={len(description)}")
 
                     final_description = description or video_caption
                     logger.info(
                         f"Возвращаю результат: "
                         f"video_path={video_path} "
                         f"caption={video_caption} "
-                        f"description={final_description} "
                         f"used={'post_text' if description else 'caption'}"
                     )
                     return DownloadOut(file_path=str(video_path), description=final_description)
