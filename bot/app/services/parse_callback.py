@@ -27,7 +27,11 @@ def parse_category_mode(cb: str) -> tuple[str, RecipeMode] | None:
     category = m.group("category")
     mode_str = m.group("mode")
     logger.debug(f"⏩⏩⏩ mode_str = {mode_str}, category = {category}")
-    mode = RecipeMode(mode_str)
+    if not mode_str:
+        logger.debug("⏩⏩⏩ mode_str is empty, fallback to SHOW")
+        mode = RecipeMode.SHOW
+    else:
+        mode = RecipeMode(mode_str)
     return category, mode
 
 
@@ -54,7 +58,11 @@ def parse_mode(cb: str) -> RecipeMode | None:
         return None
     mode_str = m.group("mode")
     logger.debug(f"⏩⏩⏩ mode_str = {mode_str}")
-    mode = RecipeMode(mode_str)
+    if not mode_str:
+        logger.debug("⏩⏩⏩ mode_str is empty, fallback to SHOW")
+        mode = RecipeMode.SHOW
+    else:
+        mode = RecipeMode(mode_str)
     return mode
 
 

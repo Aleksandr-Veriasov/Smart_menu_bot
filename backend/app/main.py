@@ -51,7 +51,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if pepper is None:
         raise RuntimeError("PASSWORD_PEPPER не задан: не можем настроить AdminAuth.")
     authentication_backend = AdminAuth(state.db, secret_key=pepper.get_secret_value())
-    admin = Admin(app, engine, authentication_backend=authentication_backend)
+    admin = Admin(
+        app,
+        engine,
+        authentication_backend=authentication_backend,
+        templates_dir="backend/templates",
+    )
     setup_admin(admin)
     logger.info("Админка загружена")
 

@@ -239,7 +239,7 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
 
 
 async def change_category(update: Update, context: PTBContext) -> int:
-    """Entry-point: колбэк вида change_category_{id}."""
+    """Entry-point: колбэк вида change_category:{id}."""
     cq = update.callback_query
     if not cq:
         return ConversationHandler.END
@@ -247,7 +247,7 @@ async def change_category(update: Update, context: PTBContext) -> int:
     data = cq.data or ""
     # парсим id рецепта
     try:
-        recipe_id = int(data.rsplit("_", 1)[1])
+        recipe_id = int(data.rsplit(":", 1)[1])
     except Exception:
         await cq.edit_message_text("Не смог понять ID рецепта.")
         return ConversationHandler.END
@@ -307,7 +307,16 @@ async def confirm_change_category(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
 
     service = CategoryService(db, redis)
-    category_id, _ = await service.get_id_and_name_by_slug_cached(category_slug)
+    try:
+        category_id, _ = await service.get_id_and_name_by_slug_cached(category_slug)
+    except ValueError:
+        logger.error("Категория не найдена в confirm_change_category: %s", category_slug)
+        await cq.edit_message_text(
+            "Категория не найдена. Пожалуйста, выберите другую.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=home_keyboard(),
+        )
+        return ConversationHandler.END
     async with db.session() as session:
         recipe_title = await RecipeRepository.update_category(
             session,
@@ -350,7 +359,7 @@ def conversation_edit_recipe() -> ConversationHandler:
         entry_points=[
             CallbackQueryHandler(start_edit, pattern=r"^edit_recipe_(\d+)$"),
             CallbackQueryHandler(delete_recipe, pattern=r"^delete_recipe_\d+$"),
-            CallbackQueryHandler(change_category, pattern=r"^change_category_\d+$"),
+            CallbackQueryHandler(change_category, pattern=r"^change_category:\d+$"),
         ],
         states={
             EDRState.CHOOSE_FIELD: [

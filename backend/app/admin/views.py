@@ -2,11 +2,12 @@ import logging
 from typing import Any, ClassVar
 
 from markupsafe import Markup, escape
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from packages.db.database import Database
 from packages.db.models import Admin as AdminModel
@@ -188,6 +189,8 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
         # на всякий случай удалим и текущий ключ
         await CategoryCacheRepository.invalidate_by_slug(redis, str(new_slug))
         await CategoryCacheRepository.set_id_name_by_slug(redis, str(new_slug), model.id, model.name)
+        # список всех категорий тоже сбрасываем при создании/изменении
+        await CategoryCacheRepository.invalidate_all_name_and_slug(redis)
 
     async def after_model_delete(self, model: Category, request: Request) -> None:
         """
@@ -198,6 +201,7 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
             logger.warning("Redis is not available via get_redis()")
             return
         await CategoryCacheRepository.invalidate_by_slug(redis, str(model.slug))
+        await CategoryCacheRepository.invalidate_all_name_and_slug(redis)
 
 
 class IngredientAdmin(ModelView, model=Ingredient):  # type: ignore[call-arg]
@@ -379,6 +383,132 @@ class AdminUserAdmin(ModelView, model=AdminModel):  # type: ignore[call-arg]
     icon = "fa-solid fa-user"
 
 
+class RedisKeysAdmin(BaseView):
+    name = "Redis ключи"
+    icon = "fa-solid fa-database"
+    identity = "redis_keys"
+
+    @expose("/redis-keys", methods=["GET"], identity="redis-keys")
+    async def index(self, request: Request) -> HTMLResponse:
+        per_page = 100
+        try:
+            page = int(request.query_params.get("page", "1"))
+        except ValueError:
+            page = 1
+        page = max(1, page)
+
+        redis = await get_redis()
+        if not redis:
+            return HTMLResponse("<h3>Redis недоступен</h3>", status_code=503)
+
+        start = (page - 1) * per_page
+        cursor = 0
+        skipped = 0
+        collected: list[bytes] = []
+        has_more = False
+
+        while True:
+            cursor, keys = await redis.scan(cursor=cursor, count=per_page)
+            if keys:
+                if skipped < start:
+                    if skipped + len(keys) <= start:
+                        skipped += len(keys)
+                        keys = []
+                    else:
+                        offset = start - skipped
+                        keys = keys[offset:]
+                        skipped = start
+                if keys:
+                    needed = per_page - len(collected)
+                    if needed > 0:
+                        collected.extend(keys[:needed])
+                    if len(keys) > needed:
+                        has_more = True
+                        break
+            if cursor == 0:
+                break
+            if len(collected) >= per_page:
+                has_more = True
+                break
+
+        keys_text = [
+            (k.decode("utf-8", errors="replace") if isinstance(k, (bytes | bytearray)) else str(k)) for k in collected
+        ]
+        ttls: list[int] = []
+        if keys_text:
+            pipe = redis.pipeline()
+            for key in keys_text:
+                pipe.ttl(key)
+            ttls = await pipe.execute()
+
+        def _format_ttl(raw: int | None) -> str:
+            if raw is None:
+                return "unknown"
+            if raw == -1:
+                return "no-expiry"
+            if raw == -2:
+                return "missing"
+            minutes = raw // 60
+            seconds = raw % 60
+            return f"{minutes}m {seconds}s"
+
+        rows = [{"key": key, "ttl": _format_ttl(ttl)} for key, ttl in zip(keys_text, ttls, strict=False)]
+
+        prev_page = page - 1
+        next_page = page + 1
+        base_path = request.url.path.rstrip("/")
+        return await self.templates.TemplateResponse(
+            request,
+            "sqladmin/redis_keys.html",
+            {
+                "title": "Redis ключи",
+                "subtitle": f"Показано до {per_page} ключей на странице",
+                "rows": rows,
+                "page": page,
+                "per_page": per_page,
+                "prev_page": prev_page if prev_page >= 1 else None,
+                "next_page": next_page,
+                "has_more": has_more,
+                "base_path": base_path,
+            },
+        )
+
+    @expose("/redis-keys/value", methods=["GET"], identity="redis-keys")
+    async def value(self, request: Request) -> JSONResponse:
+        redis = await get_redis()
+        if not redis:
+            return JSONResponse({"error": "Redis недоступен"}, status_code=503)
+
+        key = str(request.query_params.get("key") or "")
+        if not key:
+            return JSONResponse({"error": "Отсутствует key"}, status_code=400)
+
+        value = await redis.get(key)
+        if value is None:
+            return JSONResponse({"missing": True, "value": ""})
+
+        if isinstance(value, (bytes | bytearray)):
+            value_text = value.decode("utf-8", errors="replace")
+        else:
+            value_text = str(value)
+
+        return JSONResponse({"missing": False, "value": value_text})
+
+    @expose("/redis-keys/delete", methods=["GET", "POST"], identity="redis-keys")
+    async def remove_key(self, request: Request) -> RedirectResponse:
+        if request.method == "GET":
+            base_path = request.url.path.rsplit("/", 1)[0]
+            return RedirectResponse(url=base_path, status_code=303)
+        form = await request.form()
+        key = str(form.get("key") or "")
+        page = str(form.get("page") or "1")
+        redis = await get_redis()
+        if redis and key:
+            await redis.delete(key)
+        base_path = request.url.path.rsplit("/", 1)[0]
+        return RedirectResponse(url=f"{base_path}?page={page}", status_code=303)
+
+
 def setup_admin(admin: Admin) -> None:
     """Регистрируем все ModelView в SQLAdmin."""
     admin.add_view(UserAdmin)
@@ -386,4 +516,5 @@ def setup_admin(admin: Admin) -> None:
     admin.add_view(CategoryAdmin)
     admin.add_view(VideoAdmin)
     admin.add_view(IngredientAdmin)
+    admin.add_view(RedisKeysAdmin)
     # admin.add_view(AdminUserAdmin)

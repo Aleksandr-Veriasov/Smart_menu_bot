@@ -108,7 +108,7 @@ def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
         InlineKB()
         # .button(text="✏️ Редактировать рецепт", callback_data=f"edit_recipe_{recipe_id}")
         .button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
-        .button(text="🔄 Изменить категорию", callback_data=f"change_category_{recipe_id}")
+        .button(text="🔄 Изменить категорию", callback_data=f"change_category:{recipe_id}")
         .button(text="⏪ Назад", callback_data=f"next_{page}")
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
