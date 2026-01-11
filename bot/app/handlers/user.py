@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.ext import ConversationHandler
 
 from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.share_link import handle_shared_start
@@ -63,18 +64,18 @@ HELP_TEXT = (
 )
 
 
-async def user_start(update: Update, context: PTBContext) -> None:
+async def user_start(update: Update, context: PTBContext) -> int:
     """Обработчик команды /start"""
     tg_user = update.effective_user
     if not tg_user:
         logger.error("update.effective_user отсутствует в функции start")
-        return
+        return ConversationHandler.END
 
     args = context.args or []
     if args and args[0].startswith("share_"):
         token = args[0].removeprefix("share_")
         if await handle_shared_start(update, context, token):
-            return
+            return ConversationHandler.END
 
     db, redis = get_db_and_redis(context)
     service = UserService(db, redis)
@@ -98,7 +99,7 @@ async def user_start(update: Update, context: PTBContext) -> None:
         text,
         keyboard,
     ):
-        return
+        return ConversationHandler.END
 
     cq = update.callback_query
     if cq:
@@ -110,7 +111,7 @@ async def user_start(update: Update, context: PTBContext) -> None:
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )
-        return
+        return ConversationHandler.END
     # Если это не callback_query, то обычное сообщение
     msg = update.effective_message
     if msg:
@@ -120,6 +121,7 @@ async def user_start(update: Update, context: PTBContext) -> None:
             parse_mode="HTML",
         )
         await append_message_id_to_cache(update, context, reply.message_id)
+    return ConversationHandler.END
 
 
 async def user_help(update: Update, context: PTBContext) -> None:

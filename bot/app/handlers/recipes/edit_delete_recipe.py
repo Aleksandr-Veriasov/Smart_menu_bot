@@ -14,6 +14,7 @@ from telegram.ext import (
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import EDRState
 from bot.app.core.types import PTBContext
+from bot.app.handlers.user import user_start
 from bot.app.keyboards.inlines import (
     category_keyboard,
     home_keyboard,
@@ -386,7 +387,10 @@ def conversation_edit_recipe() -> ConversationHandler:
                 CallbackQueryHandler(cancel, pattern=r"^cancel$"),
             ],
         },
-        fallbacks=[CallbackQueryHandler(cancel, pattern=r"^cancel$")],
+        fallbacks=[
+            CallbackQueryHandler(cancel, pattern=r"^cancel$"),
+            CallbackQueryHandler(user_start, pattern=r"^start$"),
+        ],
         per_chat=True,
         per_user=True,
         # per_message=True,

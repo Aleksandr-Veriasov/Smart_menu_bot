@@ -7,6 +7,7 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SaveRecipeState
 from bot.app.core.types import PTBContext
+from bot.app.handlers.user import user_start
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import parse_category
@@ -173,7 +174,10 @@ def save_recipe_handlers() -> ConversationHandler:
                 CallbackQueryHandler(save_recipe, pattern=r"^[a-z0-9][a-z0-9_-]*_save:\d+$")
             ]
         },
-        fallbacks=[CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$")],
+        fallbacks=[
+            CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"),
+            CallbackQueryHandler(user_start, pattern=r"^start$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=True,

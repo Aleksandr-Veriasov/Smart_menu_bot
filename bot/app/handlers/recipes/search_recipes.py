@@ -12,6 +12,7 @@ from telegram.ext import (
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SearchRecipeState
 from bot.app.core.types import PTBContext
+from bot.app.handlers.user import user_start
 from bot.app.keyboards.inlines import (
     build_recipes_list_keyboard,
     cancel_keyboard,
@@ -218,7 +219,10 @@ def search_recipes_conversation() -> ConversationHandler:
                 CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
             ],
         },
-        fallbacks=[CallbackQueryHandler(cancel_search, pattern=r"^cancel$")],
+        fallbacks=[
+            CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
+            CallbackQueryHandler(user_start, pattern=r"^start$"),
+        ],
         per_chat=True,
         per_user=True,
     )
