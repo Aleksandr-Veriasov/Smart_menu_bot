@@ -174,10 +174,17 @@ class RedisSettings(BaseAppSettings):
     port: str = Field(alias="REDIS_PORT")
     password: SecretStr = Field(alias="REDIS_PASSWORD")
     db: str = Field(alias="REDIS_DB")
-    prefix: str = Field(default="myapp:dev", alias="REDIS_PREFIX")
 
     def dsn(self) -> str:
         return f"redis://:{self.password.get_secret_value()}" f"@{self.host}:{self.port}/{self.db}"
+
+    def prefix(self) -> str:
+        explicit = (os.getenv("REDIS_PREFIX") or "").strip()
+        if explicit:
+            return explicit
+        name = (os.getenv("APP_NAME") or "myapp").strip() or "myapp"
+        env = (os.getenv("APP_ENV") or "dev").strip() or "dev"
+        return f"{name}:{env}"
 
 
 class TelegramSettings(BaseAppSettings):

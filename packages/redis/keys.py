@@ -2,7 +2,7 @@ from packages.common_settings.settings import settings
 
 
 class RedisKeys:
-    PREFIX = settings.redis.prefix
+    PREFIX = settings.redis.prefix()
 
     @classmethod
     def user_exists(cls, user_id: int | str) -> str:
