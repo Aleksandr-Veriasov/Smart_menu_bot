@@ -17,7 +17,7 @@ def convert_to_mp4(input_path: str) -> str:
     # Получаем исходное разрешение видео
     width, height, sar = _get_video_resolution(input_path)
 
-    logger.info(f"Начинаем конвертацию видео: {input_path}")
+    logger.debug(f"Начинаем конвертацию видео: {input_path}")
     if not width or not height:
         logger.error("Не удалось получить разрешение видео для %s", input_path)
         return ""
@@ -27,9 +27,9 @@ def convert_to_mp4(input_path: str) -> str:
     corrected_width, corrected_height = _correct_resolution(display_width, height)
 
     # Логирование размеров для проверки
-    logger.info(f"Исходное разрешение видео: {width}x{height}")
-    logger.info(f"SAR видео: {sar}")
-    logger.info(f"Исправленное разрешение видео: {corrected_width}x{corrected_height}")
+    logger.debug(f"Исходное разрешение видео: {width}x{height}")
+    logger.debug(f"SAR видео: {sar}")
+    logger.debug(f"Исправленное разрешение видео: {corrected_width}x{corrected_height}")
 
     # Уменьшаем разрешение на 40%
     new_width = int(corrected_width * CORRECTION_FACTOR)
@@ -38,7 +38,7 @@ def convert_to_mp4(input_path: str) -> str:
     # Корректируем новый размер на 2 (чтобы избежать ошибок при обработке)
     new_width, new_height = _correct_resolution(new_width, new_height)
 
-    logger.info(f"Новое разрешение видео после сжатия: {new_width}x{new_height}")
+    logger.debug(f"Новое разрешение видео после сжатия: {new_width}x{new_height}")
 
     try:
         # Выполняем конвертацию с исправленным разрешением
@@ -49,7 +49,7 @@ def convert_to_mp4(input_path: str) -> str:
             acodec="aac",
             crf=32,
         ).run()
-        logger.info(f"Конвертация завершена: {output_path}")
+        logger.debug(f"Конвертация завершена: {output_path}")
     except ffmpeg.Error as e:
         logger.error(f"Ошибка при конвертации видео: {e}", exc_info=True)
         return ""
@@ -64,7 +64,7 @@ async def async_convert_to_mp4(input_path: str) -> str:
 
 def _get_video_resolution(video_path: str) -> tuple[int | None, int | None, float]:
     """Получаем разрешение видео и SAR."""
-    logger.info(f"Получаем разрешение видео: {video_path}")
+    logger.debug(f"Получаем разрешение видео: {video_path}")
     if not os.path.exists(video_path):
         logger.error(f"Видео {video_path} не найдено перед конвертацией")
         return None, None, 1.0
@@ -85,7 +85,7 @@ def _get_video_resolution(video_path: str) -> tuple[int | None, int | None, floa
             if dar is None:
                 dar = 9 / 16
             sar = (height * dar / width) if width else 1.0
-        logger.info(f"Разрешение видео: {width}x{height} sar={sar_raw or 'n/a'} dar={dar_raw or 'n/a'}")
+        logger.debug(f"Разрешение видео: {width}x{height} sar={sar_raw or 'n/a'} dar={dar_raw or 'n/a'}")
         return width, height, sar
     except ffmpeg.Error as e:
         logger.error(f"Ошибка при анализе видео: {e}", exc_info=True)

@@ -5,7 +5,12 @@ from fastapi import FastAPI, HTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, HttpUrl
 
-from downloader.telethon_service import download_video_via_telethon, telethon_base_url
+from downloader.telethon_service import (
+    delay_if_telethon_busy,
+    download_video_via_telethon,
+    release_telethon_slot,
+    telethon_base_url,
+)
 from downloader.video_service import _platform_from_url, download_video
 from packages.logging_config import setup_logging
 
@@ -63,7 +68,11 @@ def get_app() -> FastAPI:
             if telethon_base_url():
                 logger.info("Пробуем скачать через Telethon worker (SaveAsBot)")
                 try:
-                    file_path, caption = await download_video_via_telethon(str(payload.url))
+                    await delay_if_telethon_busy()
+                    try:
+                        file_path, caption = await download_video_via_telethon(str(payload.url))
+                    finally:
+                        await release_telethon_slot()
                     logger.info("Успешно скачано через Telethon worker")
                     return DownloadResponse(file_path=file_path, description=caption or "")
                 except Exception as telethon_exc:

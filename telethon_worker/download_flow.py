@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 _DOWNLOAD_BUTTON_TEXT = "скачать видео"
 _LARGE_VIDEO_HINT = "весит более 50 мб"
 _UPLOADING_HINT = "ваше видео выгружается"
+_TOO_FREQUENT_HINT = "вы очень часто отправляете ссылки"
+_FAILED_DOWNLOAD_HINT = "не получилось выгрузить публикацию"
 
 
 def _filename_from_headers(headers: dict, fallback_name: str) -> str:
@@ -108,6 +110,14 @@ def _extract_url_after_anchor(text: str, anchor: str) -> str | None:
     return None
 
 
+def _parse_retry_after_seconds(text: str) -> float | None:
+    """Извлекает количество секунд ожидания из сообщения бота."""
+    match = re.search(r"через\s+(\d+)\s*сек", text.lower())
+    if match:
+        return float(match.group(1))
+    return None
+
+
 async def download_via_saveasbot(
     url: str,
     target_bot: str,
@@ -152,6 +162,16 @@ async def download_via_saveasbot(
                 if _UPLOADING_HINT in lower_text:
                     logger.info("Бот сообщил, что видео выгружается")
                     continue
+                if _TOO_FREQUENT_HINT in lower_text:
+                    retry_after = (_parse_retry_after_seconds(text) or 5.0) + 3.0
+                    logger.warning(f"SaveAsBot ограничил частоту. Жду {retry_after:.1f} сек")
+                    await asyncio.sleep(retry_after)
+                    await conv.send_message(str(url))
+                    logger.info("Повторно отправил ссылку после ограничения")
+                    continue
+                if _FAILED_DOWNLOAD_HINT in lower_text:
+                    logger.warning(f"SaveAsBot не смог выгрузить публикацию: {text}")
+                    raise RuntimeError("SaveAsBot failed to download publication")
                 if _LARGE_VIDEO_HINT in lower_text:
                     download_url = _extract_url_from_buttons(msg, _DOWNLOAD_BUTTON_TEXT)
                     if not download_url:
@@ -177,7 +197,7 @@ async def download_via_saveasbot(
 
             button_wait_sec = 20
             logger.info(
-                f"Ищу кнопку получения текста поста: " f"button_text={desired_button_text} wait_sec={button_wait_sec}"
+                f"Ищу кнопку получения текста поста: button_text={desired_button_text} wait_sec={button_wait_sec}"
             )
 
             button_msg = None

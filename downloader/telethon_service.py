@@ -1,9 +1,33 @@
+import asyncio
 import logging
 import os
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+_TELETHON_DELAY_ON_CONCURRENCY_SEC = 6.0
+_telethon_lock = asyncio.Lock()
+_telethon_in_flight = 0
+
+
+async def delay_if_telethon_busy() -> None:
+    """Если уже есть активный Telethon-запрос, задерживает текущий."""
+    global _telethon_in_flight
+    delay = 0.0
+    async with _telethon_lock:
+        if _telethon_in_flight > 0:
+            delay = _TELETHON_DELAY_ON_CONCURRENCY_SEC
+        _telethon_in_flight += 1
+    if delay:
+        await asyncio.sleep(delay)
+
+
+async def release_telethon_slot() -> None:
+    """Уменьшает счетчик активных Telethon-запросов."""
+    global _telethon_in_flight
+    async with _telethon_lock:
+        _telethon_in_flight = max(0, _telethon_in_flight - 1)
 
 
 def telethon_base_url() -> str | None:
