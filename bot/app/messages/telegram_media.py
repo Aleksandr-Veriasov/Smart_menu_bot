@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 from typing import Final
 
+import ffmpeg
 from telegram import InputFile
 from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 
@@ -15,6 +16,22 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES: Final[int] = 4
 _BASE_DELAY_SEC: Final[float] = 1.5
 _MAX_JITTER_SEC: Final[float] = 0.4
+
+
+def _probe_video_dimensions(video_path: Path) -> tuple[int | None, int | None]:
+    """Возвращает размеры видео (width, height) или (None, None) при ошибке."""
+    try:
+        probe = ffmpeg.probe(
+            str(video_path),
+            v="error",
+            select_streams="v:0",
+            show_entries="stream=width,height",
+        )
+        stream = probe.get("streams", [{}])[0]
+        return stream.get("width"), stream.get("height")
+    except ffmpeg.Error as exc:
+        logger.warning("Не удалось определить размеры видео %s: %s", video_path, exc)
+        return None, None
 
 
 async def send_video_to_channel(
@@ -32,6 +49,8 @@ async def send_video_to_channel(
         logger.error("Видео не найдено: %s", p)
         return ""
 
+    width, height = _probe_video_dimensions(p)
+
     for attempt in range(1, max_retries + 1):
         try:
             # Каждый раз открываем файл заново — после
@@ -42,6 +61,8 @@ async def send_video_to_channel(
                     video=InputFile(f, filename=p.name),
                     caption=caption,
                     supports_streaming=True,
+                    width=width,
+                    height=height,
                     allow_sending_without_reply=True,
                     read_timeout=90,
                     write_timeout=90,
