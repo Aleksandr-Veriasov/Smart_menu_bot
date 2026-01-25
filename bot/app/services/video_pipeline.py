@@ -84,13 +84,17 @@ async def process_video_pipeline(url: str, message: Message, context: PTBContext
         await notifier.progress(60, "✅ Видео загружено. Распознаём текст...")
 
         audio_path = extract_audio(converted_path, AUDIO_FOLDER)
-        transcribe_task = asyncio.create_task(async_transcribe_audio(audio_path))
+        if audio_path:
+            transcribe_task = asyncio.create_task(async_transcribe_audio(audio_path))
 
-        def _cleanup_audio_after_done(_task: asyncio.Task) -> None:
-            safe_remove(audio_path)
+            def _cleanup_audio_after_done(_task: asyncio.Task) -> None:
+                safe_remove(audio_path)
 
-        transcribe_task.add_done_callback(_cleanup_audio_after_done)
-        transcript = await transcribe_task
+            transcribe_task.add_done_callback(_cleanup_audio_after_done)
+            transcript = await transcribe_task
+        else:
+            await notifier.error("Видео скачалось без аудио. Попробуйте еще раз.")
+            return
 
         await notifier.progress(80, "🧠 Подготавливаем рецепт через AI... " "Рецепт практически готов!")
 
