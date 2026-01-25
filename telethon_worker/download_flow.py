@@ -77,11 +77,11 @@ def _extract_url_from_buttons(msg, target_text: str | None = None) -> str | None
 
 
 def _extract_url_from_entities(msg) -> str | None:
-    """Возвращает первую URL-ссылку из entities сообщения."""
+    """Возвращает первую URL-ссылку из entities сообщения, игнорируя t.me."""
     text = msg.message or ""
     for entity in getattr(msg, "entities", []) or []:
         url = getattr(entity, "url", None)
-        if url:
+        if url and "t.me/" not in url:
             logger.info(f"Найдена URL-ссылка в entity: {url}")
             return url
         offset = getattr(entity, "offset", None)
@@ -89,9 +89,22 @@ def _extract_url_from_entities(msg) -> str | None:
         if offset is None or length is None:
             continue
         candidate = text[offset : offset + length]
-        if candidate.startswith("http"):
+        if candidate.startswith("http") and "t.me/" not in candidate:
             logger.info(f"Найдена URL-ссылка в тексте по entity: {candidate}")
             return candidate
+    return None
+
+
+def _extract_url_after_anchor(text: str, anchor: str) -> str | None:
+    """Ищет первую URL после якоря в тексте."""
+    lower = text.lower()
+    anchor_pos = lower.find(anchor.lower())
+    if anchor_pos == -1:
+        return None
+    tail = text[anchor_pos + len(anchor) :]
+    match = re.search(r"https?://\\S+", tail)
+    if match:
+        return match.group(0)
     return None
 
 
@@ -141,6 +154,8 @@ async def download_via_saveasbot(
                     continue
                 if _LARGE_VIDEO_HINT in lower_text:
                     download_url = _extract_url_from_buttons(msg, _DOWNLOAD_BUTTON_TEXT)
+                    if not download_url:
+                        download_url = _extract_url_after_anchor(text, _DOWNLOAD_BUTTON_TEXT)
                     if not download_url:
                         download_url = _extract_url_from_entities(msg)
                     if download_url:
