@@ -6,7 +6,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, HttpUrl
 
 from downloader.telethon_service import download_video_via_telethon, telethon_base_url
-from downloader.video_service import download_video
+from downloader.video_service import _platform_from_url, download_video
 from packages.logging_config import setup_logging
 
 setup_logging()
@@ -53,6 +53,12 @@ def get_app() -> FastAPI:
                 "Ошибка загрузки через downloader, пробуем fallback",
                 exc_info=primary_exc,
             )
+
+            if _platform_from_url(str(payload.url)) == "youtube_shorts":
+                raise HTTPException(
+                    status_code=500,
+                    detail="Downloader failed for YouTube; Telethon fallback skipped",
+                ) from primary_exc
 
             if telethon_base_url():
                 logger.info("Пробуем скачать через Telethon worker (SaveAsBot)")

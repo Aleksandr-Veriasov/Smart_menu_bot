@@ -9,6 +9,7 @@ from pydantic import AnyUrl, BaseModel
 from packages.common_settings.telethon_settings import get_telethon_settings
 from packages.logging_config import setup_logging
 from telethon_worker import telethon_client
+from telethon_worker.download_flow import download_via_saveasbot
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -49,115 +50,22 @@ def get_app() -> FastAPI:
             f"timeout_sec={timeout_sec}"
         )
 
-        async with telethon_client.sem:
-            try:
-                # Conversation: отправили ссылку -> читаем ответы, пока не прилетит видео
-                async with telethon_client.client.conversation(target_bot, timeout=timeout_sec) as conv:
-                    await conv.send_message(str(payload.url))
-                    logger.info(f"Ссылка отправлена боту: url={payload.url} target_bot={target_bot}")
+        try:
+            file_path, description = await download_via_saveasbot(
+                str(payload.url),
+                target_bot=target_bot,
+                download_dir=download_dir,
+                timeout_sec=timeout_sec,
+                edit_timeout_sec=settings.edit_timeout_sec,
+            )
+            return DownloadOut(file_path=file_path, description=description)
 
-                    video_path = None
-                    video_caption = ""
-
-                    # 1) Wait for the video
-                    while True:
-                        msg = await conv.get_response()
-                        logger.info("Получено сообщение от бота")
-                        if telethon_client.is_video_message(msg):
-                            video_caption = msg.message or ""
-                            video_path = await msg.download_media(file=download_dir)
-                            if not video_path:
-                                raise RuntimeError("download_media() returned empty path")
-                            logger.info(f"Видео скачано: video_path={video_path}")
-                            break
-
-                    # 2) Нажимаем кнопку "получить текст поста" (она приходит отдельным сообщением после видео)
-                    desired_button_text = "получить текст поста"
-                    description = ""
-                    edit_timeout_sec = settings.edit_timeout_sec
-
-                    button_wait_sec = 20
-                    logger.info(
-                        f"Ищу кнопку получения текста поста: "
-                        f"button_text={desired_button_text} wait_sec={button_wait_sec}"
-                    )
-
-                    button_msg = None
-                    button_coords = None
-                    description_candidate = ""
-
-                    # Ждем следующее сообщение(я) от SaveAsBot, пока не увидим inline-кнопку
-                    loop = asyncio.get_running_loop()
-                    start_ts = loop.time()
-                    while True:
-                        remaining = button_wait_sec - (loop.time() - start_ts)
-                        if remaining <= 0:
-                            break
-                        try:
-                            msg = await asyncio.wait_for(conv.get_response(), timeout=remaining)
-                        except asyncio.TimeoutError:
-                            break
-                        logger.info("Получено сообщение от бота (поиск кнопки текста поста)")
-                        coords = telethon_client.find_button_coords(msg, desired_button_text)
-                        if coords:
-                            button_msg = msg
-                            button_coords = coords
-                            break
-                        text = (msg.message or "").strip()
-                        if text and not description_candidate:
-                            description_candidate = text
-                            logger.info("Получено сообщение с текстом без кнопки, " "сохраняю как кандидат на описание")
-
-                    if not button_msg or not button_coords:
-                        if description_candidate:
-                            description = description_candidate
-                            logger.info("Кнопка не найдена за timeout, использую описание из текста")
-                            logger.info("Итог: найден текст без кнопки")
-                        else:
-                            logger.info("Кнопка не найдена за timeout и текста нет, использую caption видео")
-                            logger.info("Итог: не найдено ни кнопки, ни текста")
-                    else:
-                        logger.info("Итог: найдена кнопка")
-                        # Важно: SaveAsBot после клика обычно НЕ присылает новое сообщение,
-                        # а РЕДАКТИРУЕТ то же сообщение с кнопкой. Поэтому ждём edit.
-                        edit_task = asyncio.create_task(
-                            telethon_client.wait_for_message_edit(
-                                telethon_client.client,
-                                target_bot,
-                                button_msg.id,
-                                timeout_sec=edit_timeout_sec,
-                            )
-                        )
-
-                        await button_msg.click(*button_coords)
-                        logger.info(
-                            f"Нажала кнопку получения текста поста: "
-                            f"coords={button_coords} button_msg_id={button_msg.id}"
-                        )
-
-                        edited = await edit_task
-                        logger.info("Сообщение отредактировано ботом")
-
-                        text = (edited.message or "").strip()
-                        if text:
-                            description = text
-                            logger.info(f"Получен текст поста: description_len={len(description)}")
-
-                    final_description = description or video_caption
-                    logger.info(
-                        f"Возвращаю результат: "
-                        f"video_path={video_path} "
-                        f"caption={video_caption} "
-                        f"used={'post_text' if description else 'caption'}"
-                    )
-                    return DownloadOut(file_path=str(video_path), description=final_description)
-
-            except asyncio.TimeoutError as exc:
-                logger.warning(f"Таймаут ожидания ответа от SaveAsBot: url={payload.url}")
-                raise HTTPException(status_code=504, detail="Timeout waiting SaveAsBot video") from exc
-            except Exception as e:
-                logger.exception(f"Ошибка сценария SaveAsBot: url={payload.url}")
-                raise HTTPException(status_code=500, detail=f"SaveAsBot flow failed: {e}") from e
+        except asyncio.TimeoutError as exc:
+            logger.warning(f"Таймаут ожидания ответа от SaveAsBot: url={payload.url}")
+            raise HTTPException(status_code=504, detail="Timeout waiting SaveAsBot video") from exc
+        except Exception as e:
+            logger.exception(f"Ошибка сценария SaveAsBot: url={payload.url}")
+            raise HTTPException(status_code=500, detail=f"SaveAsBot flow failed: {e}") from e
 
     return app
 
