@@ -42,7 +42,7 @@ def convert_to_mp4(input_path: str) -> str:
         # Выполняем конвертацию с исправленным разрешением
         ffmpeg.input(input_path).output(
             output_path,
-            vf=f"scale={new_width}:{new_height}",
+            vf=f"scale={new_width}:{new_height},setsar=1",
             vcodec="libx264",
             acodec="aac",
             crf=32,
