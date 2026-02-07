@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y --no-install-recommends tini \
     ffmpeg \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем рабочую директорию

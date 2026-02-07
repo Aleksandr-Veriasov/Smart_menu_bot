@@ -12,6 +12,7 @@ from telegram.ext import Application
 from bot.app.core.types import AppState, PTBApp
 from bot.app.handlers.setup import setup_handlers
 from packages.common_settings.settings import settings
+from packages.db.backup import run_daily_dump_scheduler
 from packages.db.database import Database
 from packages.db.migrate_and_seed import ensure_db_up_to_date
 from packages.db.models import Base
@@ -32,6 +33,7 @@ def build_state() -> AppState:
             pool_pre_ping=settings.db.pool_pre_ping,
         ),
         cleanup_task=None,
+        backup_task=None,
     )
 
 
@@ -65,6 +67,10 @@ async def runtime_start(ptb_app: PTBApp, state: AppState) -> None:
         await ensure_db_up_to_date(sync_db_url)
         logger.info("Миграция выполнена")
 
+    # Плановый дамп БД (ежедневно по UTC)
+    logger.info("🚀 Запускаем планировщик дампов БД…")
+    state.backup_task = asyncio.create_task(run_daily_dump_scheduler())
+
     # Если включён режим вебхука — ставим вебхук (вариант А: авто)
     if settings.telegram.use_webhook:
         await ptb_app.bot.set_webhook(
@@ -91,6 +97,14 @@ async def runtime_stop(state: AppState) -> None:
         with suppress(asyncio.CancelledError):
             await task
         logger.info("✅ Фоновая задача остановлена.")
+
+    backup_task: asyncio.Task[None] | None = cur_state.backup_task
+    if backup_task and not backup_task.done():
+        logger.info("⛔ Останавливаем планировщик дампов…")
+        backup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await backup_task
+        logger.info("✅ Планировщик дампов остановлен.")
 
     # Закрыть Redis
     if cur_state.redis is not None:

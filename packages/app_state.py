@@ -17,6 +17,7 @@ class AppState:
 
     db: Database
     cleanup_task: Any | None = None  # сюда можно класть фоновые таски/хэндлы
+    backup_task: Any | None = None
     redis: Redis | None = None
 
 
