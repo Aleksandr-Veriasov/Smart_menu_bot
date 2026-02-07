@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: downloader/Dockerfile
-    container_name: downloader
+    container_name: menu_bot_downloader
     user: "1001:1001"
     env_file:
       - .env
@@ -43,7 +43,7 @@ services:
     build:
       context: .
       dockerfile: telethon_worker/Dockerfile
-    container_name: telethon_worker
+    container_name: menu_bot_telethon_worker
     user: "1001:1001"
     env_file:
       - .env
@@ -63,7 +63,7 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: db
+    container_name: menu_bot_db
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -80,7 +80,7 @@ services:
   
   redis:
     image: redis:7.4.5-alpine
-    container_name: redis
+    container_name: menu_bot_redis
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     networks: 
       - app-net
@@ -97,13 +97,13 @@ services:
     build:
       context: .
       dockerfile: bot/Dockerfile
-    container_name: tgbot
+    container_name: menu_bot_tgbot
     user: "1001:1001"
     # restart: always
     env_file:
       - .env
     environment:
-      ALLOWED_HOSTS: '["infrasprint1veriasov.ru","localhost","127.0.0.1"]'
+      ALLOWED_HOSTS: '["smartbot.infrasprint1veriasov.ru","infrasprint1veriasov.ru","localhost","127.0.0.1"]'
       DOWNLOADER_BASE_URL: http://downloader:8082
     volumes:
       - ./data:/app/data
@@ -121,12 +121,12 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: backend
+    container_name: menu_bot_backend
     user: "1001:1001"
     env_file: 
       - .env
     environment:
-      ALLOWED_HOSTS: '["infrasprint1veriasov.ru","localhost","127.0.0.1","backend"]'
+      ALLOWED_HOSTS: '["smartbot.infrasprint1veriasov.ru","infrasprint1veriasov.ru","localhost","127.0.0.1","backend"]'
     volumes:
       - static_data:/app/app/static
       - media_data:/app/app/media
@@ -141,7 +141,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
-    container_name: nginx
+    container_name: menu_bot_nginx
     env_file:
       - .env
     environment:
@@ -158,14 +158,11 @@ services:
       - media_data:/var/www/media:ro
     networks: 
       - app-net
-    ports:
-      - "80:80"
-      - "443:443"
     restart: unless-stopped
 
   certbot:
     image: certbot/certbot:latest
-    container_name: certbot
+    container_name: menu_bot_certbot
     volumes:
       - certbot_www:/var/www/certbot
       - certbot_conf:/etc/letsencrypt
