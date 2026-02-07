@@ -21,11 +21,13 @@ jobs:
       DB_POOL_PRE_PING: "true"
       DB_POOL_RECYCLE: "0"
       RUN_MIGRATIONS_ON_STARTUP: "false"
+      DB_DUMP_DROPBOX_ACCESS_TOKEN: ci_dropbox_token
+      DB_DUMP_DROPBOX_ROOT_PATH: /ci/db_dumps
       TELEGRAM_CHAT_ID: "123456789"
       TELEGRAM_BOT_TOKEN: dummy_test_token
       TELEGRAM_ADMIN_ID: "987654321"
       TELEGRAM_USE_WEBHOOK: "false"
-      WEBHOOK_PREFIX: https://example.com
+      WEBHOOK_PREFIX: tg
       WEBHOOK_SLUG: ci_slug
       WEBHOOK_SECRET_TOKEN: ci_secret
       WEBHOOK_PORT: "443"
@@ -45,6 +47,8 @@ jobs:
       REDIS_PORT: "6379"
       REDIS_DB: "0"
       REDIS_PASSWORD: testpassword
+      TG_API_ID: "123456"
+      TG_API_HASH: test_telethon_hash
 
     steps:
     - name: Checkout code
