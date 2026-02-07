@@ -4,8 +4,6 @@ volumes:
   bot_cache:
   pg_data:
   redis_data:
-  certbot_www:
-  certbot_conf:
   static_data:
   media_data:
   telethon_session:
@@ -152,20 +150,8 @@ services:
       - backend
     volumes:
       - ./gateway/default.conf.template:/etc/nginx/templates/default.conf.template:ro
-      - certbot_www:/var/www/certbot:ro
-      - certbot_conf:/etc/letsencrypt:ro
       - static_data:/var/www/static:ro
       - media_data:/var/www/media:ro
     networks: 
       - app-net
     restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: menu_bot_certbot
-    volumes:
-      - certbot_www:/var/www/certbot
-      - certbot_conf:/etc/letsencrypt
-    entrypoint: /bin/sh
-    networks: 
-      - app-net
