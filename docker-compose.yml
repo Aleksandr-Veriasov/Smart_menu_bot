@@ -2,6 +2,7 @@ name: menu_bot_prod
 
 volumes:
   bot_cache:
+  db_dumps:
   pg_data:
   redis_data:
   static_data:
@@ -107,6 +108,7 @@ services:
       - ./data:/app/data
       - ./audio:/app/audio
       - ./videos:/app/videos
+      - db_dumps:/app/db_dumps
       - bot_cache:/app/.cache
     networks: 
       - app-net
