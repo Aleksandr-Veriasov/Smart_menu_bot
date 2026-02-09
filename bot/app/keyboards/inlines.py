@@ -28,9 +28,8 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
 def help_keyboard() -> InlineKeyboardMarkup:
     """Создание кнопок для помощи."""
     return (
-        InlineKB()
-        .button(text="🏠 На главную", callback_data="start")
-        .button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
+        InlineKB().button(text="🏠 На главную", callback_data="start")
+        # .button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
         .adjust(1)
     )
 
@@ -38,6 +37,17 @@ def help_keyboard() -> InlineKeyboardMarkup:
 def home_keyboard() -> InlineKeyboardMarkup:
     """Создание кнопок для домашнего меню."""
     return InlineKB().button(text="🏠 На главную", callback_data="start").adjust(1)
+
+
+def random_recipe_keyboard(category_slug: str) -> InlineKeyboardMarkup:
+    """Кнопки под случайным рецептом."""
+    return (
+        InlineKB()
+        .button(text="🎲 Еще рецепт", callback_data=f"{category_slug}_random")
+        .button(text="📚 Назад к категориям", callback_data="recipes_random")
+        .button(text="🏠 На главную", callback_data="start")
+        .adjust(1)
+    )
 
 
 def category_keyboard(

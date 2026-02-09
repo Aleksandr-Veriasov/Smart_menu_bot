@@ -1,5 +1,6 @@
 import logging
 import random
+from html import escape
 
 from redis.asyncio import Redis
 
@@ -30,13 +31,16 @@ async def random_recipe(db: Database, redis: Redis, user_id: int, category_slug:
             video_url = await VideoRepository().get_video_url(session, int(recipe.id))
             await RecipeRepository.update_last_used_at(session, int(recipe.id))
             await session.commit()
-            logger.debug(f"◀️ {video_url} - video URL для рецепта {recipe.title}")
+            logger.debug("◀️ %s - video URL для рецепта %s", video_url, recipe.title)
             # Формируем список ингредиентов
-            ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)
+            safe_category_name = escape(category_name or "")
+            safe_title = escape(recipe.title or "")
+            safe_description = escape(recipe.description or "")
+            ingredients_text = "\n".join(f"- {escape(ingredient.name or '')}" for ingredient in recipe.ingredients)
             text = (
-                f'Вот случайный рецепт из категории "{category_name}":\n\n'
-                f"🍽 *{recipe.title}*\n\n"
-                f'📝 {recipe.description or ""}\n\n'
-                f"🥦 *Ингредиенты:*\n{ingredients_text}"
+                f'Вот случайный рецепт из категории "{safe_category_name}":\n\n'
+                f"🍽 <b>Название рецепта:</b> {safe_title}\n\n"
+                f"📝 <b>Рецепт:</b>\n{safe_description}\n\n"
+                f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
             )
             return video_url, text
