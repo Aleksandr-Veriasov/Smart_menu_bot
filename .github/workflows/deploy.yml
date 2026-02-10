@@ -21,7 +21,9 @@ jobs:
       DB_POOL_PRE_PING: "true"
       DB_POOL_RECYCLE: "0"
       RUN_MIGRATIONS_ON_STARTUP: "false"
-      DB_DUMP_DROPBOX_ACCESS_TOKEN: ci_dropbox_token
+      DB_DUMP_DROPBOX_REFRESH_TOKEN: ci_dropbox_refresh_token
+      DB_DUMP_DROPBOX_APP_KEY: ci_dropbox_app_key
+      DB_DUMP_DROPBOX_APP_SECRET: ci_dropbox_app_secret
       DB_DUMP_DROPBOX_ROOT_PATH: /ci/db_dumps
       TELEGRAM_CHAT_ID: "123456789"
       TELEGRAM_BOT_TOKEN: dummy_test_token
