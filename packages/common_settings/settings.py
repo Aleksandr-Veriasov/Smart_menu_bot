@@ -40,6 +40,47 @@ class SslMode(str, Enum):
     verify_full = "verify-full"  # проверка CA + имени хоста
 
 
+class DbDumpDropboxSettings(BaseAppSettings):
+    """Конфигурация Dropbox для загрузки и ротации дампов БД."""
+
+    refresh_token: SecretStr = Field(default=SecretStr(""), alias="DB_DUMP_DROPBOX_REFRESH_TOKEN")
+    app_key: SecretStr = Field(default=SecretStr(""), alias="DB_DUMP_DROPBOX_APP_KEY")
+    app_secret: SecretStr = Field(default=SecretStr(""), alias="DB_DUMP_DROPBOX_APP_SECRET")
+    root_path: str = Field(default="/smartmenu/db", alias="DB_DUMP_DROPBOX_ROOT_PATH")
+
+    timeout_sec: int = 120
+    api_base: str = "https://api.dropboxapi.com/2/files"
+    content_api_base: str = "https://content.dropboxapi.com/2/files"
+    oauth_api_base: str = "https://api.dropboxapi.com/oauth2"
+    chunk_size_bytes: int = 8 * 1024 * 1024
+
+    @model_validator(mode="after")
+    def _validate_auth(self) -> DbDumpDropboxSettings:
+        has_refresh_flow = all(
+            [
+                self.refresh_token.get_secret_value().strip(),
+                self.app_key.get_secret_value().strip(),
+                self.app_secret.get_secret_value().strip(),
+            ]
+        )
+        if not has_refresh_flow:
+            raise ValueError("DB dump Dropbox config incomplete: set refresh_token + app_key + app_secret")
+        return self
+
+    def safe_dict(self) -> dict[str, Any]:
+        return {
+            "refresh_token": "***",
+            "app_key": "***",
+            "app_secret": "***",
+            "root_path": self.root_path,
+            "timeout_sec": self.timeout_sec,
+            "api_base": self.api_base,
+            "content_api_base": self.content_api_base,
+            "oauth_api_base": self.oauth_api_base,
+            "chunk_size_bytes": self.chunk_size_bytes,
+        }
+
+
 class DatabaseSettings(BaseAppSettings):
     """
     Конфигурация БД: собираем DSN из составных полей.
@@ -65,16 +106,11 @@ class DatabaseSettings(BaseAppSettings):
     dump_dir: str = Field(default="/app/data/db_dumps", alias="DB_DUMP_DIR")
     dump_schedule_hour_utc: int = Field(default=3, ge=0, le=23, alias="DB_DUMP_SCHEDULE_HOUR_UTC")
     dump_schedule_minute_utc: int = Field(default=0, ge=0, le=59, alias="DB_DUMP_SCHEDULE_MINUTE_UTC")
-    dump_dropbox_access_token: SecretStr = Field(alias="DB_DUMP_DROPBOX_ACCESS_TOKEN")
-    dump_dropbox_root_path: str = Field(default="/smartmenu/db", alias="DB_DUMP_DROPBOX_ROOT_PATH")
+    dump_dropbox: DbDumpDropboxSettings = Field(default_factory=DbDumpDropboxSettings)
     # Внутренние дефолты дампов (без ENV)
     dump_filename_prefix: str = "smartmenu"
     dump_pg_timeout_sec: int = 300
-    dump_dropbox_timeout_sec: int = 120
     dump_retention_days: int = 14
-    dump_dropbox_api_base: str = "https://api.dropboxapi.com/2/files"
-    dump_dropbox_content_api_base: str = "https://content.dropboxapi.com/2/files"
-    dump_dropbox_chunk_size_bytes: int = 8 * 1024 * 1024
 
     @model_validator(mode="after")
     def _validate_required(self) -> DatabaseSettings:
@@ -89,8 +125,6 @@ class DatabaseSettings(BaseAppSettings):
             problems.append("database_name")
         if problems:
             raise ValueError(f'DB config incomplete: set {", ".join(problems)}')
-        if not self.dump_dropbox_access_token.get_secret_value().strip():
-            raise ValueError("DB dump Dropbox config incomplete: set dump_dropbox_access_token")
         return self
 
     @property
@@ -180,15 +214,10 @@ class DatabaseSettings(BaseAppSettings):
             "dump_dir": self.dump_dir,
             "dump_schedule_hour_utc": self.dump_schedule_hour_utc,
             "dump_schedule_minute_utc": self.dump_schedule_minute_utc,
-            "dump_dropbox_access_token": "***",
-            "dump_dropbox_root_path": self.dump_dropbox_root_path,
+            "dump_dropbox": self.dump_dropbox.safe_dict(),
             "dump_filename_prefix": self.dump_filename_prefix,
             "dump_pg_timeout_sec": self.dump_pg_timeout_sec,
-            "dump_dropbox_timeout_sec": self.dump_dropbox_timeout_sec,
             "dump_retention_days": self.dump_retention_days,
-            "dump_dropbox_api_base": self.dump_dropbox_api_base,
-            "dump_dropbox_content_api_base": self.dump_dropbox_content_api_base,
-            "dump_dropbox_chunk_size_bytes": self.dump_dropbox_chunk_size_bytes,
         }
 
 
