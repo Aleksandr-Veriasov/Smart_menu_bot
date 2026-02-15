@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Рецепт</title>
+    <link rel="stylesheet" href="/webapp/ui.css?v=2026-02-14-1" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <div class="card">
+        <h1 class="heading">📝 Рецепт</h1>
+        <p class="subtitle">Опишите пошаговый процесс приготовления</p>
+
+        <div class="form-group">
+          <label for="desc_text">Текст рецепта</label>
+          <textarea
+            id="desc_text"
+            class="field"
+            placeholder="1. Нарежьте овощи мелкими кубиками&#10;2. Обжарьте лук до золотистого цвета&#10;3. Добавьте бульон и доведите до кипения&#10;..."
+          ></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button id="back" class="btn btn-secondary" type="button">← Назад</button>
+          <button id="save" type="button" class="btn btn-primary">💾 Сохранить</button>
+        </div>
+
+        <div class="notice notice-error" id="err"></div>
+        <div class="notice notice-ok" id="ok"></div>
+
+        <p class="hint">Книга рецептов</p>
+      </div>
+    </main>
+    <script src="/webapp/edit-description.js"></script>
+  </body>
+</html>

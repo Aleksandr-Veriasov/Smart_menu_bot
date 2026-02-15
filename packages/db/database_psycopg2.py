@@ -41,7 +41,7 @@ class Database:
         if engine is not None:
             self.engine = engine
             safe = getattr(engine.url, "render_as_string", lambda **_: "<engine>")(hide_password=True)
-            logger.info("🚀 DB engine injected: %s", safe)
+            logger.info("🚀 DB engine подключён извне: %s", safe)
         else:
             url = db_url or settings.db.sqlalchemy_url(use_async=True)
             # защита от async-драйвера в синхронном классе
@@ -77,7 +77,7 @@ class Database:
             self.engine = create_engine(url, **engine_kwargs)
 
             safe = url.render_as_string(hide_password=True) if isinstance(url, URL) else "<masked url>"
-            logger.info("🚀 DB engine created for %s", safe)
+            logger.info("🚀 DB engine создан для %s", safe)
 
         self._sessionmaker: sessionmaker[Session] = sessionmaker(
             bind=self.engine,
@@ -88,11 +88,11 @@ class Database:
     def dispose(self) -> None:
         """Закрыть все соединения пула (использовать при shutdown)."""
         self.engine.dispose()
-        logger.info("🧹 DB engine disposed")
+        logger.info("🧹 DB engine освобождён")
 
     def get_session(self) -> Session:
         """Создать новую сессию (не забывай закрыть!)."""
-        logger.debug("💾 Creating DB session")
+        logger.debug("💾 Создаём DB сессию")
         return self._sessionmaker()
 
     @contextmanager
@@ -109,12 +109,12 @@ class Database:
             yield session
             session.commit()
         except Exception:
-            logger.exception("❌ Error in async DB session")
+            logger.exception("❌ Ошибка в DB сессии")
             session.rollback()
             raise
         finally:
             session.close()
-            logger.debug("🔒 Async DB session closed")
+            logger.debug("🔒 DB сессия закрыта")
 
     def healthcheck(self) -> bool:
         """Лёгкая проверка доступности БД."""
@@ -123,7 +123,7 @@ class Database:
                 conn.execute(text("SELECT 1"))
             return True
         except Exception:
-            logger.exception("❌ DB healthcheck failed")
+            logger.exception("❌ Проверка доступности БД завершилась ошибкой")
             return False
 
     def create_all(self, base_metadata: MetaData) -> None:
@@ -133,4 +133,4 @@ class Database:
         """
         with self.engine.begin() as conn:
             base_metadata.create_all(bind=conn)
-        logger.info("📦 Metadata.create_all() done")
+        logger.info("📦 Metadata.create_all() завершён")

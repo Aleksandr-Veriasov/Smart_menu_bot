@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Ингредиенты</title>
+    <link rel="stylesheet" href="/webapp/ui.css?v=2026-02-14-1" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <div class="card">
+        <h1 class="heading">🥕 Ингредиенты</h1>
+        <p class="subtitle">Перечислите все необходимые ингредиенты</p>
+
+        <div class="form-group">
+          <label for="ing_text">Список ингредиентов</label>
+          <textarea
+            id="ing_text"
+            class="field"
+            placeholder="Картофель — 3 шт.&#10;Морковь — 1 шт.&#10;Лук репчатый — 1 шт.&#10;Свёкла — 1 шт.&#10;..."
+          ></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button id="back" class="btn btn-secondary" type="button">← Назад</button>
+          <button id="save" type="button" class="btn btn-primary">💾 Сохранить</button>
+        </div>
+
+        <div class="notice notice-error" id="err"></div>
+        <div class="notice notice-ok" id="ok"></div>
+
+        <p class="hint">Книга рецептов</p>
+      </div>
+    </main>
+    <script src="/webapp/edit-ingredients.js"></script>
+  </body>
+</html>

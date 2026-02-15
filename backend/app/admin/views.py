@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from backend.app.utils.fastapi_state import get_backend_redis
 from packages.db.database import Database
 from packages.db.models import Admin as AdminModel
 from packages.db.models import Category, Ingredient, Recipe, User, Video
-from packages.redis.redis_conn import get_redis
 from packages.redis.repository import CategoryCacheRepository
 from packages.security.passwords import verify_password
 
@@ -158,7 +158,7 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
         if not is_created:
             # model.slug на этом этапе — старое значение
             request.state._old_slug = model.slug
-            logger.debug(f"Old slug saved: {request.state._old_slug}")
+            logger.debug(f"Старый slug сохранён: {request.state._old_slug}")
 
     async def after_model_change(
         self,
@@ -172,15 +172,12 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
         • Если slug менялся — инвалидируем старый ключ.
         • Всегда пересоздаём ключ для актуального slug.
         """
-        # достаём Redis из твоего AppState
-        redis = await get_redis()
-        if not redis:
-            logger.warning("Redis is not available via get_redis()")
-            return
+        # Redis берём из app.state (без создания новых подключений)
+        redis = get_backend_redis(request)
 
         old_slug = getattr(request.state, "_old_slug", None)
         new_slug = model.slug
-        logger.debug(f"New slug: {new_slug}")
+        logger.debug(f"Новый slug: {new_slug}")
 
         # если это апдейт и slug поменялся — сносим старый ключ
         if not is_created and old_slug and old_slug != new_slug:
@@ -196,10 +193,7 @@ class CategoryAdmin(ModelView, model=Category):  # type: ignore[call-arg]
         """
         При удалении категории — чистим ключ по slug.
         """
-        redis = await get_redis()
-        if not redis:
-            logger.warning("Redis is not available via get_redis()")
-            return
+        redis = get_backend_redis(request)
         await CategoryCacheRepository.invalidate_by_slug(redis, str(model.slug))
         await CategoryCacheRepository.invalidate_all_name_and_slug(redis)
 
@@ -397,9 +391,7 @@ class RedisKeysAdmin(BaseView):
             page = 1
         page = max(1, page)
 
-        redis = await get_redis()
-        if not redis:
-            return HTMLResponse("<h3>Redis недоступен</h3>", status_code=503)
+        redis = get_backend_redis(request)
 
         start = (page - 1) * per_page
         cursor = 0
@@ -478,9 +470,7 @@ class RedisKeysAdmin(BaseView):
 
     @expose("/redis-keys/value", methods=["GET"])
     async def value(self, request: Request) -> JSONResponse:
-        redis = await get_redis()
-        if not redis:
-            return JSONResponse({"error": "Redis недоступен"}, status_code=503)
+        redis = get_backend_redis(request)
 
         key = str(request.query_params.get("key") or "")
         if not key:
@@ -505,8 +495,8 @@ class RedisKeysAdmin(BaseView):
         form = await request.form()
         key = str(form.get("key") or "")
         page = str(form.get("page") or "1")
-        redis = await get_redis()
-        if redis and key:
+        redis = get_backend_redis(request)
+        if key:
             await redis.delete(key)
         base_path = request.url.path.rsplit("/", 1)[0]
         return RedirectResponse(url=f"{base_path}?page={page}", status_code=303)

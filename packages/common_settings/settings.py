@@ -314,6 +314,10 @@ class WebHookSettings(BaseAppSettings):
 class FastApiSettings(BaseAppSettings):
     """Конфигратор FastAPI"""
 
+    # Если задано и DEBUG=true, base_url() вернёт это значение.
+    # Удобно для локальной разработки через ngrok/cloudflared.
+    debug_base_url: str | None = Field(default=None, alias="FASTAPI_DEBUG_BASE_URL")
+
     allowed_hosts: list[str] = Field(
         default_factory=lambda: ["localhost", "127.0.0.1"],
         alias="ALLOWED_HOSTS",
@@ -352,6 +356,8 @@ class FastApiSettings(BaseAppSettings):
         return self.allowed_hosts[0] if self.allowed_hosts else "localhost"
 
     def base_url(self) -> str:
+        if settings.debug and self.debug_base_url and self.debug_base_url.strip():
+            return self.debug_base_url.strip().rstrip("/")
         scheme = "https" if self.use_https else "http"
         return f"{scheme}://{self.external_domain()}"
 
@@ -417,7 +423,7 @@ class Settings(BaseAppSettings):
 try:
     settings = Settings()
     logger.info("✅ Конфигурация загружена")
-    logger.debug("Config dump: %s", settings.safe_dict())
+    logger.debug("Дамп конфигурации: %s", settings.safe_dict())
 except ValidationError as e:
     logger.critical("❌ Ошибка конфигурации: %s", e.errors())
     raise SystemExit("Остановка: отсутствуют обязательные " "переменные окружения или заданы неверно.") from e

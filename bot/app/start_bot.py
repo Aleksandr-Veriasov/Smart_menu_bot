@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # сохраним в app.state, чтобы роуты имели доступ
     app.state.ptb_app = ptb_app
     app.state.state = state
-    logger.info("✅ PTB Application запущен (webhook mode).")
+    logger.info("✅ PTB-приложение запущено (режим webhook).")
 
     try:
         yield
@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.state = None
 
 
-fastapi_app = FastAPI(title="Telegram Bot Webhook", lifespan=lifespan)
+fastapi_app = FastAPI(title="Webhook Telegram-бота", lifespan=lifespan)
 Instrumentator().instrument(fastapi_app).expose(fastapi_app, endpoint="/metrics", include_in_schema=False)
 
 
@@ -192,12 +192,12 @@ async def telegram_webhook(request: Request) -> dict[str, bool]:
     """
     ptb_app: PTBApp | None = getattr(request.app.state, "ptb_app", None)
     if ptb_app is None:
-        raise HTTPException(status_code=503, detail="PTB not ready")
+        raise HTTPException(status_code=503, detail="PTB ещё не готов")
 
     # Проверка секрета от Telegram (защита от «левых» POST)
     secret_hdr = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if secret_hdr != settings.webhooks.secret_token.get_secret_value():
-        raise HTTPException(status_code=403, detail="Invalid secret token")
+        raise HTTPException(status_code=403, detail="Некорректный secret token")
 
     data = await request.json()
     update = Update.de_json(data, ptb_app.bot)

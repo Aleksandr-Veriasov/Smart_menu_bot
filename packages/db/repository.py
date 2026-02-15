@@ -142,9 +142,9 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         result = await session.execute(statement)
         row = result.scalar_one_or_none()
-        logger.debug(f"Updated recipe {recipe_id} to category " f"{category_id}, row={row}")
+        logger.debug(f"Рецепт {recipe_id} обновлён: category_id={category_id}, row={row}")
         if row is None:
-            raise ValueError("Recipe not found")
+            raise ValueError("Рецепт не найден")
         return await cls.get_name_by_id(session, recipe_id)
 
     @classmethod
@@ -152,8 +152,8 @@ class RecipeRepository(BaseRepository[Recipe]):
         statement = update(cls.model).where(cls.model.id == recipe_id).values(title=title)
         result = await session.execute(statement)
         if result.rowcount == 0:
-            raise ValueError("Recipe not found")
-        logger.debug(f"👉 Updated recipe {recipe_id} title to {title}")
+            raise ValueError("Рецепт не найден")
+        logger.debug(f"👉 Название рецепта {recipe_id} обновлено на: {title}")
 
     @classmethod
     async def update_last_used_at(cls, session: AsyncSession, recipe_id: int) -> None:
@@ -327,7 +327,7 @@ class CategoryRepository(BaseRepository[Category]):
     async def get_all(cls, session: AsyncSession) -> list[dict[str, Any]]:
         statement = select(cls.model).order_by(cls.model.id)
         result = await session.execute(statement)
-        rows = result.all()
+        rows = result.scalars().all()
         return [{"id": row.id, "name": row.name, "slug": row.slug} for row in rows]
 
     @classmethod
@@ -373,6 +373,14 @@ class VideoRepository(BaseRepository[Video]):
         )
         result = await session.execute(statement)
         return result.scalars().first()
+
+    @classmethod
+    async def get_all_by_original_url(cls, session: AsyncSession, original_url: str, *, limit: int = 20) -> list[Video]:
+        statement = select(cls.model).where(cls.model.original_url == original_url).order_by(cls.model.id.desc())
+        if limit and limit > 0:
+            statement = statement.limit(int(limit))
+        result = await session.execute(statement)
+        return list(result.scalars().all())
 
     @classmethod
     async def create(

@@ -144,6 +144,10 @@ services:
     container_name: menu_bot_nginx
     env_file:
       - .env
+    ports:
+      # Для локальной разработки (ngrok/cloudflared). В проде внешний nginx ходит в контейнер по сети,
+      # а этот порт можно просто не использовать.
+      - "127.0.0.1:8011:80"
     environment:
       - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
       - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d

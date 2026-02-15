@@ -81,7 +81,7 @@ async def send_recipe_confirmation(
     logger.debug("Черновик рецепта сохранен (pipeline_id=%s, recipe_id=%s)", pipeline_id, recipe_id)
 
     video_msg = None
-    logger.debug(f"video_file_id = {video_file_id} ,title = {title},")
+    logger.debug(f"video_file_id={video_file_id}, title={title}")
     # 1) Видео (если есть file_id) — ждём до 10 сек
     if video_file_id:
         logger.debug("Пытаемся отправить видео пользователю (file_id=%s)", video_file_id)
@@ -136,7 +136,7 @@ async def _try_reply_video(message: Message, file_id: str) -> Message | None:
             pool_timeout=30,
         )
     except (TimedOut, NetworkError) as e:
-        logger.warning("Timeout/Network при отправке видео: %s", e)
+        logger.warning("Таймаут/сеть при отправке видео: %s", e)
         return None
     except Exception as e:
         logger.error("Ошибка при отправке видео: %s", e, exc_info=True)

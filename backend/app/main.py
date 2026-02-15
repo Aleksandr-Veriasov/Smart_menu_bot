@@ -3,16 +3,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqladmin import Admin
 from sqlalchemy.ext.asyncio import AsyncEngine
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.staticfiles import StaticFiles
+from starlette.routing import Mount
 
 from backend.app.admin.views import AdminAuth, setup_admin
-from backend.app.api.routers import api_router
+from backend.app.core import setup_middleware, setup_routes, setup_static
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
 from packages.db.database import Database
@@ -24,9 +21,32 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # 1) DB
+def _propagate_state_to_mounted_apps(app: FastAPI, *, state: AppState) -> None:
+    """
+    SQLAdmin монтируется как sub-app. Для таких sub-app `request.app.state.*` не совпадает с корневым FastAPI app.state.
+    Поэтому дублируем ссылки на общие ресурсы (db/redis/app_state) во все mounted приложения.
+    """
+
+    for route in getattr(app, "routes", []) or []:
+        if not isinstance(route, Mount):
+            continue
+        try:
+            sub_app = route.app
+        except Exception:
+            continue
+        if sub_app is None:
+            continue
+        # StaticFiles и некоторые другие ASGI apps не имеют .state
+        if not hasattr(sub_app, "state"):
+            continue
+        # Делаем те же поля, что и на root app, чтобы хелперы вида get_backend_redis() работали везде.
+        sub_app.state.app_state = state
+        sub_app.state.db = state.db
+        sub_app.state.redis = getattr(state, "redis", None)
+
+
+def create_app() -> FastAPI:
+    # Create long-lived resources once; lifespan is only for connect/disconnect.
     state = AppState(
         db=Database(
             db_url=settings.db.sqlalchemy_url(use_async=True),
@@ -36,88 +56,66 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         ),
         cleanup_task=None,
     )
-
-    # Redis
-    state.redis = await get_redis()
-    ping = await state.redis.ping()
-    logger.info(f"🧠 Redis подключён PING={ping}")
-
     engine: AsyncEngine = state.db.engine
-    logger.info("БД загружена")
-    await ensure_admin(state.db)
 
-    # 3) SQLAdmin c auth
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        # Делаем ресурсы доступными из роутеров через request.app.state.*
+        app.state.app_state = state
+        app.state.db = state.db
+        app.state.redis = None
+        _propagate_state_to_mounted_apps(app, state=state)
+
+        # Redis
+        state.redis = await get_redis()
+        app.state.redis = state.redis
+        _propagate_state_to_mounted_apps(app, state=state)
+        ping = await state.redis.ping()
+        logger.info(f"🧠 Redis подключён PING={ping}")
+
+        logger.info("БД загружена")
+        await ensure_admin(state.db)
+
+        try:
+            yield
+        finally:
+            # Закрываем Redis первым
+            if state.redis is not None:
+                await close_redis()
+                state.redis = None
+                app.state.redis = None
+                _propagate_state_to_mounted_apps(app, state=state)
+                logger.info("🔒 Redis закрыт.")
+            await engine.dispose()
+
+    app = FastAPI(
+        title="Recipes Backend",
+        debug=settings.debug,
+        lifespan=lifespan,
+    )
+
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+    setup_static(app)
+    setup_middleware(app)
+
+    # SQLAdmin c auth: register routes at app creation time, not inside lifespan.
     pepper = settings.security.password_pepper
     if pepper is None:
-        raise RuntimeError("PASSWORD_PEPPER не задан: не можем настроить AdminAuth.")
+        raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware/AdminAuth не может стартовать.")
     authentication_backend = AdminAuth(state.db, secret_key=pepper.get_secret_value())
     admin = Admin(
         app,
         engine,
         authentication_backend=authentication_backend,
-        templates_dir="backend/templates",
+        templates_dir="backend/web/templates",
     )
     setup_admin(admin)
     logger.info("Админка загружена")
 
-    try:
-        yield
-    finally:
-        # Закрываем Redis первым
-        if state.redis is not None:
-            await close_redis()
-            state.redis = None
-            logger.info("🔒 Redis закрыт.")
-        await engine.dispose()
+    setup_routes(app)
+
+    return app
 
 
-app = FastAPI(
-    title="Recipes Backend",
-    debug=settings.debug,
-    lifespan=lifespan,
-)
-
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
-
-_allowed = settings.fast_api.allowed_hosts
-if settings.debug and _allowed:
-    # В дебаг можно добавить '*' чтобы не мучиться с host header
-    _allowed = _allowed + ["*"]
-
-if _allowed:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed)
-
-if settings.fast_api.serve_from_app:
-    app.mount(
-        settings.fast_api.mount_static_url,
-        StaticFiles(directory=settings.fast_api.static_dir, html=False),
-        name="static",
-    )
-    app.mount(
-        settings.fast_api.mount_media_url,
-        StaticFiles(directory=settings.fast_api.media_dir, html=False),
-        name="media",
-    )
-
-# Session cookie для SQLAdmin auth
-pepper = settings.security.password_pepper
-if pepper is None:
-    raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware не может стартовать.")
-app.add_middleware(SessionMiddleware, secret_key=pepper.get_secret_value())
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# API
-app.include_router(api_router, prefix="/api")
-
-
-@app.get("/ping", tags=["health"])
-async def ping() -> dict[str, bool]:
-    return {"ok": True}
+app = create_app()
