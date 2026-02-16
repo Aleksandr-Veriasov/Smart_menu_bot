@@ -12,6 +12,10 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import Select
 
 from packages.db.models import (
+    BroadcastCampaign,
+    BroadcastCampaignStatus,
+    BroadcastMessage,
+    BroadcastMessageStatus,
     Category,
     Ingredient,
     Recipe,
@@ -547,3 +551,162 @@ class RecipeUserRepository(BaseRepository[RecipeUser]):
         statement = select(RecipeUser.category_id).where(RecipeUser.recipe_id == recipe_id).limit(1)
         result = await session.execute(statement)
         return result.scalar_one_or_none()
+
+
+class BroadcastRepository:
+    @staticmethod
+    async def build_outbox_all_users(session: AsyncSession, *, campaign_id: int) -> None:
+        """
+        Построить outbox для кампании по аудитории all_users.
+        Дубликаты (campaign_id, chat_id) игнорируются.
+        """
+        insert_stmt = pg_insert(BroadcastMessage).from_select(
+            ["campaign_id", "chat_id", "status", "attempts"],
+            select(
+                sa.literal(int(campaign_id)),
+                User.id,
+                sa.literal(BroadcastMessageStatus.pending),
+                sa.literal(0),
+            ),
+        )
+        stmt = insert_stmt.on_conflict_do_nothing(
+            index_elements=[BroadcastMessage.campaign_id, BroadcastMessage.chat_id]
+        )
+        await session.execute(stmt)
+
+    @staticmethod
+    async def list_campaigns(session: AsyncSession, *, limit: int) -> list[BroadcastCampaign]:
+        stmt = select(BroadcastCampaign).order_by(desc(BroadcastCampaign.id)).limit(max(1, min(200, int(limit))))
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
+
+    @staticmethod
+    async def create_campaign(
+        session: AsyncSession,
+        *,
+        name: str,
+        status,
+        audience_type,
+        audience_params_json: str | None,
+        text: str,
+        parse_mode: str,
+        disable_web_page_preview: bool,
+        reply_markup_json: str | None,
+        photo_file_id: str | None,
+        photo_url: str | None,
+        scheduled_at,
+    ) -> BroadcastCampaign:
+        campaign = BroadcastCampaign(
+            name=name,
+            status=status,
+            audience_type=audience_type,
+            audience_params_json=audience_params_json,
+            text=text,
+            parse_mode=parse_mode,
+            disable_web_page_preview=disable_web_page_preview,
+            reply_markup_json=reply_markup_json,
+            photo_file_id=photo_file_id,
+            photo_url=photo_url,
+            scheduled_at=scheduled_at,
+        )
+        session.add(campaign)
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @staticmethod
+    async def get_campaign_or_none(session: AsyncSession, campaign_id: int) -> BroadcastCampaign | None:
+        res = await session.execute(select(BroadcastCampaign).where(BroadcastCampaign.id == int(campaign_id)))
+        return res.scalar_one_or_none()
+
+    @classmethod
+    async def update_campaign(
+        cls,
+        session: AsyncSession,
+        *,
+        campaign_id: int,
+        changes: dict[str, Any],
+    ) -> BroadcastCampaign:
+        campaign = await cls.get_campaign_or_none(session, campaign_id)
+        if campaign is None:
+            raise LookupError("Campaign not found")
+        # Разрешаем перезапись кампании только пока не было фактических отправок.
+        if int(campaign.sent_count or 0) > 0 or int(campaign.failed_count or 0) > 0:
+            raise ValueError("Campaign already has deliveries; create a new campaign instead")
+        if campaign.status == BroadcastCampaignStatus.completed:
+            raise ValueError("Completed campaign is immutable; create a new campaign instead")
+
+        for field, value in changes.items():
+            setattr(campaign, field, value)
+
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @classmethod
+    async def queue_campaign(cls, session: AsyncSession, *, campaign_id: int) -> BroadcastCampaign:
+        campaign = await cls.get_campaign_or_none(session, campaign_id)
+        if campaign is None:
+            raise LookupError("Campaign not found")
+        if campaign.status not in (
+            BroadcastCampaignStatus.draft,
+            BroadcastCampaignStatus.paused,
+            BroadcastCampaignStatus.failed,
+        ):
+            raise ValueError(f"Cannot queue from status={campaign.status.value}")
+        campaign.status = BroadcastCampaignStatus.queued
+        campaign.last_error = None
+        campaign.finished_at = None
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @classmethod
+    async def pause_campaign(cls, session: AsyncSession, *, campaign_id: int) -> BroadcastCampaign:
+        campaign = await cls.get_campaign_or_none(session, campaign_id)
+        if campaign is None:
+            raise LookupError("Campaign not found")
+        if campaign.status != BroadcastCampaignStatus.running:
+            raise ValueError(f"Cannot pause from status={campaign.status.value}")
+        campaign.status = BroadcastCampaignStatus.paused
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @classmethod
+    async def resume_campaign(cls, session: AsyncSession, *, campaign_id: int, now_utc) -> BroadcastCampaign:
+        campaign = await cls.get_campaign_or_none(session, campaign_id)
+        if campaign is None:
+            raise LookupError("Campaign not found")
+        if campaign.status != BroadcastCampaignStatus.paused:
+            raise ValueError(f"Cannot resume from status={campaign.status.value}")
+        campaign.status = BroadcastCampaignStatus.running
+        if campaign.started_at is None:
+            campaign.started_at = now_utc
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @classmethod
+    async def cancel_campaign(cls, session: AsyncSession, *, campaign_id: int, now_utc) -> BroadcastCampaign:
+        campaign = await cls.get_campaign_or_none(session, campaign_id)
+        if campaign is None:
+            raise LookupError("Campaign not found")
+        if campaign.status in (BroadcastCampaignStatus.completed, BroadcastCampaignStatus.cancelled):
+            return campaign
+        campaign.status = BroadcastCampaignStatus.cancelled
+        campaign.finished_at = now_utc
+        await session.flush()
+        await session.refresh(campaign)
+        return campaign
+
+    @staticmethod
+    async def list_messages(session: AsyncSession, *, campaign_id: int, limit: int) -> list[BroadcastMessage]:
+        stmt = (
+            select(BroadcastMessage)
+            .where(BroadcastMessage.campaign_id == int(campaign_id))
+            .order_by(desc(BroadcastMessage.id))
+            .limit(max(1, min(500, int(limit))))
+        )
+        res = await session.execute(stmt)
+        return list(res.scalars().all())

@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass
 from typing import TypedDict
 
 from redis.asyncio import Redis
@@ -431,3 +432,57 @@ class ProgressMessageCacheRepository:
     @classmethod
     async def delete(cls, r: Redis, user_id: int) -> None:
         await r.delete(RedisKeys.user_progress_message(user_id))
+
+
+@dataclass(frozen=True, slots=True)
+class RedisLock:
+    key: str
+    token: str
+
+
+class RedisLockRepository:
+    """
+    Атомарный distributed lock поверх Redis (token-based ownership).
+    """
+
+    @classmethod
+    async def acquire(cls, r: Redis | None, *, key: str, token: str, ttl_sec: int) -> RedisLock | None:
+        if r is None:
+            # Best-effort режим для single-process.
+            return RedisLock(key=key, token=token)
+        ok = await r.set(key, token, ex=int(ttl_sec), nx=True)
+        return RedisLock(key=key, token=token) if ok else None
+
+    @classmethod
+    async def refresh(cls, r: Redis | None, lock: RedisLock, *, ttl_sec: int) -> bool:
+        if r is None:
+            return True
+        script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("expire", KEYS[1], tonumber(ARGV[2]))
+        else
+          return 0
+        end
+        """
+        try:
+            res = await r.eval(script, 1, lock.key, lock.token, str(int(ttl_sec)))
+            return bool(res)
+        except Exception:
+            logger.exception("Redis lock refresh failed for key=%s", lock.key)
+            return False
+
+    @classmethod
+    async def release(cls, r: Redis | None, lock: RedisLock) -> None:
+        if r is None:
+            return
+        script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        else
+          return 0
+        end
+        """
+        try:
+            await r.eval(script, 1, lock.key, lock.token)
+        except Exception:
+            logger.exception("Redis lock release failed for key=%s", lock.key)

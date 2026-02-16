@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.routing import Mount
 
 from backend.app.admin.views import AdminAuth, setup_admin
+from backend.app.broadcast.worker import run_broadcast_worker
 from backend.app.core import setup_middleware, setup_routes, setup_static
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
@@ -76,9 +78,21 @@ def create_app() -> FastAPI:
         logger.info("БД загружена")
         await ensure_admin(state.db)
 
+        # Broadcast worker (mass mailing outbox).
+        if settings.broadcast.enabled:
+            state.broadcast_task = asyncio.create_task(run_broadcast_worker(state))
+
         try:
             yield
         finally:
+            task = getattr(state, "broadcast_task", None)
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
             # Закрываем Redis первым
             if state.redis is not None:
                 await close_redis()

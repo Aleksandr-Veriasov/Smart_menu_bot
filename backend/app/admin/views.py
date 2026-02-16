@@ -12,7 +12,15 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from backend.app.utils.fastapi_state import get_backend_redis
 from packages.db.database import Database
 from packages.db.models import Admin as AdminModel
-from packages.db.models import Category, Ingredient, Recipe, User, Video
+from packages.db.models import (
+    BroadcastCampaign,
+    BroadcastMessage,
+    Category,
+    Ingredient,
+    Recipe,
+    User,
+    Video,
+)
 from packages.redis.repository import CategoryCacheRepository
 from packages.security.passwords import verify_password
 
@@ -377,6 +385,107 @@ class AdminUserAdmin(ModelView, model=AdminModel):  # type: ignore[call-arg]
     icon = "fa-solid fa-user"
 
 
+class BroadcastCampaignAdmin(ModelView, model=BroadcastCampaign):  # type: ignore[call-arg]
+    name = "Рассылка"
+    name_plural = "Рассылки"
+    icon = "fa-solid fa-bullhorn"
+    page_size: ClassVar[int] = 50
+
+    column_list = [
+        "id",
+        "name",
+        "status",
+        "audience_type",
+        "scheduled_at",
+        "total_recipients",
+        "sent_count",
+        "failed_count",
+        "created_at",
+        "started_at",
+        "finished_at",
+    ]
+    column_sortable_list = ["id", "status", "scheduled_at", "created_at"]
+    column_searchable_list = ["id", "name", "status", "audience_type"]
+
+    column_labels = {
+        "id": "ID",
+        "name": "Название",
+        "status": "Статус",
+        "audience_type": "Аудитория",
+        "audience_params_json": "Параметры аудитории (JSON)",
+        "scheduled_at": "Запланировано (UTC)",
+        "text": "Текст",
+        "parse_mode": "Parse mode",
+        "disable_web_page_preview": "Без превью ссылок",
+        "reply_markup_json": "Кнопки (reply_markup JSON)",
+        "photo_file_id": "Фото file_id",
+        "photo_url": "Фото URL",
+        "total_recipients": "Получателей",
+        "sent_count": "Отправлено",
+        "failed_count": "Ошибок",
+        "created_at": "Создано",
+        "outbox_created_at": "Outbox создан",
+        "started_at": "Старт",
+        "finished_at": "Финиш",
+        "last_error": "Ошибка",
+    }
+
+    form_columns = [
+        "name",
+        "status",
+        "scheduled_at",
+        "audience_type",
+        "audience_params_json",
+        "text",
+        "parse_mode",
+        "disable_web_page_preview",
+        "reply_markup_json",
+        "photo_file_id",
+        "photo_url",
+    ]
+
+    can_create = True
+    can_edit = True
+    can_delete = True
+
+
+class BroadcastMessageAdmin(ModelView, model=BroadcastMessage):  # type: ignore[call-arg]
+    name = "Сообщение рассылки"
+    name_plural = "Сообщения рассылок"
+    icon = "fa-solid fa-envelope"
+    page_size: ClassVar[int] = 50
+
+    column_list = [
+        "id",
+        "campaign_id",
+        "chat_id",
+        "status",
+        "attempts",
+        "next_retry_at",
+        "sent_at",
+        "created_at",
+        "last_error",
+    ]
+    column_sortable_list = ["id", "campaign_id", "status", "attempts", "created_at", "next_retry_at", "sent_at"]
+    column_searchable_list = ["id", "campaign_id", "chat_id", "status", "last_error"]
+
+    column_labels = {
+        "id": "ID",
+        "campaign_id": "Кампания",
+        "chat_id": "Chat ID",
+        "status": "Статус",
+        "attempts": "Попыток",
+        "next_retry_at": "След. попытка (UTC)",
+        "sent_at": "Отправлено (UTC)",
+        "created_at": "Создано",
+        "last_error": "Ошибка",
+    }
+
+    can_create = False
+    can_edit = False
+    can_delete = True
+
+
 class RedisKeysAdmin(BaseView):
     name = "Redis ключи"
     icon = "fa-solid fa-database"
@@ -509,5 +618,7 @@ def setup_admin(admin: Admin) -> None:
     admin.add_view(CategoryAdmin)
     admin.add_view(VideoAdmin)
     admin.add_view(IngredientAdmin)
+    admin.add_view(BroadcastCampaignAdmin)
+    admin.add_view(BroadcastMessageAdmin)
     admin.add_view(RedisKeysAdmin)
     # admin.add_view(AdminUserAdmin)
