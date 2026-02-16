@@ -256,6 +256,22 @@ class TelegramSettings(BaseAppSettings):
     recipes_per_page: int = 5
 
 
+class BroadcastSettings(BaseAppSettings):
+    """
+    Очередь массовых рассылок (outbox + worker).
+    Управляется из кабинета (SQLAdmin): создаём кампанию, ставим status='queued'.
+    """
+
+    enabled: bool = Field(default=True, alias="BROADCAST_ENABLED")
+    tick_seconds: float = Field(default=600, ge=0.2, alias="BROADCAST_TICK_SECONDS")
+    batch_size: int = Field(default=50, ge=1, le=1000, alias="BROADCAST_BATCH_SIZE")
+    request_timeout_sec: float = Field(default=12.0, ge=1.0, le=60.0, alias="BROADCAST_REQUEST_TIMEOUT_SEC")
+    # Безопасный дефолт ниже лимитов Telegram (30 msg/sec глобально).
+    max_messages_per_second: float = Field(default=10.0, ge=1.0, le=30.0, alias="BROADCAST_MAX_MPS")
+    max_attempts: int = Field(default=8, ge=1, le=50, alias="BROADCAST_MAX_ATTEMPTS")
+    lock_ttl_sec: int = Field(default=20, ge=5, le=300, alias="BROADCAST_LOCK_TTL_SEC")
+
+
 class DeepSeekSettings(BaseAppSettings):
     """
     Конфигурация DeepSeek API: ключ API. Используется для доступа к DeepSeek сервисам.
@@ -314,6 +330,10 @@ class WebHookSettings(BaseAppSettings):
 class FastApiSettings(BaseAppSettings):
     """Конфигратор FastAPI"""
 
+    # Если задано и DEBUG=true, base_url() вернёт это значение.
+    # Удобно для локальной разработки через ngrok/cloudflared.
+    debug_base_url: str | None = Field(default=None, alias="FASTAPI_DEBUG_BASE_URL")
+
     allowed_hosts: list[str] = Field(
         default_factory=lambda: ["localhost", "127.0.0.1"],
         alias="ALLOWED_HOSTS",
@@ -352,6 +372,8 @@ class FastApiSettings(BaseAppSettings):
         return self.allowed_hosts[0] if self.allowed_hosts else "localhost"
 
     def base_url(self) -> str:
+        if settings.debug and self.debug_base_url and self.debug_base_url.strip():
+            return self.debug_base_url.strip().rstrip("/")
         scheme = "https" if self.use_https else "http"
         return f"{scheme}://{self.external_domain()}"
 
@@ -367,6 +389,7 @@ class Settings(BaseAppSettings):
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)
+    broadcast: BroadcastSettings = Field(default_factory=BroadcastSettings)
     deepseek: DeepSeekSettings = Field(default_factory=DeepSeekSettings)
     sentry: SentrySettings = Field(default_factory=SentrySettings)
     # 🔹 CORS: список доменов, которым можно слать запросы к API
@@ -404,6 +427,15 @@ class Settings(BaseAppSettings):
             "debug": self.debug,
             "db": self.db.safe_dict(),
             "telegram": {"chat_id": self.telegram.chat_id, "bot_token": "***"},
+            "broadcast": {
+                "enabled": self.broadcast.enabled,
+                "tick_seconds": self.broadcast.tick_seconds,
+                "batch_size": self.broadcast.batch_size,
+                "request_timeout_sec": self.broadcast.request_timeout_sec,
+                "max_messages_per_second": self.broadcast.max_messages_per_second,
+                "max_attempts": self.broadcast.max_attempts,
+                "lock_ttl_sec": self.broadcast.lock_ttl_sec,
+            },
             "deepseek": {"api_key": "***"},
             "sentry": {"dsn": "***" if self.sentry.dsn else None},
             "admin": {"password": "***"},
@@ -417,7 +449,7 @@ class Settings(BaseAppSettings):
 try:
     settings = Settings()
     logger.info("✅ Конфигурация загружена")
-    logger.debug("Config dump: %s", settings.safe_dict())
+    logger.debug("Дамп конфигурации: %s", settings.safe_dict())
 except ValidationError as e:
     logger.critical("❌ Ошибка конфигурации: %s", e.errors())
     raise SystemExit("Остановка: отсутствуют обязательные " "переменные окружения или заданы неверно.") from e

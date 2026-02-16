@@ -1,0 +1,385 @@
+/* ============================================
+   Telegram Mini App — Recipe Editor
+   Theme: Paper / Cookbook (v0-inspired)
+   ============================================ */
+
+/* ---------- Light palette ---------- */
+:root {
+  /* Primary tokens (used by our JS theme application) */
+  --bg: #e8e0d0;
+  --text: #2c1e10;
+  --muted: #7d6e5c;
+  --card: #fdf8ef;
+  --accent: #c0522a;
+  --accentText: #fff8f0;
+  --field: #faf5ea;
+  --fieldText: var(--text);
+  --fieldBorder: #c9b99e;
+
+  /* Cookbook extras */
+  --accent-hover: #a3441f;
+  --accent-text: var(--accentText);
+  --field-border: var(--fieldBorder);
+  --field-focus: var(--accent);
+  --line-color: rgba(160, 140, 110, 0.16);
+  --shadow-sm: 0 1px 3px rgba(60, 40, 20, 0.06);
+  --shadow-md: 0 4px 20px rgba(60, 40, 20, 0.08);
+  --shadow-lg: 0 8px 40px rgba(60, 40, 20, 0.10);
+  --divider: rgba(160, 140, 110, 0.25);
+  --focus-ring: rgba(192, 82, 42, 0.18);
+  --radius: 14px;
+  --font-heading: Georgia, "Noto Serif", "Times New Roman", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Status */
+  --danger: #b00020;
+  --ok: #0a7a2f;
+}
+
+/* ---------- Dark: data-theme attribute ---------- */
+[data-theme="dark"] {
+  --bg: #161110;
+  --text: #e6dccb;
+  --muted: #9c8e7a;
+  --card: #231c16;
+  --accent: #e4834e;
+  --accent-hover: #d07340;
+  --accentText: #1a1310;
+  --accent-text: var(--accentText);
+  --field: #2c241c;
+  --fieldBorder: #4a3e30;
+  --field-border: var(--fieldBorder);
+  --field-focus: var(--accent);
+  --line-color: rgba(160, 140, 110, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.20);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.25);
+  --divider: rgba(160, 140, 110, 0.10);
+  --focus-ring: rgba(228, 131, 78, 0.25);
+}
+
+/* ---------- Dark: prefers-color-scheme ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161110;
+    --text: #e6dccb;
+    --muted: #9c8e7a;
+    --card: #231c16;
+    --accent: #e4834e;
+    --accent-hover: #d07340;
+    --accentText: #1a1310;
+    --accent-text: var(--accentText);
+    --field: #2c241c;
+    --fieldBorder: #4a3e30;
+    --field-border: var(--fieldBorder);
+    --field-focus: var(--accent);
+    --line-color: rgba(160, 140, 110, 0.05);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.20);
+    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.25);
+    --divider: rgba(160, 140, 110, 0.10);
+    --focus-ring: rgba(228, 131, 78, 0.25);
+  }
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Page wrapper ---------- */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100dvh;
+  padding: 20px 14px 44px;
+}
+
+/* ---------- Card ---------- */
+.card {
+  width: 100%;
+  max-width: 680px;
+  position: relative;
+  background-color: var(--card);
+  border-radius: var(--radius);
+  padding: 36px 22px 28px;
+  box-shadow: var(--shadow-sm), var(--shadow-md), var(--shadow-lg);
+
+  /* Ruled notebook lines */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 31px,
+    var(--line-color) 31px,
+    var(--line-color) 32px
+  );
+  background-size: 100% 32px;
+  background-position: 0 28px;
+}
+
+/* Top accent strip */
+.card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* ---------- Typography ---------- */
+.heading {
+  font-family: var(--font-heading);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+.section-label {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+/* ---------- Form group ---------- */
+.form-group {
+  margin-bottom: 22px;
+}
+
+.form-group label {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 7px;
+  letter-spacing: 0.015em;
+}
+
+/* ---------- Fields ---------- */
+.field {
+  display: block;
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--fieldText, var(--text));
+  background-color: var(--field);
+  border: 1.5px solid var(--field-border, var(--fieldBorder));
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field::placeholder {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.field:focus {
+  border-color: var(--field-focus);
+  box-shadow: 0 0 0 3.5px var(--focus-ring);
+}
+
+/* Select custom arrow */
+select.field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237d6e5c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+[data-theme="dark"] select.field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239c8e7a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Textarea */
+textarea.field {
+  resize: none;
+  overflow: hidden; /* auto-grow via JS */
+  min-height: 0; /* match content; JS drives height */
+  line-height: 1.7;
+}
+
+/* ---------- Divider ---------- */
+.divider {
+  border: none;
+  height: 1px;
+  background: var(--divider);
+  margin: 26px 0;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: block;
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  border-radius: 10px;
+  padding: 15px 20px;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.08s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  box-shadow: 0 0 0 3.5px var(--focus-ring);
+}
+
+/* Primary */
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 2px 10px rgba(192, 82, 42, 0.18);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Secondary */
+.btn-secondary {
+  background-color: var(--field);
+  color: var(--text);
+  border: 1.5px solid var(--field-border, var(--fieldBorder));
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg);
+}
+
+/* ---------- Layouts ---------- */
+.btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-row .btn {
+  flex: 1;
+}
+
+/* ---------- Notices ---------- */
+.notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--divider);
+  background: rgba(255, 255, 255, 0.20);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.notice:empty {
+  display: none;
+}
+
+.notice-error {
+  border-color: rgba(176, 0, 32, 0.35);
+  background: rgba(176, 0, 32, 0.08);
+}
+
+.notice-ok {
+  border-color: rgba(10, 122, 47, 0.35);
+  background: rgba(10, 122, 47, 0.08);
+}
+
+/* ---------- Hint ---------- */
+.hint {
+  text-align: center;
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 24px;
+  opacity: 0.55;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- Responsive ---------- */
+@media (min-width: 420px) {
+  .page {
+    padding: 28px 18px 48px;
+  }
+  .card {
+    padding: 40px 28px 32px;
+  }
+  .heading {
+    font-size: 1.7rem;
+  }
+}
+
+@media (min-width: 600px) {
+  .page {
+    padding: 40px 24px 56px;
+  }
+  .card {
+    padding: 44px 40px 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+}

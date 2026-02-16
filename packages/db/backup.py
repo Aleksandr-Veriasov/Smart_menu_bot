@@ -249,7 +249,7 @@ class DropboxDumpClient:
         token = str(resp.json().get("access_token", "")).strip()
         if not token:
             raise BackupError("Dropbox token refresh returned empty access_token")
-        logger.info("Dropbox access token refreshed successfully")
+        logger.info("Токен доступа Dropbox успешно обновлён")
         return token
 
     def _post_with_refresh(

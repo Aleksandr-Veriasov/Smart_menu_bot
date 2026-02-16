@@ -32,12 +32,12 @@ def download_video_and_description(url: str) -> tuple[str, str]:
         file_path = payload.get("file_path") or ""
         description = payload.get("description") or ""
         if not file_path:
-            logger.error("Downloader вернул пустой путь.")
+            logger.error("Сервис downloader вернул пустой путь к файлу.")
             return "", ""
-        logger.debug(f"✅ Downloader вернул файл: {file_path}")
+        logger.debug(f"✅ Сервис downloader вернул файл: {file_path}")
         return file_path, description
     except Exception as exc:
-        logger.error(f"downloader сервис не ответил: {exc}", exc_info=True)
+        logger.error(f"Сервис downloader не ответил: {exc}", exc_info=True)
         return "", ""
 
 

@@ -1,0 +1,84 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block content %}
+<div class="container-xl">
+  <div class="page-header d-print-none mb-3">
+    <div class="row align-items-center">
+      <div class="col">
+        <h2 class="page-title">Дашборд</h2>
+        <div class="text-muted mt-1">Общая статистика и быстрые действия.</div>
+      </div>
+      <div class="col-auto ms-auto">
+        <a href="/broadcast" class="btn btn-primary">Открыть Broadcast</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-sm">
+        <div class="card-body">
+          <div class="text-uppercase text-muted fw-medium">Пользователи</div>
+          <div class="h1 mb-0 mt-2" id="users_count">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-sm">
+        <div class="card-body">
+          <div class="text-uppercase text-muted fw-medium">Рецепты</div>
+          <div class="h1 mb-0 mt-2" id="recipes_count">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-sm">
+        <div class="card-body">
+          <div class="text-uppercase text-muted fw-medium">Рассылки (всего)</div>
+          <div class="h1 mb-0 mt-2" id="broadcasts_count">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-sm">
+        <div class="card-body">
+          <div class="text-uppercase text-muted fw-medium">Рассылки (активные)</div>
+          <div class="h1 mb-0 mt-2" id="active_broadcasts_count">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-body">
+      <div class="btn-list">
+        <a href="/admin/user/list" class="btn btn-outline-secondary">Пользователи</a>
+        <a href="/admin/recipe/list" class="btn btn-outline-secondary">Рецепты</a>
+        <a href="/admin/broadcast-campaign/list" class="btn btn-outline-secondary">Кампании</a>
+        <a href="/admin/broadcast-message/list" class="btn btn-outline-secondary">Сообщения рассылок</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block tail %}
+<script>
+  (function () {
+    fetch("/api/admin/stats", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        ["users_count", "recipes_count", "broadcasts_count", "active_broadcasts_count"].forEach(function (k) {
+          var el = document.getElementById(k);
+          if (el) el.textContent = String(data[k] ?? 0);
+        });
+      })
+      .catch(function () {
+        // keep placeholders if request fails
+      });
+  })();
+</script>
+{% endblock %}

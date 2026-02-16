@@ -12,7 +12,6 @@ CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save(?:\:\d+)?$")
 
 CB_RE_M = re.compile(r"^recipes(?:_(?P<mode>show|random|edit))?$")
 CB_CAT_MODE_ID = re.compile(r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$")
-CB_CHANGE_CATEGORY = re.compile(r"^change_category:(?P<category>[a-z0-9][a-z0-9_-]*)$")
 
 
 def parse_category_mode(cb: str) -> tuple[str, RecipeMode] | None:
@@ -28,7 +27,7 @@ def parse_category_mode(cb: str) -> tuple[str, RecipeMode] | None:
     mode_str = m.group("mode")
     logger.debug(f"⏩⏩⏩ mode_str = {mode_str}, category = {category}")
     if not mode_str:
-        logger.debug("⏩⏩⏩ mode_str is empty, fallback to SHOW")
+        logger.debug("⏩⏩⏩ mode_str пустой, переключаемся на SHOW")
         mode = RecipeMode.SHOW
     else:
         mode = RecipeMode(mode_str)
@@ -59,7 +58,7 @@ def parse_mode(cb: str) -> RecipeMode | None:
     mode_str = m.group("mode")
     logger.debug(f"⏩⏩⏩ mode_str = {mode_str}")
     if not mode_str:
-        logger.debug("⏩⏩⏩ mode_str is empty, fallback to SHOW")
+        logger.debug("⏩⏩⏩ mode_str пустой, переключаемся на SHOW")
         mode = RecipeMode.SHOW
     else:
         mode = RecipeMode(mode_str)
@@ -78,11 +77,6 @@ def parse_category_mode_id(cb: str) -> tuple[str, str, int] | None:
     return category, mode, int(obj_id)
 
 
-def parse_change_category(cb: str) -> str | None:
-    """
-    Возвращает category_slug для смены категории или None.
-    """
-    m = CB_CHANGE_CATEGORY.fullmatch((cb or "").lower().strip())
-    if not m:
-        return None
-    return m.group("category")
+#
+# change_category:* больше не используем: редактирование переехало в WebApp
+#

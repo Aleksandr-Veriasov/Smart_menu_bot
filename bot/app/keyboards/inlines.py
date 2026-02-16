@@ -1,7 +1,8 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 
 from telegram import (
     InlineKeyboardMarkup,
+    WebAppInfo,
 )
 
 from bot.app.core.recipes_mode import RecipeMode
@@ -51,7 +52,7 @@ def random_recipe_keyboard(category_slug: str) -> InlineKeyboardMarkup:
 
 
 def category_keyboard(
-    categories: list[dict[str, str]],
+    categories: Sequence[Mapping[str, object]],
     mode: RecipeMode = RecipeMode.SHOW,
     pipeline_id: int = 0,
     *,
@@ -62,8 +63,8 @@ def category_keyboard(
     kb = InlineKB()
 
     for cat in categories:
-        name = (cat.get("name") or "").strip()
-        slug = (cat.get("slug") or "").strip().lower()
+        name = str(cat.get("name") or "").strip()
+        slug = str(cat.get("slug") or "").strip().lower()
         if not name or not slug:
             continue
         if callback_builder is not None:
@@ -114,11 +115,12 @@ def build_recipes_list_keyboard(
 
 def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для редактирования рецепта."""
+    base = settings.fast_api.base_url()
+    webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe_id)}"
     return (
         InlineKB()
-        # .button(text="✏️ Редактировать рецепт", callback_data=f"edit_recipe_{recipe_id}")
+        .button(text="✏️ Редактировать рецепт", web_app=WebAppInfo(url=webapp_url))
         .button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
-        .button(text="🔄 Изменить категорию", callback_data=f"change_category:{recipe_id}")
         .button(text="⏪ Назад", callback_data=f"next_{page}")
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
@@ -154,19 +156,6 @@ def keyboard_delete() -> InlineKeyboardMarkup:
         .button(text="❌ Отмена", callback_data="cancel")
         .adjust(1)
     )
-
-
-def keyboard_save_cancel_delete(func: str = "") -> InlineKeyboardMarkup:
-    """Создание клавиатуры для сохранения, отмены и удаления."""
-    kb = InlineKB()
-    if func == "start_edit":
-        kb.button(text="📝 Изменить название", callback_data="f:title")
-    elif func == "handle_title":
-        kb.button(text="✅ Сохранить", callback_data="save_changes")
-    elif func == "delete_recipe":
-        kb.button(text="🗑 Удалить", callback_data="delete")
-    kb.button(text="❌ Отмена", callback_data="cancel")
-    return kb.adjust(1)
 
 
 def keyboard_save_recipe(pipeline_id: int) -> InlineKeyboardMarkup:

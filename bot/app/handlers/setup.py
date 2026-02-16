@@ -12,7 +12,13 @@ from bot.app.handlers.recipes.add_existing_recipe import (
     add_existing_recipe,
     add_existing_recipe_choose_category,
 )
-from bot.app.handlers.recipes.edit_delete_recipe import conversation_edit_recipe
+from bot.app.handlers.recipes.delete_recipe import conversation_delete_recipe
+from bot.app.handlers.recipes.existing_by_url import (
+    add_candidate_recipe,
+    add_candidate_recipe_choose_category,
+    show_candidate_recipe,
+    show_candidates_list,
+)
 from bot.app.handlers.recipes.pagination import handler_pagination
 from bot.app.handlers.recipes.recipes_menu import (
     recipe_choice,
@@ -43,7 +49,7 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", user_start))
     app.add_handler(CommandHandler("help", user_help))
     # pattern='^(edit|delete)_recipe_(\d+)$'
-    app.add_handler(conversation_edit_recipe())
+    app.add_handler(conversation_delete_recipe())
     # pattern='^save_recipe$'
     app.add_handler(save_recipe_handlers())
     # pattern='^search_recipes$'
@@ -54,6 +60,12 @@ def setup_handlers(app: Application) -> None:
     # app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=r"^add_recipe:\d+$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe_choose_category, pattern=r"^add_recipe:\d+:[a-z0-9_-]+$"))
+    app.add_handler(CallbackQueryHandler(show_candidate_recipe, pattern=r"^urlpick:[A-Za-z0-9]+:\d+$"))
+    app.add_handler(CallbackQueryHandler(show_candidates_list, pattern=r"^urllist:[A-Za-z0-9]+$"))
+    app.add_handler(CallbackQueryHandler(add_candidate_recipe, pattern=r"^urladd:[A-Za-z0-9]+:\d+$"))
+    app.add_handler(
+        CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=r"^urladdcat:[A-Za-z0-9]+:\d+:[a-z0-9_-]+$")
+    )
     app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
     app.add_handler(CallbackQueryHandler(handler_pagination, pattern=r"^(next|prev)_\d+$"))
     app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=r"^share_recipe_\d+$"))
