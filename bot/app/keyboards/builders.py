@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 
 class InlineKB:
@@ -13,9 +13,10 @@ class InlineKB:
         text: str,
         callback_data: str | None = None,
         url: str | None = None,
+        web_app: WebAppInfo | None = None,
     ) -> InlineKB:
         """Добавление кнопки в клавиатуру."""
-        self._buttons.append(InlineKeyboardButton(text=text, callback_data=callback_data, url=url))
+        self._buttons.append(InlineKeyboardButton(text=text, callback_data=callback_data, url=url, web_app=web_app))
         return self
 
     def adjust(self, *widths: int) -> InlineKeyboardMarkup:

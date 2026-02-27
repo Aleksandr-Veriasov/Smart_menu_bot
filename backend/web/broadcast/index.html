@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Рассылки</title>
+    <style>
+      :root { --bg:#f3f7ff; --panel:#ffffff; --muted:#5e6f8d; --text:#18263f; --accent:#1479ff; --danger:#cf2f2f; --ok:#0f8a56; }
+      body { margin:0; background: radial-gradient(1000px 700px at 10% 0%, #dfeeff 0%, var(--bg) 60%); color:var(--text); font: 14px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      header { padding:18px 18px 8px; display:flex; gap:12px; align-items:center; justify-content:space-between; }
+      header h1 { margin:0; font-size:18px; letter-spacing:0.5px; }
+      header a { color: var(--muted); text-decoration:none; }
+      .wrap { padding: 0 18px 22px; max-width: 1600px; margin: 0 auto; }
+      .grid { display:grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+      .card { background: linear-gradient(180deg, #ffffff, #f8fbff); border:1px solid rgba(20,121,255,.20); box-shadow: 0 10px 25px rgba(31,72,138,.12); border-radius: 12px; padding: 14px; }
+      .card h2 { margin:0 0 10px; font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+      label { display:block; margin:10px 0 6px; color: var(--muted); }
+      input, textarea, select { width:100%; box-sizing:border-box; border-radius:10px; border:1px solid rgba(108,130,170,.35); background: #ffffff; color: var(--text); padding:10px 10px; outline: none; }
+      textarea { min-height: 140px; resize: vertical; }
+      .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .row.one-third { grid-template-columns: 2fr 1fr; }
+      .row.date-row { grid-template-columns: 2fr 1fr; }
+      .actions { display:flex; gap:10px; margin-top:12px; flex-wrap: wrap; }
+      button { border-radius: 10px; border:1px solid rgba(20,121,255,.35); background: rgba(20,121,255,.08); color: var(--text); padding:10px 12px; cursor:pointer; }
+      button.primary { border-color: rgba(15,138,86,.45); background: rgba(15,138,86,.10); }
+      button.danger { border-color: rgba(207,47,47,.45); background: rgba(207,47,47,.10); }
+      button:disabled { opacity:.55; cursor:not-allowed; }
+      .hint { margin-top:8px; color: var(--muted); font-size:12px; }
+      table { width:100%; border-collapse: collapse; }
+      th, td { padding: 8px 8px; border-bottom: 1px solid rgba(108,130,170,.22); vertical-align: top; }
+      th { text-align:left; color: var(--muted); font-weight: 600; }
+      .pill { display:inline-block; padding:2px 8px; border-radius: 999px; border:1px solid rgba(108,130,170,.32); color: var(--muted); }
+      .pill.ok { border-color: rgba(15,138,86,.5); color: var(--ok); }
+      .pill.bad { border-color: rgba(207,47,47,.5); color: var(--danger); }
+      .mono { white-space: pre-wrap; word-break: break-word; }
+      .small { font-size: 12px; color: var(--muted); }
+      .card-list { display: flex; flex-direction: column; }
+      .table-wrap { flex: 1 1 auto; overflow: auto; margin-top: 10px; }
+      .check-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); }
+      .check-row input[type="checkbox"] { width: auto; margin: 0; padding: 0; }
+      .preview-wrap { margin-top: 12px; border: 1px dashed rgba(108,130,170,.5); border-radius: 12px; padding: 10px; background: #f7fbff; }
+      .preview-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .7px; }
+      .tg-msg { border: 1px solid rgba(108,130,170,.28); background: #fff; border-radius: 12px; padding: 10px; }
+      .tg-meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+      .tg-text { white-space: pre-wrap; word-break: break-word; }
+      .tg-buttons { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+      .tg-btn-row { display: flex; gap: 6px; }
+      .tg-btn { border: 1px solid rgba(20,121,255,.28); background: #eef5ff; border-radius: 8px; padding: 6px 8px; font-size: 12px; color: #21508f; }
+      .tg-empty { color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Рассылки</h1>
+      <div><a href="/admin">в админку</a></div>
+    </header>
+    <div class="wrap">
+      <div class="grid">
+        <div class="card">
+          <h2>Новая кампания</h2>
+          <div class="hint" id="edit_mode_hint">Режим: создание новой кампании</div>
+          <div class="actions" style="margin-top:8px;">
+            <button id="reset_form" type="button">Сбросить форму</button>
+          </div>
+          <label>Название</label>
+          <input id="name" placeholder="Например: Новая фича" />
+
+          <label>Когда (UTC)</label>
+          <div class="row date-row">
+            <input id="scheduled_date" type="date" inputmode="none" />
+            <input id="scheduled_time" type="time" step="60" value="12:00" />
+          </div>
+          <div class="hint">Оставь пустым, чтобы начать сразу после постановки в очередь.</div>
+
+          <label>Текст (HTML)</label>
+          <textarea id="text" placeholder="Можно использовать HTML-теги Telegram"></textarea>
+
+          <div class="row">
+            <div>
+              <label>Кнопки (reply_markup JSON)</label>
+              <textarea id="reply_markup_json" placeholder='{"inline_keyboard":[[{"text":"Открыть","url":"https://..."}]]}'></textarea>
+            </div>
+            <div>
+              <label>Картинка</label>
+              <input id="photo_file_id" placeholder="photo_file_id (предпочтительно)" />
+              <div class="hint">или</div>
+              <input id="photo_url" placeholder="photo_url" />
+              <label class="check-row">
+                <input id="disable_preview" type="checkbox" checked />
+                <span>Отключить превью ссылок</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="preview-wrap">
+            <div class="preview-title">Превью сообщения</div>
+            <div class="tg-msg">
+              <div class="tg-meta" id="preview_meta">Без картинки, без кнопок</div>
+              <div class="tg-text mono" id="preview_text">Тут будет текст сообщения…</div>
+              <div class="tg-buttons" id="preview_buttons"></div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="save" class="primary">Сохранить (draft)</button>
+            <button id="queue">Поставить в очередь</button>
+          </div>
+          <div id="create_msg" class="hint"></div>
+        </div>
+
+        <div class="card card-list">
+          <h2>Кампании</h2>
+          <div class="actions" style="margin-top:0;">
+            <button id="refresh">Обновить</button>
+          </div>
+          <div class="hint">Показываем последние 50.</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Название</th>
+                  <th>Статус</th>
+                  <th>План</th>
+                  <th>Прогресс</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let campaignsCache = [];
+      let selectedCampaign = null;
+
+      function toIsoUtcFromDateAndTime(dateValue, timeValue) {
+        if (!dateValue) return null;
+        const hhmm = (timeValue && timeValue.trim()) ? timeValue.trim() : "12:00";
+        return `${dateValue}T${hhmm}:00Z`;
+      }
+
+      function openDatePicker() {
+        const el = $("scheduled_date");
+        if (!el) return;
+        if (typeof el.showPicker === "function") {
+          el.showPicker();
+        } else {
+          el.focus();
+        }
+      }
+
+      function pill(status) {
+        const ok = ["completed"].includes(status);
+        const bad = ["failed", "cancelled"].includes(status);
+        const cls = ok ? "pill ok" : (bad ? "pill bad" : "pill");
+        return `<span class="${cls}">${status}</span>`;
+      }
+
+      async function api(path, opts={}) {
+        const res = await fetch("/api/broadcast-admin" + path, Object.assign({ headers: { "Content-Type": "application/json" }}, opts));
+        if (!res.ok) {
+          let body = "";
+          try { body = (await res.json()).detail || JSON.stringify(await res.json()); } catch { body = await res.text(); }
+          throw new Error(res.status + " " + body);
+        }
+        return await res.json();
+      }
+
+      function readPayload(status) {
+        const name = $("name").value.trim();
+        const text = $("text").value.trim();
+        const scheduled_at = toIsoUtcFromDateAndTime($("scheduled_date").value, $("scheduled_time").value);
+        const reply_markup_json = $("reply_markup_json").value.trim() || null;
+        const photo_file_id = $("photo_file_id").value.trim() || null;
+        const photo_url = $("photo_url").value.trim() || null;
+        const disable_web_page_preview = $("disable_preview").checked;
+
+        return {
+          name,
+          text,
+          scheduled_at: scheduled_at,
+          status: status,
+          audience_type: "all_users",
+          audience_params_json: null,
+          parse_mode: "HTML",
+          disable_web_page_preview,
+          reply_markup_json,
+          photo_file_id,
+          photo_url,
+        };
+      }
+
+      function splitUtcToDateTime(iso) {
+        if (!iso) return { date: "", time: "12:00" };
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return { date: "", time: "12:00" };
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        const hh = String(d.getUTCHours()).padStart(2, "0");
+        const mm = String(d.getUTCMinutes()).padStart(2, "0");
+        return { date: `${y}-${m}-${day}`, time: `${hh}:${mm}` };
+      }
+
+      function setEditModeText() {
+        const el = $("edit_mode_hint");
+        if (!selectedCampaign) {
+          el.textContent = "Режим: создание новой кампании";
+          return;
+        }
+        el.textContent = `Режим: редактирование #${selectedCampaign.id} (${selectedCampaign.status})`;
+      }
+
+      function clearFormAndSelection() {
+        selectedCampaign = null;
+        $("name").value = "";
+        $("text").value = "";
+        $("scheduled_date").value = "";
+        $("scheduled_time").value = "12:00";
+        $("reply_markup_json").value = "";
+        $("photo_file_id").value = "";
+        $("photo_url").value = "";
+        $("disable_preview").checked = true;
+        $("create_msg").textContent = "";
+        setEditModeText();
+        updatePreview();
+      }
+
+      function loadCampaignToForm(id) {
+        const item = campaignsCache.find((x) => Number(x.id) === Number(id));
+        if (!item) return;
+        selectedCampaign = item;
+        $("name").value = item.name || "";
+        $("text").value = item.text || "";
+        const dt = splitUtcToDateTime(item.scheduled_at);
+        $("scheduled_date").value = dt.date;
+        $("scheduled_time").value = dt.time;
+        $("reply_markup_json").value = item.reply_markup_json || "";
+        $("photo_file_id").value = item.photo_file_id || "";
+        $("photo_url").value = item.photo_url || "";
+        $("disable_preview").checked = Boolean(item.disable_web_page_preview);
+        setEditModeText();
+        updatePreview();
+      }
+
+      function canOverwriteSelected() {
+        if (!selectedCampaign) return false;
+        if (selectedCampaign.status === "completed") return false;
+        return Number(selectedCampaign.sent_count || 0) === 0 && Number(selectedCampaign.failed_count || 0) === 0;
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function updatePreview() {
+        const text = $("text").value.trim();
+        const replyRaw = $("reply_markup_json").value.trim();
+        const photoFileId = $("photo_file_id").value.trim();
+        const photoUrl = $("photo_url").value.trim();
+        const disablePreview = $("disable_preview").checked;
+
+        const metaParts = [];
+        if (photoFileId) metaParts.push("Картинка: file_id");
+        else if (photoUrl) metaParts.push("Картинка: URL");
+        else metaParts.push("Без картинки");
+        metaParts.push(disablePreview ? "Превью ссылок: выкл" : "Превью ссылок: вкл");
+
+        $("preview_meta").textContent = metaParts.join(" | ");
+        $("preview_text").innerHTML = text || '<span class="tg-empty">Тут будет текст сообщения…</span>';
+
+        const box = $("preview_buttons");
+        box.innerHTML = "";
+        if (!replyRaw) {
+          return;
+        }
+
+        try {
+          const obj = JSON.parse(replyRaw);
+          const rows = Array.isArray(obj.inline_keyboard) ? obj.inline_keyboard : [];
+          if (!rows.length) {
+            box.innerHTML = '<div class="tg-empty">Кнопок нет</div>';
+            return;
+          }
+          for (const row of rows) {
+            if (!Array.isArray(row)) continue;
+            const rowEl = document.createElement("div");
+            rowEl.className = "tg-btn-row";
+            for (const btn of row) {
+              const text = btn && typeof btn.text === "string" ? btn.text : "button";
+              const el = document.createElement("div");
+              el.className = "tg-btn";
+              el.textContent = text;
+              rowEl.appendChild(el);
+            }
+            if (rowEl.childNodes.length) box.appendChild(rowEl);
+          }
+        } catch (_e) {
+          box.innerHTML = '<div class="tg-empty">Некорректный JSON кнопок</div>';
+        }
+      }
+
+      async function create(status) {
+        $("create_msg").textContent = "";
+        try {
+          const payload = readPayload(status);
+          let c = null;
+          if (canOverwriteSelected()) {
+            c = await api(`/campaigns/${selectedCampaign.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+            $("create_msg").textContent = `OK: campaign #${c.id} обновлена`;
+          } else {
+            c = await api("/campaigns", { method: "POST", body: JSON.stringify(payload) });
+            $("create_msg").textContent = `OK: создана новая campaign_id=${c.id}`;
+          }
+          selectedCampaign = c;
+          setEditModeText();
+          await refresh();
+        } catch (e) {
+          $("create_msg").textContent = String(e.message || e);
+        }
+      }
+
+      async function setAction(id, action) {
+        await api(`/campaigns/${id}/${action}`, { method: "POST" });
+        await refresh();
+      }
+
+      async function refresh() {
+        const rows = $("rows");
+        rows.innerHTML = `<tr><td colspan="6" class="small">Загрузка…</td></tr>`;
+        try {
+          const items = await api("/campaigns?limit=50");
+          campaignsCache = Array.isArray(items) ? items : [];
+          if (selectedCampaign) {
+            const reloaded = campaignsCache.find((x) => Number(x.id) === Number(selectedCampaign.id));
+            selectedCampaign = reloaded || selectedCampaign;
+          }
+          setEditModeText();
+          rows.innerHTML = items.map(c => {
+            const plan = c.scheduled_at ? new Date(c.scheduled_at).toISOString().replace(".000Z","Z") : "ASAP";
+            const total = (c.total_recipients === null || c.total_recipients === undefined) ? "?" : String(c.total_recipients);
+            const prog = `${c.sent_count}/${total} sent, ${c.failed_count} failed`;
+            const actions = [
+              `<button onclick="setAction(${c.id}, 'queue')">queue</button>`,
+              `<button onclick="setAction(${c.id}, 'pause')">pause</button>`,
+              `<button onclick="setAction(${c.id}, 'resume')">resume</button>`,
+              `<button class="danger" onclick="setAction(${c.id}, 'cancel')">cancel</button>`,
+            ].join(" ");
+            return `
+              <tr>
+                <td>${c.id}</td>
+                <td class="mono"><button type="button" onclick="loadCampaignToForm(${c.id})">${(c.name||"").replaceAll("<","&lt;")}</button></td>
+                <td>${pill(c.status)}</td>
+                <td class="small">${plan}</td>
+                <td class="small">${prog}</td>
+                <td>${actions}</td>
+              </tr>
+            `;
+          }).join("");
+        } catch (e) {
+          rows.innerHTML = `<tr><td colspan="6" class="small">Ошибка: ${String(e.message || e)}</td></tr>`;
+        }
+      }
+
+      $("save").addEventListener("click", () => create("draft"));
+      $("queue").addEventListener("click", () => create("queued"));
+      $("refresh").addEventListener("click", refresh);
+      $("scheduled_date").addEventListener("click", openDatePicker);
+      $("scheduled_date").addEventListener("focus", openDatePicker);
+      $("scheduled_date").addEventListener("keydown", (e) => e.preventDefault());
+      $("reset_form").addEventListener("click", clearFormAndSelection);
+      ["text", "reply_markup_json", "photo_file_id", "photo_url"].forEach((id) => {
+        $(id).addEventListener("input", updatePreview);
+      });
+      $("disable_preview").addEventListener("change", updatePreview);
+
+      // expose
+      window.setAction = setAction;
+      window.loadCampaignToForm = loadCampaignToForm;
+
+      updatePreview();
+      setEditModeText();
+      refresh();
+    </script>
+  </body>
+</html>

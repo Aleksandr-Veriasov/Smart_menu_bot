@@ -53,7 +53,7 @@ async def video_link(update: Update, context: PTBContext) -> None:
         await append_message_id_to_cache(update, context, reply.message_id)
         return
 
-    if await handle_existing_recipe(message, context, url):
+    if await handle_existing_recipe(update, context, url):
         return
 
     chat_id = message.chat_id

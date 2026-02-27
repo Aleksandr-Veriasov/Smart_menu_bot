@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import ConversationHandler
 
 from bot.app.core.types import PTBContext
@@ -106,11 +107,17 @@ async def user_start(update: Update, context: PTBContext) -> int:
         await cq.answer()  # убираем «часики»
         # если есть исходное сообщение — отвечаем рядом
         if cq.message:
-            await cq.edit_message_text(
-                text,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
+            try:
+                await cq.edit_message_text(
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+            except BadRequest as exc:
+                # Telegram returns this when user presses the same button again
+                # and the message content/markup is identical.
+                if "Message is not modified" not in str(exc):
+                    raise
         return ConversationHandler.END
     # Если это не callback_query, то обычное сообщение
     msg = update.effective_message
@@ -132,12 +139,16 @@ async def user_help(update: Update, context: PTBContext) -> None:
         await cq.answer()  # убираем «часики»
         # если есть исходное сообщение — отвечаем рядом
         if cq.message:
-            await cq.edit_message_text(
-                HELP_TEXT,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-                reply_markup=help_keyboard(),
-            )
+            try:
+                await cq.edit_message_text(
+                    HELP_TEXT,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                    reply_markup=help_keyboard(),
+                )
+            except BadRequest as exc:
+                if "Message is not modified" not in str(exc):
+                    raise
         return
 
     # 2) Обычная команда /help как сообщение

@@ -44,7 +44,7 @@ class Database:
                 "render_as_string",
                 lambda **_: "<engine>",
             )(hide_password=True)
-            logger.info("🚀 Async DB engine injected: %s", safe)
+            logger.info("🚀 Async DB engine подключён извне: %s", safe)
         else:
             url = db_url or settings.db.sqlalchemy_url(use_async=True)
             # защита от sync-драйвера в асинхронном классе
@@ -80,7 +80,7 @@ class Database:
             self.engine = create_async_engine(url, **engine_kwargs)
 
             safe = url.render_as_string(hide_password=True) if isinstance(url, URL) else "<masked url>"
-            logger.info("🚀 Async DB engine created for %s", safe)
+            logger.info("🚀 Async DB engine создан для %s", safe)
 
         self._sessionmaker: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self.engine,
@@ -91,11 +91,11 @@ class Database:
     async def dispose(self) -> None:
         """Закрыть все соединения пула (использовать при shutdown)."""
         await self.engine.dispose()
-        logger.info("🧹 Async DB engine disposed")
+        logger.info("🧹 Async DB engine освобождён")
 
     def get_session(self) -> AsyncSession:
         """Создать новую асинхронную сессию (не забывай закрыть!)."""
-        logger.debug("💾 Creating Async DB session")
+        logger.debug("💾 Создаём Async DB сессию")
         return self._sessionmaker()
 
     @asynccontextmanager
@@ -112,12 +112,12 @@ class Database:
             yield session
             await session.commit()
         except Exception:
-            logger.exception("❌ Error in Async DB session")
+            logger.exception("❌ Ошибка в Async DB сессии")
             await session.rollback()
             raise
         finally:
             await session.close()
-            logger.debug("🔒 Async DB session closed")
+            logger.debug("🔒 Async DB сессия закрыта")
 
     async def healthcheck(self) -> bool:
         """Лёгкая проверка доступности БД (async)."""
@@ -126,7 +126,7 @@ class Database:
                 await conn.execute(text("SELECT 1"))
             return True
         except Exception:
-            logger.exception("❌ DB healthcheck failed")
+            logger.exception("❌ Проверка доступности БД завершилась ошибкой")
             return False
 
     async def create_all(self, base_metadata: MetaData) -> None:
@@ -136,4 +136,4 @@ class Database:
         """
         async with self.engine.begin() as conn:
             await conn.run_sync(base_metadata.create_all)
-        logger.info("📦 Metadata.create_all() done")
+        logger.info("📦 Metadata.create_all() завершён")

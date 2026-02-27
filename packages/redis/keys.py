@@ -59,3 +59,13 @@ class RedisKeys:
     @classmethod
     def user_progress_message(cls, user_id: int | str) -> str:
         return f"{cls.PREFIX}:user:{user_id}:progress_message"
+
+    @classmethod
+    def user_webapp_recipe_draft(cls, user_id: int | str, recipe_id: int | str) -> str:
+        """Черновик для Telegram WebApp (название/категория) на время навигации между страницами."""
+        return f"{cls.PREFIX}:user:{user_id}:webapp:recipe:{recipe_id}:draft"
+
+    @classmethod
+    def broadcast_worker_lock(cls, scope: str = "main") -> str:
+        """Глобальный lock воркера рассылок."""
+        return f"{cls.PREFIX}:lock:broadcast_worker:{scope}"

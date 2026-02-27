@@ -25,7 +25,7 @@ class CategoryService:
         """
         # 1) пробуем Redis
         cached = await CategoryCacheRepository.get_user_categories(self.redis, user_id)
-        logger.debug(f"👉 User {user_id} categories from cache: {cached}")
+        logger.debug(f"👉 Пользователь {user_id}: категории из кэша: {cached}")
         if cached:
             return cached
 
@@ -49,7 +49,7 @@ class CategoryService:
         """
         # 1) Redis
         cached = await CategoryCacheRepository.get_id_name_by_slug(self.redis, slug)
-        logger.debug(f"👉 Category {slug} id,name from cache: {cached}")
+        logger.debug(f"👉 Категория {slug}: id,name из кэша: {cached}")
         if cached:
             return cached  # (id, name)
 
@@ -59,9 +59,9 @@ class CategoryService:
         try:
             async with self.db.session() as self.session:
                 result = await CategoryRepository.get_id_and_name_by_slug(self.session, slug)
-                logger.debug(f"👉 Category {slug} id,name from DB: {result}")
+                logger.debug(f"👉 Категория {slug}: id,name из БД: {result}")
                 if result is None or (isinstance(result, tuple) and any(v is None for v in result)):
-                    raise ValueError(f'Category with slug="{slug}" not found')
+                    raise ValueError(f'Категория со slug="{slug}" не найдена')
 
                 category_id, category_name = result
                 # 3) Persist в Redis (без TTL)
@@ -72,14 +72,21 @@ class CategoryService:
                     await release_lock(self.redis, lock_key, token)
         return category_id, category_name
 
-    async def get_all_category(self) -> list[dict[str, str]]:
+    async def get_all_category(self) -> list[dict[str, int | str]]:
         """
         Получить все категории с кешированием в Redis.
-        Возвращает список словарей с ключами 'name' и 'slug'.
+        Возвращает список словарей категорий.
+
+        Минимальные ключи:
+        - name: str
+        - slug: str
+
+        Также в кеше/ответе может присутствовать:
+        - id: int
         """
         # 1) Redis
         cached = await CategoryCacheRepository.get_all_name_and_slug(self.redis)
-        logger.debug(f"👉 All categories from cache: {cached}")
+        logger.debug(f"👉 Все категории из кэша: {cached}")
         if cached:
             return cached
 
@@ -88,9 +95,10 @@ class CategoryService:
         token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
         try:
             async with self.db.session() as self.session:
-                rows = await CategoryRepository.get_all_name_and_slug(self.session)
+                # Храним в кеше также id, чтобы его могли использовать другие компоненты (например WebApp).
+                rows = await CategoryRepository.get_all(self.session)
                 await CategoryCacheRepository.set_all_name_and_slug(self.redis, rows)
-                logger.debug(f"👉 All categories from DB: {rows}")
+                logger.debug(f"👉 Все категории из БД: {rows}")
         finally:
             if token:
                 with suppress(Exception):

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Редактировать рецепт</title>
+    <link rel="stylesheet" href="/webapp/ui.css?v=2026-02-14-1" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <div class="card">
+        <h1 class="heading">📖 Редактирование рецепта</h1>
+        <p class="subtitle">Заполните основные поля и перейдите к деталям</p>
+
+        <div class="form-group">
+          <label for="title">Название</label>
+          <input
+            id="title"
+            class="field"
+            type="text"
+            placeholder="Например: Борщ по-домашнему"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="category">Категория</label>
+          <select id="category" class="field"></select>
+        </div>
+
+        <hr class="divider" />
+
+        <p class="section-label">Детали</p>
+
+        <div class="btn-stack">
+          <button class="btn btn-secondary" id="btn_desc" type="button">📝 Редактировать рецепт</button>
+          <button class="btn btn-secondary" id="btn_ing" type="button">🥕 Редактировать ингредиенты</button>
+        </div>
+
+        <hr class="divider" />
+
+        <button id="save" type="button" class="btn btn-primary">💾 Сохранить</button>
+
+        <div class="notice notice-error" id="err"></div>
+        <div class="notice notice-ok" id="ok"></div>
+
+        <p class="hint">Книга рецептов</p>
+      </div>
+    </main>
+
+    <script src="/webapp/edit-recipe.js"></script>
+  </body>
+</html>
