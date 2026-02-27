@@ -17,6 +17,7 @@ WORKDIR /app
 
 # Копируем зависимости
 COPY bot/requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip setuptools
 RUN pip install uv && uv pip install --system -r /tmp/requirements.txt
 
 # Куда класть кэш моделей
