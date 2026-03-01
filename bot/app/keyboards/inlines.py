@@ -113,7 +113,7 @@ def build_recipes_list_keyboard(
     return kb.adjust(1)
 
 
-def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
+def recipe_edit_keyboard(recipe_id: int, page: int, category_slug: str, mode: str) -> InlineKeyboardMarkup:
     """Создание клавиатуры для редактирования рецепта."""
     base = settings.fast_api.base_url()
     webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe_id)}"
@@ -121,17 +121,17 @@ def recipe_edit_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
         InlineKB()
         .button(text="✏️ Редактировать рецепт", web_app=WebAppInfo(url=webapp_url))
         .button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
-        .button(text="⏪ Назад", callback_data=f"next_{page}")
+        .button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
     )
 
 
-def choice_recipe_keyboard(recipe_id: int, page: int) -> InlineKeyboardMarkup:
+def choice_recipe_keyboard(recipe_id: int, page: int, category_slug: str, mode: str) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
     return (
         InlineKB()
-        .button(text="⏪ Назад", callback_data=f"next_{page}")
+        .button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
         .button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)

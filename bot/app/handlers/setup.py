@@ -67,7 +67,12 @@ def setup_handlers(app: Application) -> None:
         CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=r"^urladdcat:[A-Za-z0-9]+:\d+:[a-z0-9_-]+$")
     )
     app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
-    app.add_handler(CallbackQueryHandler(handler_pagination, pattern=r"^(next|prev)_\d+$"))
+    app.add_handler(
+        CallbackQueryHandler(
+            handler_pagination,
+            pattern=r"^(next|prev)_\d+(?::[a-z0-9][a-z0-9_-]*:(?:show|edit|search))?$",
+        )
+    )
     app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=r"^share_recipe_\d+$"))
     app.add_handler(CallbackQueryHandler(recipe_choice, pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$"))
     app.add_handler(

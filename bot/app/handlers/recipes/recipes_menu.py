@@ -315,9 +315,9 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     page = int(state.get("recipes_page", 0))
     if mode_str == RecipeMode.EDIT.value:
         # Редактирование рецепта
-        keyboard = recipe_edit_keyboard(recipe_id, page)
+        keyboard = recipe_edit_keyboard(recipe_id, page, category_slug, mode_str)
     else:
-        keyboard = choice_recipe_keyboard(recipe_id, page)
+        keyboard = choice_recipe_keyboard(recipe_id, page, category_slug, mode_str)
 
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, recipe_id)

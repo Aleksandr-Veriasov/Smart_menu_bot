@@ -246,6 +246,10 @@ async def update_telegram_recipe_message_best_effort(
         page = int(recipes_state.get("recipes_page", 0))
     except Exception:
         page = 0
+    category_slug = str(recipes_state.get("category_slug") or "recipes")
+    mode = str(recipes_state.get("mode") or "show")
+    if mode not in {"show", "edit", "search"}:
+        mode = "show"
 
     base = settings.fast_api.base_url()
     webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe.id)}"
@@ -253,7 +257,7 @@ async def update_telegram_recipe_message_best_effort(
         "inline_keyboard": [
             [{"text": "✏️ Редактировать рецепт", "web_app": {"url": webapp_url}}],
             [{"text": "🗑 Удалить рецепт", "callback_data": f"delete_recipe_{int(recipe.id)}"}],
-            [{"text": "⏪ Назад", "callback_data": f"next_{page}"}],
+            [{"text": "⏪ Назад", "callback_data": f"next_{page}:{category_slug}:{mode}"}],
             [{"text": "🏠 На главную", "callback_data": "start"}],
         ]
     }

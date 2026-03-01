@@ -269,7 +269,7 @@ class BroadcastSettings(BaseAppSettings):
     # Безопасный дефолт ниже лимитов Telegram (30 msg/sec глобально).
     max_messages_per_second: float = Field(default=10.0, ge=1.0, le=30.0, alias="BROADCAST_MAX_MPS")
     max_attempts: int = Field(default=8, ge=1, le=50, alias="BROADCAST_MAX_ATTEMPTS")
-    lock_ttl_sec: int = Field(default=20, ge=5, le=300, alias="BROADCAST_LOCK_TTL_SEC")
+    lock_ttl_sec: int = Field(default=650, ge=5, le=900, alias="BROADCAST_LOCK_TTL_SEC")
 
 
 class DeepSeekSettings(BaseAppSettings):
