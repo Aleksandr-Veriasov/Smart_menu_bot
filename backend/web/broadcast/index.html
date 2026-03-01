@@ -27,6 +27,8 @@
       button.danger { border-color: rgba(207,47,47,.45); background: rgba(207,47,47,.10); }
       button:disabled { opacity:.55; cursor:not-allowed; }
       .hint { margin-top:8px; color: var(--muted); font-size:12px; }
+      .utc-now { margin-top: 8px; font-size: 12px; color: var(--muted); }
+      .utc-now strong { color: var(--text); }
       table { width:100%; border-collapse: collapse; }
       th, td { padding: 8px 8px; border-bottom: 1px solid rgba(108,130,170,.22); vertical-align: top; }
       th { text-align:left; color: var(--muted); font-weight: 600; }
@@ -71,6 +73,7 @@
             <input id="scheduled_date" type="date" inputmode="none" />
             <input id="scheduled_time" type="time" step="60" value="12:00" />
           </div>
+          <div class="utc-now">Текущее время (UTC): <strong id="utc_now">—</strong></div>
           <div class="hint">Оставь пустым, чтобы начать сразу после постановки в очередь.</div>
 
           <label>Текст (HTML)</label>
@@ -143,6 +146,23 @@
         if (!dateValue) return null;
         const hhmm = (timeValue && timeValue.trim()) ? timeValue.trim() : "12:00";
         return `${dateValue}T${hhmm}:00Z`;
+      }
+
+      function formatUtcNow() {
+        const now = new Date();
+        const y = now.getUTCFullYear();
+        const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(now.getUTCDate()).padStart(2, "0");
+        const hh = String(now.getUTCHours()).padStart(2, "0");
+        const mm = String(now.getUTCMinutes()).padStart(2, "0");
+        const ss = String(now.getUTCSeconds()).padStart(2, "0");
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss} UTC`;
+      }
+
+      function updateUtcNow() {
+        const el = $("utc_now");
+        if (!el) return;
+        el.textContent = formatUtcNow();
       }
 
       function openDatePicker() {
@@ -389,6 +409,8 @@
 
       updatePreview();
       setEditModeText();
+      updateUtcNow();
+      setInterval(updateUtcNow, 1000);
       refresh();
     </script>
   </body>
