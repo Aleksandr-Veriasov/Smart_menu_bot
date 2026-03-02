@@ -146,6 +146,108 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
         )
 
 
+async def recipes_book_menu(update: Update, context: PTBContext) -> None:
+    """
+    Обработчик кнопки "Книга рецептов".
+    Entry-point: r"^recipes_book$"
+    """
+    cq = update.callback_query
+    if not cq:
+        return
+    await cq.answer()
+
+    db, redis = get_db_and_redis(context)
+    service = CategoryService(db, redis)
+    categories = await service.get_all_category()
+
+    if not categories:
+        if cq.message:
+            await _safe_edit_message(
+                cq,
+                "Книга рецептов пока пуста.",
+                home_keyboard(),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        return
+
+    markup = category_keyboard(categories, callback_builder=lambda slug: f"bookcat_{slug}")
+    if cq.message:
+        await _safe_edit_message(
+            cq,
+            "📚 Выберите раздел книги рецептов:",
+            markup,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+
+async def recipes_book_from_category(update: Update, context: PTBContext) -> None:
+    """
+    Обработчик выбора категории книги рецептов.
+    Entry-point: r"^bookcat_[a-z0-9][a-z0-9_-]*$"
+    """
+    cq = update.callback_query
+    if not cq or not cq.data:
+        return
+    await cq.answer()
+
+    category_slug = cq.data.removeprefix("bookcat_").strip().lower()
+    if not category_slug:
+        return
+
+    user_id = cq.from_user.id
+    db, redis = get_db_and_redis(context)
+    service = CategoryService(db, redis)
+    category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+    async with db.session() as session:
+        pairs = await RecipeRepository.get_public_recipes_ids_and_titles_by_category(
+            session,
+            category_id,
+            exclude_user_id=user_id,
+        )
+
+    if not pairs:
+        if cq.message:
+            await _safe_edit_message(
+                cq,
+                f"В категории «{category_name}» пока нет рецептов с видео.",
+                home_keyboard(),
+            )
+        return
+
+    recipes_per_page = settings.telegram.recipes_per_page
+    recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
+    state = {
+        "search_items": pairs,
+        "recipes_page": 0,
+        "recipes_total_pages": recipes_total_pages,
+        "category_name": category_name,
+        "category_slug": f"book_{category_slug}",
+        "category_id": 0,
+        "mode": RecipeMode.SHOW.value,
+        "list_title": f"📚 Книга рецептов • {category_name}",
+    }
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
+
+    markup = build_recipes_list_keyboard(
+        pairs,
+        page=0,
+        per_page=recipes_per_page,
+        category_slug=f"book_{category_slug}",
+        mode=RecipeMode.SHOW,
+        categories_callback="recipes_book",
+    )
+    if cq.message:
+        await _safe_edit_message(
+            cq,
+            f"📚 Рецепты категории «{category_name}»:",
+            markup,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+
 async def recipes_from_category(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора категории рецептов.
@@ -317,7 +419,13 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         # Редактирование рецепта
         keyboard = recipe_edit_keyboard(recipe_id, page, category_slug, mode_str)
     else:
-        keyboard = choice_recipe_keyboard(recipe_id, page, category_slug, mode_str)
+        keyboard = choice_recipe_keyboard(
+            recipe_id,
+            page,
+            category_slug,
+            mode_str,
+            add_to_self=category_slug.startswith("book_"),
+        )
 
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, recipe_id)

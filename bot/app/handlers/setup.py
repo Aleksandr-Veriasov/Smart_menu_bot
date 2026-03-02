@@ -22,6 +22,8 @@ from bot.app.handlers.recipes.existing_by_url import (
 from bot.app.handlers.recipes.pagination import handler_pagination
 from bot.app.handlers.recipes.recipes_menu import (
     recipe_choice,
+    recipes_book_from_category,
+    recipes_book_menu,
     recipes_from_category,
     recipes_menu,
 )
@@ -67,6 +69,8 @@ def setup_handlers(app: Application) -> None:
         CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=r"^urladdcat:[A-Za-z0-9]+:\d+:[a-z0-9_-]+$")
     )
     app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
+    app.add_handler(CallbackQueryHandler(recipes_book_menu, pattern=r"^recipes_book$"))
+    app.add_handler(CallbackQueryHandler(recipes_book_from_category, pattern=r"^bookcat_[a-z0-9][a-z0-9_-]*$"))
     app.add_handler(
         CallbackQueryHandler(
             handler_pagination,

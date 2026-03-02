@@ -82,6 +82,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     state["recipes_total_pages"] = total_pages
     await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
     category_slug = state.get("category_slug", "recipes")
+    categories_callback = "recipes_book" if str(category_slug).startswith("book_") else None
     logger.debug("🗑 %s - category_slug", state["recipes_page"])
     markup = build_recipes_list_keyboard(
         items,
@@ -89,6 +90,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
         per_page=per_page,
         category_slug=category_slug,
         mode=mode,
+        categories_callback=categories_callback,
     )
     list_title = state.get("list_title")
     if list_title:

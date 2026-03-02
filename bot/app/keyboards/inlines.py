@@ -16,9 +16,11 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     if new_user:
         # kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
         # TODO добавить кнопку случайного рецепта для новых пользователей
+        kb.button(text="📚 Книга рецептов", callback_data="recipes_book")
         kb.button(text="❓ Помощь", callback_data="help")
     else:
-        kb.button(text="📖 Рецепты", callback_data="recipes_show")
+        kb.button(text="📖 Мои рецепты", callback_data="recipes_show")
+        # kb.button(text="📚 Книга рецептов", callback_data="recipes_book")
         kb.button(text="🎲 Случайные рецепты", callback_data="recipes_random")
         # kb.button(text="⏬ Загрузить рецепт", callback_data="upload_recipe")
         kb.button(text="🔍 Поиск рецептов", callback_data="search_recipes")
@@ -87,6 +89,7 @@ def build_recipes_list_keyboard(
     per_page: int = settings.telegram.recipes_per_page,
     category_slug: str,
     mode: RecipeMode = RecipeMode.SHOW,
+    categories_callback: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Создание клавиатуры для списка рецептов с пагинацией."""
     total = len(items)
@@ -107,7 +110,8 @@ def build_recipes_list_keyboard(
         kb.button(text="⏪ Назад", callback_data=f"prev_{page - 1}")
 
     if mode is not RecipeMode.SEARCH:  # TODO для поиска сделать возможность повторного поиска
-        kb.button(text="📚 К категориям", callback_data=f"recipes_{suffix}")
+        back_to_categories = categories_callback or f"recipes_{suffix}"
+        kb.button(text="📚 К категориям", callback_data=back_to_categories)
     kb.button(text="🏠 В меню", callback_data="start")
 
     return kb.adjust(1)
@@ -127,15 +131,22 @@ def recipe_edit_keyboard(recipe_id: int, page: int, category_slug: str, mode: st
     )
 
 
-def choice_recipe_keyboard(recipe_id: int, page: int, category_slug: str, mode: str) -> InlineKeyboardMarkup:
+def choice_recipe_keyboard(
+    recipe_id: int,
+    page: int,
+    category_slug: str,
+    mode: str,
+    *,
+    add_to_self: bool = False,
+) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
-    return (
-        InlineKB()
-        .button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
-        .button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
-        .button(text="🏠 На главную", callback_data="start")
-        .adjust(1)
-    )
+    kb = InlineKB().button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
+    if add_to_self:
+        kb.button(text="➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")
+    else:
+        kb.button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
+    kb.button(text="🏠 На главную", callback_data="start")
+    return kb.adjust(1)
 
 
 def keyboard_save() -> InlineKeyboardMarkup:

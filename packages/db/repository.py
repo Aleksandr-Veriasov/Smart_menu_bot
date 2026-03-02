@@ -220,6 +220,48 @@ class RecipeRepository(BaseRepository[Recipe]):
         return [{"id": int(row.id), "title": str(row.title)} for row in rows]
 
     @classmethod
+    async def get_public_recipes_ids_and_titles_by_category(
+        cls,
+        session: AsyncSession,
+        category_id: int,
+        *,
+        exclude_user_id: int | None = None,
+    ) -> list[dict[str, int | str]]:
+        """
+        Возвращает все рецепты по категории из всей базы:
+        - только рецепты, у которых есть видео;
+        - исключаем рецепты, уже связанные с `exclude_user_id` (если передан);
+        - если к одному видео привязано несколько рецептов, берём самый новый (по max(recipe.id)).
+        """
+        video_key = func.coalesce(func.nullif(Video.original_url, ""), func.nullif(Video.video_url, ""))
+        filters = [
+            RecipeUser.category_id == int(category_id),
+            video_key.is_not(None),
+        ]
+        if exclude_user_id is not None:
+            filters.append(
+                Recipe.id.notin_(select(RecipeUser.recipe_id).where(RecipeUser.user_id == int(exclude_user_id)))
+            )
+
+        latest_by_video_subq = (
+            select(func.max(Recipe.id).label("recipe_id"))
+            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
+            .join(Video, Video.recipe_id == Recipe.id)
+            .where(*filters)
+            .group_by(video_key)
+            .subquery()
+        )
+
+        statement = (
+            select(Recipe.id, Recipe.title)
+            .join(latest_by_video_subq, latest_by_video_subq.c.recipe_id == Recipe.id)
+            .order_by(Recipe.id.desc())
+        )
+        result = await session.execute(statement)
+        rows = result.all()
+        return [{"id": int(row.id), "title": str(row.title)} for row in rows]
+
+    @classmethod
     async def search_ids_and_titles_by_title(
         cls, session: AsyncSession, user_id: int, query: str
     ) -> list[dict[str, int | str]]:
