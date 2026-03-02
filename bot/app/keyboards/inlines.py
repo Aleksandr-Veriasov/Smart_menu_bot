@@ -14,27 +14,32 @@ def start_keyboard(new_user: bool) -> InlineKeyboardMarkup:
     """Создание кнопок для стартового сообщения и домой."""
     kb = InlineKB()
     if new_user:
-        # kb.button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
-        # TODO добавить кнопку случайного рецепта для новых пользователей
         kb.button(text="📚 Книга рецептов", callback_data="recipes_book")
-        kb.button(text="❓ Помощь", callback_data="help")
     else:
         kb.button(text="📖 Мои рецепты", callback_data="recipes_show")
-        # kb.button(text="📚 Книга рецептов", callback_data="recipes_book")
+        kb.button(text="📚 Книга рецептов", callback_data="recipes_book")
         kb.button(text="🎲 Случайные рецепты", callback_data="recipes_random")
-        # kb.button(text="⏬ Загрузить рецепт", callback_data="upload_recipe")
         kb.button(text="🔍 Поиск рецептов", callback_data="search_recipes")
-        kb.button(text="✏️ Редактировать рецепт", callback_data="recipes_edit")
+    kb.button(text="❓ Помощь", callback_data="help")
     return kb.adjust(1)
 
 
-def help_keyboard() -> InlineKeyboardMarkup:
-    """Создание кнопок для помощи."""
-    return (
-        InlineKB().button(text="🏠 На главную", callback_data="start")
-        # .button(text="🍳 Загрузить рецепт", callback_data="upload_recipe")
-        .adjust(1)
-    )
+def help_keyboard(topic: str | None = None) -> InlineKeyboardMarkup:
+    """Создание кнопок для раздела помощи."""
+    kb = InlineKB()
+    if topic:
+        kb.button(text="⬅️ К разделам", callback_data="help")
+        kb.button(text="🏠 На главную", callback_data="start")
+        return kb.adjust(1)
+    kb.button(text="📥 Загрузка рецепта", callback_data="help:upload")
+    kb.button(text="📖 Мои рецепты", callback_data="help:my_recipes")
+    kb.button(text="📚 Книга рецептов", callback_data="help:book")
+    kb.button(text="🔍 Поиск рецептов", callback_data="help:search")
+    kb.button(text="🎲 Случайный рецепт", callback_data="help:random")
+    kb.button(text="✏️ Редактирование", callback_data="help:manage")
+    kb.button(text="📤 Поделиться рецептом", callback_data="help:share")
+    kb.button(text="🏠 На главную", callback_data="start")
+    return kb.adjust(1)
 
 
 def home_keyboard() -> InlineKeyboardMarkup:
@@ -117,20 +122,6 @@ def build_recipes_list_keyboard(
     return kb.adjust(1)
 
 
-def recipe_edit_keyboard(recipe_id: int, page: int, category_slug: str, mode: str) -> InlineKeyboardMarkup:
-    """Создание клавиатуры для редактирования рецепта."""
-    base = settings.fast_api.base_url()
-    webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe_id)}"
-    return (
-        InlineKB()
-        .button(text="✏️ Редактировать рецепт", web_app=WebAppInfo(url=webapp_url))
-        .button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
-        .button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
-        .button(text="🏠 На главную", callback_data="start")
-        .adjust(1)
-    )
-
-
 def choice_recipe_keyboard(
     recipe_id: int,
     page: int,
@@ -138,13 +129,20 @@ def choice_recipe_keyboard(
     mode: str,
     *,
     add_to_self: bool = False,
+    can_manage: bool = False,
 ) -> InlineKeyboardMarkup:
     """Создание клавиатуры для выбора рецепта."""
-    kb = InlineKB().button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
+    kb = InlineKB()
     if add_to_self:
         kb.button(text="➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")
     else:
+        if can_manage:
+            base = settings.fast_api.base_url()
+            webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe_id)}"
+            kb.button(text="✏️ Редактировать рецепт", web_app=WebAppInfo(url=webapp_url))
+            kb.button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
         kb.button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
+    kb.button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
     kb.button(text="🏠 На главную", callback_data="start")
     return kb.adjust(1)
 

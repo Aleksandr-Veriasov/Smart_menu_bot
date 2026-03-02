@@ -15,7 +15,6 @@ from bot.app.keyboards.inlines import (
     choice_recipe_keyboard,
     home_keyboard,
     random_recipe_keyboard,
-    recipe_edit_keyboard,
 )
 from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import (
@@ -81,23 +80,10 @@ async def _delete_previous_random_video(context: PTBContext, redis: Redis, user_
         await context.bot.delete_message(chat_id=chat_id, message_id=previous_video_id)
 
 
-async def upload_recipe(update: Update, context: PTBContext) -> None:
-    """Обработчик команды /upload_recipe."""
-    cq = update.callback_query
-    if cq:
-        await cq.answer()
-        if cq.message:
-            await cq.edit_message_text(
-                "Пожалуйста, отправьте ссылку на видео с рецептом.",
-                reply_markup=home_keyboard(),
-                parse_mode=ParseMode.HTML,
-            )
-
-
 async def recipes_menu(update: Update, context: PTBContext) -> None:
     """
     Обработчик нажатия кнопки 'Рецепты'.
-    Entry-point: r"^recipes_(?:show|random|edit)$"
+    Entry-point: r"^recipes_(?:show|random)$"
     """
     cq = update.callback_query
     if not cq:
@@ -129,8 +115,6 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
         )
     if mode is RecipeMode.RANDOM:
         text = "🔖 Выберите раздел со случайным блюдом:"
-    elif mode is RecipeMode.EDIT:
-        text = "🔖 Выберите раздел с блюдом для редактирования:"
     else:
         text = "🔖 Выберите раздел:"
 
@@ -251,7 +235,7 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
 async def recipes_from_category(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора категории рецептов.
-    Entry-point: r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random|edit))?$"
+    Entry-point: r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random))?$"
     """
     cq = update.callback_query
     if not cq or not cq.data:
@@ -391,7 +375,7 @@ async def _handle_show_or_edit_from_category(
 async def recipe_choice(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора рецепта.
-    Entry-point: r'^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\\d+)$'
+    Entry-point: r'^([a-z0-9][a-z0-9_-]*)_(show|random)_(\\d+)$'
     """
     cq = update.callback_query
     if not cq:
@@ -415,17 +399,14 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     db, redis = get_db_and_redis(context)
     state = await RecipeActionCacheRepository.get(redis, cq.from_user.id, "recipes_state") or {}
     page = int(state.get("recipes_page", 0))
-    if mode_str == RecipeMode.EDIT.value:
-        # Редактирование рецепта
-        keyboard = recipe_edit_keyboard(recipe_id, page, category_slug, mode_str)
-    else:
-        keyboard = choice_recipe_keyboard(
-            recipe_id,
-            page,
-            category_slug,
-            mode_str,
-            add_to_self=category_slug.startswith("book_"),
-        )
+    keyboard = choice_recipe_keyboard(
+        recipe_id,
+        page,
+        category_slug,
+        mode_str,
+        add_to_self=category_slug.startswith("book_"),
+        can_manage=mode_str == RecipeMode.SHOW.value and not category_slug.startswith("book_"),
+    )
 
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, recipe_id)

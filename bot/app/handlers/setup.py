@@ -57,9 +57,8 @@ def setup_handlers(app: Application) -> None:
     # pattern='^search_recipes$'
     app.add_handler(search_recipes_conversation())
     app.add_handler(MessageHandler(filters.Regex(video_link_pattern) & filters.TEXT, video_link))
-    app.add_handler(CallbackQueryHandler(user_help, pattern="^help$"))
+    app.add_handler(CallbackQueryHandler(user_help, pattern=r"^help(?::[a-z_]+)?$"))
     app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))
-    # app.add_handler(CallbackQueryHandler(upload_recipe, pattern="^upload_recipe$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=r"^add_recipe:\d+$"))
     app.add_handler(CallbackQueryHandler(add_existing_recipe_choose_category, pattern=r"^add_recipe:\d+:[a-z0-9_-]+$"))
     app.add_handler(CallbackQueryHandler(show_candidate_recipe, pattern=r"^urlpick:[A-Za-z0-9]+:\d+$"))
@@ -68,19 +67,17 @@ def setup_handlers(app: Application) -> None:
     app.add_handler(
         CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=r"^urladdcat:[A-Za-z0-9]+:\d+:[a-z0-9_-]+$")
     )
-    app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random|edit)$"))
+    app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random)$"))
     app.add_handler(CallbackQueryHandler(recipes_book_menu, pattern=r"^recipes_book$"))
     app.add_handler(CallbackQueryHandler(recipes_book_from_category, pattern=r"^bookcat_[a-z0-9][a-z0-9_-]*$"))
     app.add_handler(
         CallbackQueryHandler(
             handler_pagination,
-            pattern=r"^(next|prev)_\d+(?::[a-z0-9][a-z0-9_-]*:(?:show|edit|search))?$",
+            pattern=r"^(next|prev)_\d+(?::[a-z0-9][a-z0-9_-]*:(?:show|search))?$",
         )
     )
     app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=r"^share_recipe_\d+$"))
-    app.add_handler(CallbackQueryHandler(recipe_choice, pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random|edit)_(\d+)$"))
-    app.add_handler(
-        CallbackQueryHandler(recipes_from_category, pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random|edit))?$")
-    )
+    app.add_handler(CallbackQueryHandler(recipe_choice, pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random)_(\d+)$"))
+    app.add_handler(CallbackQueryHandler(recipes_from_category, pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random))?$"))
 
     logger.info("Все хендлеры зарегистрированы.")

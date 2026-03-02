@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # допустимые callback_data:
 # 'next_3' / 'prev_0'
-# 'next_3:breakfast:edit' / 'prev_1:search:search'
-_PAGE_RE = re.compile(r"^(next|prev)_(\d+)(?:\:([a-z0-9][a-z0-9_-]*)\:(show|edit|search))?$")
+# 'next_3:breakfast:show' / 'prev_1:search:search'
+_PAGE_RE = re.compile(r"^(next|prev)_(\d+)(?:\:([a-z0-9][a-z0-9_-]*)\:(show|search))?$")
 
 
 async def handler_pagination(update: Update, context: PTBContext) -> None:
