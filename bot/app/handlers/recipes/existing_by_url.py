@@ -1,90 +1,115 @@
+import logging
 import secrets
-from contextlib import suppress
-from html import escape
 
-from sqlalchemy import select
 from telegram import Message, Update
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
 from bot.app.core.types import PTBContext
-from bot.app.keyboards.builders import InlineKB
-from bot.app.keyboards.inlines import home_keyboard
+from bot.app.keyboards.inlines import (
+    home_keyboard,
+    url_candidate_category_keyboard,
+    url_candidate_list_keyboard,
+    url_candidate_recipe_keyboard,
+)
 from bot.app.services.category_service import CategoryService
-from bot.app.utils.context_helpers import get_db, get_db_and_redis, get_redis_cli
-from bot.app.utils.message_cache import append_message_id_to_cache
-from packages.db.models import Recipe
+from bot.app.utils.callback_utils import get_answered_callback_query
+from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.message_cache import (
+    send_message_and_cache,
+    send_video_and_cache,
+)
+from bot.app.utils.message_utils import (
+    build_existing_recipe_text,
+    delete_message_safely,
+    delete_messages,
+    safe_edit_message,
+)
 from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis.repository import (
     CategoryCacheRepository,
-    RecipeActionCacheRepository,
     RecipeCacheRepository,
+    UrlCandidateCacheRepository,
 )
 
-_ACTION_PREFIX = "url_candidates:"
+logger = logging.getLogger(__name__)
+
+STALE_LIST_TEXT = "Список по ссылке устарел. Пришлите ссылку ещё раз."
+UNAVAILABLE_RECIPE_TEXT = "Этот рецепт больше недоступен в списке."
 
 
-def _action_key(sid: str) -> str:
-    return f"{_ACTION_PREFIX}{sid}"
+def parse_sid_and_recipe_id(data: str) -> tuple[str, int] | None:
+    """Извлекает sid и recipe_id из callback вида prefix:<sid>:<recipe_id>."""
+    try:
+        _, sid, recipe_id_str = data.split(":", 2)
+        return sid, int(recipe_id_str)
+    except ValueError:
+        logger.warning("Не удалось распарсить sid и recipe_id из callback data: %s", data)
+        return None
 
 
-def _new_sid() -> str:
-    # short, callback-safe
-    return secrets.token_urlsafe(6).replace("-", "").replace("_", "")
+def parse_sid(data: str) -> str | None:
+    """Извлекает sid из callback вида prefix:<sid>."""
+    try:
+        _, sid = data.split(":", 1)
+        return sid
+    except ValueError:
+        logger.warning("Не удалось распарсить sid из callback data: %s", data)
+        return None
 
 
-async def _get_state(redis, *, user_id: int, sid: str) -> dict:
-    return await RecipeActionCacheRepository.get(redis, user_id, _action_key(sid)) or {}
+def parse_sid_recipe_id_and_slug(data: str) -> tuple[str, int, str] | None:
+    """Извлекает sid, recipe_id и slug из callback вида prefix:<sid>:<recipe_id>:<slug>."""
+    try:
+        _, sid, recipe_id_str, slug = data.split(":", 3)
+        return sid, int(recipe_id_str), slug
+    except ValueError:
+        logger.warning("Не удалось распарсить sid, recipe_id и slug из callback data: %s", data)
+        return None
 
 
-async def _set_state(redis, *, user_id: int, sid: str, patch: dict) -> dict:
-    state = await _get_state(redis, user_id=user_id, sid=sid)
-    state.update(patch or {})
-    await RecipeActionCacheRepository.set(redis, user_id, _action_key(sid), state)
-    return state
-
-
-async def _delete_messages(context: PTBContext, *, chat_id: int, message_ids: list[int]) -> None:
-    for mid in message_ids:
-        if not mid:
+def extract_allowed_recipe_ids(state: dict) -> list[int]:
+    """
+    Возвращает допустимые recipe_id из сохранённого state с сохранением порядка.
+    Игнорирует невалидные значения и дубликаты.
+    """
+    recipe_ids: list[int] = []
+    seen: set[int] = set()
+    for value in state.get("recipe_ids") or []:
+        if not isinstance(value, int | str) or not str(value).isdigit():
             continue
-        with suppress(BadRequest):
-            await context.bot.delete_message(chat_id=chat_id, message_id=int(mid))
+        recipe_id = int(value)
+        if recipe_id in seen:
+            continue
+        seen.add(recipe_id)
+        recipe_ids.append(recipe_id)
+    return recipe_ids
 
 
-async def _render_candidates_message(
+async def render_candidates_message(
     *,
     update: Update,
     context: PTBContext,
     sid: str,
     recipe_titles: list[tuple[int, str]],
 ) -> Message | None:
-    kb = InlineKB()
-    for recipe_id, title in recipe_titles:
-        t = (title or "").strip() or "Без названия"
-        if len(t) > 45:
-            t = t[:42] + "..."
-        kb.button(text=f"▪️ {t}", callback_data=f"urlpick:{sid}:{int(recipe_id)}")
-    kb.button(text="🏠 На главную", callback_data="start")
-
+    """Отправляет сообщение со списком найденных рецептов и кнопками выбора."""
     msg = update.effective_message
     if not msg:
         return None
-    sent = await msg.reply_text(
+    sent = await send_message_and_cache(
+        update,
+        context,
+        msg.chat_id,
         "По этой ссылке найдено несколько рецептов. Выберите нужный:",
-        reply_markup=kb.adjust(1),
+        reply_markup=url_candidate_list_keyboard(sid, recipe_titles),
     )
-    await append_message_id_to_cache(update, context, sent.message_id)
-    # caller persists list_message_id in state
+    # Если не удалось отправить сообщение, всё равно сохраняем список кандидатов в Redis, чтобы не потерять их.
     return sent
 
 
 async def maybe_handle_multiple_existing_recipes(
-    *,
-    update: Update,
-    context: PTBContext,
-    original_url: str,
-    candidates: list[int],
+    *, update: Update, context: PTBContext, original_url: str, candidates: list[int]
 ) -> bool:
     """
     Если кандидатов >= 2, сохраняет список в Redis и отправляет пользователю кнопки с названиями.
@@ -97,22 +122,19 @@ async def maybe_handle_multiple_existing_recipes(
     if len(candidates) < 2:
         return False
 
-    db = get_db(context)
+    db, redis = get_db_and_redis(context)
     async with db.session() as session:
-        rows = (
-            await session.execute(select(Recipe.id, Recipe.title).where(Recipe.id.in_([int(x) for x in candidates])))
-        ).all()
-        id_to_title = {int(r.id): str(r.title) for r in rows}
+        rows = await RecipeRepository.get_ids_and_titles_by_ids(session, [int(x) for x in candidates])
+        id_to_title = {int(row["id"]): str(row["title"]) for row in rows}
         recipe_titles = [(rid, id_to_title.get(int(rid), "")) for rid in candidates if int(rid) in id_to_title]
 
-    sid = _new_sid()
-    redis = get_redis_cli(context)
+    sid = secrets.token_urlsafe(6).replace("-", "").replace("_", "")
     payload = {"url": original_url, "recipe_ids": [int(x) for x in candidates], "v": 1}
-    await RecipeActionCacheRepository.set(redis, user_id, _action_key(sid), payload)
+    await UrlCandidateCacheRepository.set(redis, user_id=user_id, sid=sid, payload=payload)
 
-    sent = await _render_candidates_message(update=update, context=context, sid=sid, recipe_titles=recipe_titles)
+    sent = await render_candidates_message(update=update, context=context, sid=sid, recipe_titles=recipe_titles)
     if sent:
-        await _set_state(
+        await UrlCandidateCacheRepository.set_merge(
             redis,
             user_id=user_id,
             sid=sid,
@@ -130,85 +152,84 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
     """
     Entry-point: r"^urlpick:[A-Za-z0-9]+:\\d+$"
     """
-    cq = update.callback_query
-    if not cq or not cq.data or not cq.from_user:
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.from_user or not cq.data:
         return
-    await cq.answer()
 
-    try:
-        _, sid, recipe_id_str = cq.data.split(":", 2)
-        recipe_id = int(recipe_id_str)
-    except Exception:
+    parsed = parse_sid_and_recipe_id(cq.data)
+    if parsed is None:
         return
+    sid, recipe_id = parsed
 
     user_id = int(cq.from_user.id)
     db, redis = get_db_and_redis(context)
-    state = await _get_state(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
-        await cq.edit_message_text("Список по ссылке устарел. Пришлите ссылку ещё раз.", reply_markup=home_keyboard())
+        await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе кандидата", user_id, sid)
         return
 
-    allowed = {int(x) for x in (state.get("recipe_ids") or []) if isinstance(x, int | str) and str(x).isdigit()}
+    allowed = extract_allowed_recipe_ids(state)
     if recipe_id not in allowed:
-        await cq.edit_message_text("Этот рецепт больше недоступен в списке.", reply_markup=home_keyboard())
+        await safe_edit_message(cq, UNAVAILABLE_RECIPE_TEXT, reply_markup=home_keyboard())
+        logger.warning(
+            "recipe_id=%s не в списке allowed для user_id=%s, sid=%s при показе кандидата", recipe_id, user_id, sid
+        )
         return
 
     async with db.session() as session:
         recipe = await RecipeRepository.get_recipe_with_connections(session, int(recipe_id))
         if not recipe:
-            await cq.edit_message_text("Рецепт не найден.", reply_markup=home_keyboard())
-            return
-        already_linked = await RecipeUserRepository.is_linked(session, int(recipe_id), int(user_id))
+            recipe_not_found = True
+            already_linked = False
+        else:
+            recipe_not_found = False
+            already_linked = await RecipeUserRepository.is_linked(session, int(recipe_id), int(user_id))
+
+    if recipe_not_found:
+        await safe_edit_message(cq, "Рецепт не найден.", reply_markup=home_keyboard())
+        logger.warning("Рецепт recipe_id=%s не найден при показе кандидата", recipe_id)
+        return
 
     chat_id = int(getattr(cq.message, "chat_id", None) or state.get("chat_id") or 0)
     if not chat_id:
         return
 
-    # Delete current list message (or any current message we came from).
-    if cq.message:
-        with suppress(BadRequest):
-            await cq.message.delete()
-
-    ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in (recipe.ingredients or []))
-    title_html = escape(recipe.title or "Без названия")
-    description_html = escape(recipe.description or "—")
-    text = (
-        f"🍽 <b>Название рецепта:</b> {title_html}\n\n"
-        f"📝 <b>Рецепт:</b>\n{description_html}\n\n"
-        f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
-    )
-
-    kb = InlineKB()
-    if not already_linked:
-        kb.button(text="➕ Добавить к себе", callback_data=f"urladd:{sid}:{int(recipe_id)}")
-    kb.button(text="⬅️ Назад к списку", callback_data=f"urllist:{sid}")
-    kb.button(text="🏠 На главную", callback_data="start")
+    # Удаляем текущее сообщение с кнопкой "Назад" и видео (если было), чтобы не засорять чат.
+    await delete_message_safely(cq.message)
+    text = "Рецепт найден, но не удалось загрузить его детали."
+    if recipe is not None:
+        text = build_existing_recipe_text(recipe)
 
     header = "Этот рецепт у Вас уже сохранён ✅" if already_linked else "Рецепт из каталога ✅"
     body = f"{header}\n\n{text}"
 
-    # Send video first (if any), then send recipe message.
+    # Отправляем видео (если есть) и сохраняем его message_id для последующего удаления, чтобы не засорять чат.
     video_mid = None
-    try:
-        video_url = getattr(getattr(recipe, "video", None), "video_url", None)
-    except Exception:
-        video_url = None
+    video_url = getattr(getattr(recipe, "video", None), "video_url", None)
     if video_url:
-        with suppress(BadRequest):
-            video_msg = await context.bot.send_video(chat_id=chat_id, video=video_url)
+        try:
+            video_msg = await send_video_and_cache(update, context, chat_id, video_url, user_id=user_id)
             video_mid = int(video_msg.message_id)
-            await append_message_id_to_cache(update, context, video_mid)
+        except BadRequest as e:
+            logger.warning("Не удалось отправить видео для recipe_id=%s: %s", recipe_id, e)
 
-    recipe_msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=body,
+    recipe_msg = await send_message_and_cache(
+        update,
+        context,
+        chat_id,
+        body,
+        user_id=user_id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
-        reply_markup=kb.adjust(1),
+        reply_markup=url_candidate_recipe_keyboard(
+            sid=sid,
+            recipe_id=recipe_id,
+            already_linked=already_linked,
+        ),
     )
-    await append_message_id_to_cache(update, context, recipe_msg.message_id)
 
-    await _set_state(
+    await UrlCandidateCacheRepository.set_merge(
         redis,
         user_id=user_id,
         sid=sid,
@@ -225,60 +246,48 @@ async def show_candidates_list(update: Update, context: PTBContext) -> None:
     """
     Entry-point: r"^urllist:[A-Za-z0-9]+$"
     """
-    cq = update.callback_query
-    if not cq or not cq.data or not cq.from_user:
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.from_user or not cq.data:
         return
-    await cq.answer()
-    try:
-        _, sid = cq.data.split(":", 1)
-    except Exception:
+    sid = parse_sid(cq.data)
+    if sid is None:
         return
 
     user_id = int(cq.from_user.id)
     db, redis = get_db_and_redis(context)
-    state = await _get_state(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
-        await cq.edit_message_text("Список по ссылке устарел. Пришлите ссылку ещё раз.", reply_markup=home_keyboard())
+        await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе списка кандидатов", user_id, sid)
         return
 
     chat_id = int(getattr(cq.message, "chat_id", None) or state.get("chat_id") or 0)
     if not chat_id:
         return
 
-    # Delete current recipe message (the one with "Back"), and the video message (if present).
+    # Удаляем текущее сообщение с кнопкой "Назад" и видео (если было), чтобы не засорять чат.
     msg_ids_to_delete: list[int] = []
     if cq.message:
         msg_ids_to_delete.append(int(cq.message.message_id))
     if state.get("video_message_id"):
         msg_ids_to_delete.append(int(state["video_message_id"]))
-    await _delete_messages(context, chat_id=chat_id, message_ids=msg_ids_to_delete)
+    await delete_messages(context, chat_id=chat_id, message_ids=msg_ids_to_delete)
 
-    recipe_ids = [int(x) for x in (state.get("recipe_ids") or []) if isinstance(x, int | str) and str(x).isdigit()]
+    recipe_ids = extract_allowed_recipe_ids(state)
     async with db.session() as session:
-        stmt = (
-            RecipeRepository.model.__table__.select()
-            .with_only_columns(RecipeRepository.model.id, RecipeRepository.model.title)
-            .where(RecipeRepository.model.id.in_(recipe_ids))
-        )
-        rows = (await session.execute(stmt)).all()
-        id_to_title = {int(r.id): str(r.title) for r in rows}
+        rows = await RecipeRepository.get_ids_and_titles_by_ids(session, recipe_ids)
+        id_to_title = {int(row["id"]): str(row["title"]) for row in rows}
         recipe_titles = [(rid, id_to_title.get(int(rid), "")) for rid in recipe_ids if int(rid) in id_to_title]
 
-    kb = InlineKB()
-    for rid, title in recipe_titles:
-        t = (title or "").strip() or "Без названия"
-        if len(t) > 45:
-            t = t[:42] + "..."
-        kb.button(text=f"▪️ {t}", callback_data=f"urlpick:{sid}:{int(rid)}")
-    kb.button(text="🏠 На главную", callback_data="start")
-
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text="По этой ссылке найдено несколько рецептов. Выберите нужный:",
-        reply_markup=kb.adjust(1),
+    sent = await send_message_and_cache(
+        update,
+        context,
+        chat_id,
+        "По этой ссылке найдено несколько рецептов. Выберите нужный:",
+        user_id=user_id,
+        reply_markup=url_candidate_list_keyboard(sid, recipe_titles),
     )
-    await append_message_id_to_cache(update, context, sent.message_id)
-    await _set_state(
+    await UrlCandidateCacheRepository.set_merge(
         redis,
         user_id=user_id,
         sid=sid,
@@ -295,58 +304,52 @@ async def add_candidate_recipe(update: Update, context: PTBContext) -> None:
     """
     Entry-point: r"^urladd:[A-Za-z0-9]+:\\d+$"
     """
-    cq = update.callback_query
-    if not cq or not cq.data or not cq.from_user:
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.from_user or not cq.data:
         return
-    await cq.answer()
 
-    try:
-        _, sid, recipe_id_str = cq.data.split(":", 2)
-        recipe_id = int(recipe_id_str)
-    except Exception:
+    parsed = parse_sid_and_recipe_id(cq.data)
+    if parsed is None:
         return
+    sid, recipe_id = parsed
 
     user_id = int(cq.from_user.id)
     db, redis = get_db_and_redis(context)
-    state = await _get_state(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
-        await cq.edit_message_text("Список по ссылке устарел. Пришлите ссылку ещё раз.", reply_markup=home_keyboard())
+        await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при добавлении кандидата", user_id, sid)
         return
 
-    allowed = {int(x) for x in (state.get("recipe_ids") or []) if isinstance(x, int | str) and str(x).isdigit()}
+    allowed = extract_allowed_recipe_ids(state)
     if recipe_id not in allowed:
-        await cq.edit_message_text("Этот рецепт больше недоступен в списке.", reply_markup=home_keyboard())
+        await safe_edit_message(cq, UNAVAILABLE_RECIPE_TEXT, reply_markup=home_keyboard())
+        logger.warning(
+            "recipe_id=%s не в списке allowed для user_id=%s, sid=%s при добавлении кандидата", recipe_id, user_id, sid
+        )
         return
 
     service = CategoryService(db, redis)
     categories = await service.get_all_category()
-    kb = InlineKB()
-    for cat in categories:
-        name = str(cat.get("name") or "").strip()
-        slug = str(cat.get("slug") or "").strip().lower()
-        if not name or not slug:
-            continue
-        kb.button(text=name, callback_data=f"urladdcat:{sid}:{int(recipe_id)}:{slug}")
-    kb.button(text="⬅️ Назад к списку", callback_data=f"urllist:{sid}")
-    kb.button(text="🏠 На главную", callback_data="start")
-
-    await cq.edit_message_text("Выберите категорию для добавления рецепта:", reply_markup=kb.adjust(1))
+    await safe_edit_message(
+        cq,
+        "Выберите категорию для добавления рецепта:",
+        reply_markup=url_candidate_category_keyboard(sid, recipe_id, categories),
+    )
 
 
 async def add_candidate_recipe_choose_category(update: Update, context: PTBContext) -> None:
     """
     Entry-point: r"^urladdcat:[A-Za-z0-9]+:\\d+:[a-z0-9_-]+$"
     """
-    cq = update.callback_query
-    if not cq or not cq.data or not cq.from_user:
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.from_user or not cq.data:
         return
-    await cq.answer()
 
-    try:
-        _, sid, recipe_id_str, slug = cq.data.split(":", 3)
-        recipe_id = int(recipe_id_str)
-    except Exception:
+    parsed = parse_sid_recipe_id_and_slug(cq.data)
+    if parsed is None:
         return
+    sid, recipe_id, slug = parsed
 
     user_id = int(cq.from_user.id)
     db, redis = get_db_and_redis(context)
@@ -355,18 +358,15 @@ async def add_candidate_recipe_choose_category(update: Update, context: PTBConte
 
     message_text = "✅ Рецепт успешно сохранён."
     async with db.session() as session:
-        if await RecipeUserRepository.is_linked(session, recipe_id, user_id):
-            message_text = "ℹ️ Рецепт уже есть у вас, обновили категорию."
-            await RecipeRepository.update_category(session, recipe_id, user_id, category_id)
-        else:
-            await RecipeUserRepository.link_user(session, recipe_id, user_id, category_id)
-        await session.commit()
+        created = await RecipeUserRepository.upsert_user_link(session, recipe_id, user_id, category_id)
+    if not created:
+        message_text = "ℹ️ Рецепт уже есть у вас, обновили категорию."
 
     await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
     await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
 
     # Пользователь уже выбрал рецепт и категорию. К списку по ссылке возвращаться не нужно.
     # Заодно подчистим состояние выбора по ссылке.
-    await RecipeActionCacheRepository.delete(redis, user_id, _action_key(sid))
+    await UrlCandidateCacheRepository.delete(redis, user_id=user_id, sid=sid)
 
-    await cq.edit_message_text(message_text, reply_markup=home_keyboard())
+    await safe_edit_message(cq, message_text, reply_markup=home_keyboard())

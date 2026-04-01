@@ -1,12 +1,10 @@
 import logging
-from contextlib import suppress
-from html import escape
 
 from redis.asyncio import Redis
-from telegram import CallbackQuery, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, Update
 from telegram.constants import ParseMode
-from telegram.error import BadRequest
 
+from bot.app.core.data_models import RecipesStateData
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import (
@@ -23,61 +21,31 @@ from bot.app.services.parse_callback import (
     parse_mode,
 )
 from bot.app.services.recipe_service import RecipeService
+from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis
-from bot.app.utils.message_utils import random_recipe
+from bot.app.utils.message_cache import (
+    delete_all_user_messages,
+    reply_text_and_cache,
+    reply_video_and_cache,
+    send_message_and_cache,
+)
+from bot.app.utils.message_random import random_recipe
+from bot.app.utils.message_utils import (
+    build_existing_recipe_text,
+    delete_message_safely,
+    delete_previous_random_video,
+    safe_edit_message,
+)
 from packages.common_settings.settings import settings
 from packages.db.database import Database
-from packages.db.repository import RecipeRepository, VideoRepository
+from packages.db.repository import RecipeRepository
 from packages.redis.repository import (
     RecipeActionCacheRepository,
-    RecipeMessageCacheRepository,
+    UserMessageIdsCacheRepository,
 )
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
-
-
-async def _safe_edit_message(
-    cq: CallbackQuery,
-    text: str,
-    reply_markup: InlineKeyboardMarkup,
-    *,
-    parse_mode: str | None = None,
-    disable_web_page_preview: bool = False,
-) -> None:
-    """Безопасно редактирует сообщение и отдельно обрабатывает 'message is not modified'."""
-    try:
-        await cq.edit_message_text(
-            text,
-            parse_mode=parse_mode,
-            disable_web_page_preview=disable_web_page_preview,
-            reply_markup=reply_markup,
-        )
-    except BadRequest as e:
-        if "message is not modified" in str(e).lower():
-            with suppress(BadRequest):
-                await cq.edit_message_reply_markup(reply_markup=reply_markup)
-        else:
-            raise
-
-
-async def _delete_previous_random_video(context: PTBContext, redis: Redis, user_id: int, chat_id: int) -> None:
-    """Удаляет предыдущее видео случайного рецепта как минимальный message_id из кеша."""
-    data = await RecipeMessageCacheRepository.get_user_message_ids(redis, user_id)
-    if not data:
-        return
-    cached_chat_id = data.get("chat_id")
-    message_ids = data.get("message_ids")
-    if not isinstance(cached_chat_id, int) or cached_chat_id != int(chat_id):
-        return
-    if not isinstance(message_ids, list):
-        return
-    valid_ids = [mid for mid in message_ids if isinstance(mid, int)]
-    if len(valid_ids) <= 1:
-        return
-    previous_video_id = min(valid_ids)
-    with suppress(BadRequest):
-        await context.bot.delete_message(chat_id=chat_id, message_id=previous_video_id)
 
 
 async def recipes_menu(update: Update, context: PTBContext) -> None:
@@ -85,11 +53,9 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
     Обработчик нажатия кнопки 'Рецепты'.
     Entry-point: r"^recipes_(?:show|random)$"
     """
-    cq = update.callback_query
+    cq = await get_answered_callback_query(update)
     if not cq:
         return
-    logger.debug("⏩⏩ Получен колбэк: %s", cq)
-    await cq.answer()
 
     user_id = cq.from_user.id
     db, redis = get_db_and_redis(context)
@@ -99,32 +65,26 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
     mode = parse_mode(cq.data or "")
     if not mode:
         mode = RecipeMode.SHOW
-    logger.debug("⏩ Получен колбэк: %s", mode)
     if mode is RecipeMode.RANDOM and cq.message and update.effective_chat:
-        await _delete_previous_random_video(
+        await delete_previous_random_video(
             context=context,
             redis=redis,
             user_id=user_id,
             chat_id=update.effective_chat.id,
         )
-        await RecipeMessageCacheRepository.set_user_message_ids(
+        await UserMessageIdsCacheRepository.set_user_message_ids(
             redis,
             user_id,
             update.effective_chat.id,
             [cq.message.message_id],
         )
-    if mode is RecipeMode.RANDOM:
-        text = "🔖 Выберите раздел со случайным блюдом:"
-    else:
-        text = "🔖 Выберите раздел:"
-
-    markup = category_keyboard(categories, mode)
+    text = "🔖 Выберите раздел со случайным блюдом:" if mode is RecipeMode.RANDOM else "🔖 Выберите раздел:"
 
     if cq.message:
-        await _safe_edit_message(
-            cq,
-            text,
-            markup,
+        await safe_edit_message(
+            cq=cq,
+            text=text,
+            reply_markup=category_keyboard(categories, mode),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -135,10 +95,9 @@ async def recipes_book_menu(update: Update, context: PTBContext) -> None:
     Обработчик кнопки "Книга рецептов".
     Entry-point: r"^recipes_book$"
     """
-    cq = update.callback_query
+    cq = await get_answered_callback_query(update)
     if not cq:
         return
-    await cq.answer()
 
     db, redis = get_db_and_redis(context)
     service = CategoryService(db, redis)
@@ -146,21 +105,20 @@ async def recipes_book_menu(update: Update, context: PTBContext) -> None:
 
     if not categories:
         if cq.message:
-            await _safe_edit_message(
-                cq,
-                "Книга рецептов пока пуста.",
-                home_keyboard(),
+            await safe_edit_message(
+                cq=cq,
+                text="Книга рецептов пока пуста.",
+                reply_markup=home_keyboard(),
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
         return
 
-    markup = category_keyboard(categories, callback_builder=lambda slug: f"bookcat_{slug}")
     if cq.message:
-        await _safe_edit_message(
-            cq,
-            "📚 Выберите раздел книги рецептов:",
-            markup,
+        await safe_edit_message(
+            cq=cq,
+            text="📚 Выберите раздел книги рецептов:",
+            reply_markup=category_keyboard(categories, callback_builder=lambda slug: f"bookcat_{slug}"),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -171,10 +129,9 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
     Обработчик выбора категории книги рецептов.
     Entry-point: r"^bookcat_[a-z0-9][a-z0-9_-]*$"
     """
-    cq = update.callback_query
+    cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return
-    await cq.answer()
 
     category_slug = cq.data.removeprefix("bookcat_").strip().lower()
     if not category_slug:
@@ -183,7 +140,17 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
     user_id = cq.from_user.id
     db, redis = get_db_and_redis(context)
     service = CategoryService(db, redis)
-    category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+    try:
+        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+    except ValueError:
+        logger.warning("Категория книги рецептов не найдена: slug=%s", category_slug)
+        if cq.message:
+            await safe_edit_message(
+                cq=cq,
+                text="Выбранная категория не найдена. Откройте «Книгу рецептов» и выберите раздел заново.",
+                reply_markup=home_keyboard(),
+            )
+        return
     async with db.session() as session:
         pairs = await RecipeRepository.get_public_recipes_ids_and_titles_by_category(
             session,
@@ -193,26 +160,22 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
 
     if not pairs:
         if cq.message:
-            await _safe_edit_message(
-                cq,
-                f"В категории «{category_name}» пока нет рецептов с видео.",
-                home_keyboard(),
+            await safe_edit_message(
+                cq=cq,
+                text=f"В категории «{category_name}» пока нет рецептов с видео.",
+                reply_markup=home_keyboard(),
             )
         return
 
     recipes_per_page = settings.telegram.recipes_per_page
     recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
-    state = {
-        "search_items": pairs,
-        "recipes_page": 0,
-        "recipes_total_pages": recipes_total_pages,
-        "category_name": category_name,
-        "category_slug": f"book_{category_slug}",
-        "category_id": 0,
-        "mode": RecipeMode.SHOW.value,
-        "list_title": f"📚 Книга рецептов • {category_name}",
-    }
-    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
+    state = RecipesStateData.for_book(
+        category_name=category_name,
+        category_slug=category_slug,
+        recipes_total_pages=recipes_total_pages,
+        search_items=pairs,
+    )
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state.to_dict())
 
     markup = build_recipes_list_keyboard(
         pairs,
@@ -223,10 +186,10 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
         categories_callback="recipes_book",
     )
     if cq.message:
-        await _safe_edit_message(
-            cq,
-            f"📚 Рецепты категории «{category_name}»:",
-            markup,
+        await safe_edit_message(
+            cq=cq,
+            text=f"📚 Рецепты категории «{category_name}»:",
+            reply_markup=markup,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -237,32 +200,28 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     Обработчик выбора категории рецептов.
     Entry-point: r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random))?$"
     """
-    cq = update.callback_query
+    cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
-        logger.error("Нет callback_query или данных в recipes_from_category")
         return
-    await cq.answer()
 
     parsed = parse_category_mode(cq.data)
     if parsed is None:
         logger.error("Некорректный формат callback_query: %s", cq.data)
         return
     category_slug, mode = parsed
-    logger.debug("⏩⏩ category_slug = %s, mode = %s", category_slug, mode)
-
     user_id = cq.from_user.id
     db, redis = get_db_and_redis(context)
     if mode is RecipeMode.RANDOM:
-        await _handle_random_from_category(update, context, cq, db, redis, user_id, category_slug)
+        await handle_random_from_category(update, context, cq, db, redis, user_id, category_slug)
         return
 
-    await _handle_show_or_edit_from_category(cq, user_id, db, redis, category_slug, mode)
+    await handle_show_or_edit_from_category(cq, user_id, db, redis, category_slug, mode)
 
 
-async def _handle_random_from_category(
+async def handle_random_from_category(
     update: Update,
     context: PTBContext,
-    cq,
+    cq: CallbackQuery,
     db: Database,
     redis: Redis,
     user_id: int,
@@ -275,47 +234,32 @@ async def _handle_random_from_category(
     if not cq.message or not update.effective_chat:
         return
 
-    await _delete_previous_random_video(
-        context=context,
-        redis=redis,
-        user_id=user_id,
-        chat_id=update.effective_chat.id,
-    )
-    with suppress(BadRequest):
-        await context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=cq.message.message_id,
-        )
+    await delete_all_user_messages(context, redis, user_id, update.effective_chat.id)
     if not text:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
+        await send_message_and_cache(
+            update,
+            context,
+            update.effective_chat.id,
             text="👉 🍽 Здесь появится ваш рецепт, когда вы что-нибудь сохраните.",
+            user_id=user_id,
             reply_markup=random_markup,
         )
         return
-    # показываем видео и текст отдельными сообщениями
     if update.effective_message:
-        message_ids: list[int] = []
         if video_url:
-            video_msg = await update.effective_message.reply_video(video_url)
-            message_ids.append(video_msg.message_id)
-        text_msg = await update.effective_message.reply_text(
+            await reply_video_and_cache(update.effective_message, context, video_url, user_id=user_id)
+        await reply_text_and_cache(
+            update.effective_message,
+            context,
             text,
+            user_id=user_id,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
             reply_markup=random_markup,
         )
-        message_ids.append(text_msg.message_id)
-        if message_ids and update.effective_chat:
-            await RecipeMessageCacheRepository.set_user_message_ids(
-                redis,
-                cq.from_user.id,
-                update.effective_chat.id,
-                sorted(message_ids),
-            )
 
 
-async def _handle_show_or_edit_from_category(
+async def handle_show_or_edit_from_category(
     cq: CallbackQuery,
     user_id: int,
     db: Database,
@@ -326,16 +270,24 @@ async def _handle_show_or_edit_from_category(
     """Сценарий показа/редактирования списка рецептов в категории."""
     pairs: list[dict[str, str | int]] = []
     service = CategoryService(db, redis)
-    category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
-    logger.debug("📼 category_id = %s", category_id)
+    try:
+        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+    except ValueError:
+        logger.warning("Категория пользователя не найдена: slug=%s user_id=%s", category_slug, user_id)
+        if cq.message:
+            await safe_edit_message(
+                cq,
+                "Выбранная категория не найдена. Откройте раздел заново.",
+                home_keyboard(),
+            )
+        return
     service_recipe = RecipeService(db, redis)
     if category_id:
         pairs = await service_recipe.get_all_recipes_ids_and_titles(user_id, category_id)
-        logger.debug("📼 pairs = %s", pairs)
 
     if not pairs:
         if cq.message:
-            await _safe_edit_message(
+            await safe_edit_message(
                 cq,
                 f"У вас нет рецептов в категории «{category_name}».",
                 home_keyboard(),
@@ -345,15 +297,14 @@ async def _handle_show_or_edit_from_category(
     # сохраняем состояние в Redis
     recipes_per_page = settings.telegram.recipes_per_page
     recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
-    state = {
-        "recipes_page": 0,
-        "recipes_total_pages": recipes_total_pages,
-        "category_name": category_name,
-        "category_slug": category_slug,
-        "category_id": category_id,
-        "mode": mode.value,
-    }
-    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state)
+    state = RecipesStateData.for_category(
+        category_name=category_name,
+        category_slug=category_slug,
+        category_id=category_id,
+        mode=mode,
+        recipes_total_pages=recipes_total_pages,
+    )
+    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state.to_dict())
 
     # рисуем первую страницу
     markup = build_recipes_list_keyboard(
@@ -363,7 +314,7 @@ async def _handle_show_or_edit_from_category(
         category_slug=category_slug,
         mode=mode,
     )
-    await _safe_edit_message(
+    await safe_edit_message(
         cq,
         f"Выберите рецепт из категории «{category_name}»:",
         markup,
@@ -377,28 +328,19 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     Обработчик выбора рецепта.
     Entry-point: r'^([a-z0-9][a-z0-9_-]*)_(show|random)_(\\d+)$'
     """
-    cq = update.callback_query
-    if not cq:
+    cq = await get_answered_callback_query(update)
+    if not cq or not cq.data:
         return
 
-    await cq.answer()
-
-    data = cq.data or ""
-    parsed = parse_category_mode_id(data)
+    parsed = parse_category_mode_id(cq.data)
     if parsed is None:
-        logger.error("Некорректный формат callback_query в recipe_choice: %s", data)
+        logger.error("Некорректный формат callback_query в recipe_choice: %s", cq.data)
         return
     category_slug, mode_str, recipe_id = parsed
-    logger.debug("🗑 %s - category_slug", category_slug)
-    if cq.message and update.effective_chat:
-        with suppress(BadRequest):
-            await context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=cq.message.message_id,
-            )
+    await delete_message_safely(cq.message)
     db, redis = get_db_and_redis(context)
-    state = await RecipeActionCacheRepository.get(redis, cq.from_user.id, "recipes_state") or {}
-    page = int(state.get("recipes_page", 0))
+    state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, cq.from_user.id, "recipes_state"))
+    page = state.recipes_page
     keyboard = choice_recipe_keyboard(
         recipe_id,
         page,
@@ -409,46 +351,34 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     )
 
     async with db.session() as session:
-        recipe = await RecipeRepository.get_by_id(session, recipe_id)
-        if not recipe:
-            if update.effective_chat:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text="❌ Рецепт не найден.",
-                    reply_markup=home_keyboard(),
-                )
-            return
-        video_url = await VideoRepository.get_video_url(session, int(recipe.id))
-        if not video_url:
-            video_url = None
-        await RecipeRepository.update_last_used_at(session, int(recipe.id))
-        await session.commit()
-        safe_title = escape(recipe.title or "")
-        safe_description = escape(recipe.description or "")
-        ingredients_text = "\n".join(f"- {escape(ingredient.name or '')}" for ingredient in recipe.ingredients)
-        text = (
-            f"🍽 <b>Название рецепта:</b> {safe_title}\n\n"
-            f"📝 <b>Рецепт:</b>\n{safe_description}\n\n"
-            f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
-        )
-        message_ids: list[int] = []
-        if video_url and update.effective_message:
-            video_msg = await update.effective_message.reply_video(video_url)
-            message_ids.append(video_msg.message_id)
+        recipe = await RecipeRepository.get_recipe_with_connections(session, recipe_id)
+        if recipe:
+            await RecipeRepository.update_last_used_at(session, int(recipe.id))
 
-        if update.effective_message:
-            text_msg = await update.effective_message.reply_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
-                reply_markup=keyboard,
-            )
-            message_ids.append(text_msg.message_id)
-
-        if message_ids and update.effective_chat:
-            await RecipeMessageCacheRepository.append_user_message_ids(
-                redis,
-                cq.from_user.id,
+    if not recipe:
+        if update.effective_chat:
+            await send_message_and_cache(
+                update,
+                context,
                 update.effective_chat.id,
-                message_ids,
+                text="❌ Рецепт не найден.",
+                user_id=cq.from_user.id,
+                reply_markup=home_keyboard(),
             )
+        return
+
+    video_url = getattr(getattr(recipe, "video", None), "video_url", None)
+    text = build_existing_recipe_text(recipe)
+    if video_url and update.effective_message:
+        await reply_video_and_cache(update.effective_message, context, video_url, user_id=cq.from_user.id)
+
+    if update.effective_message:
+        await reply_text_and_cache(
+            update.effective_message,
+            context,
+            text,
+            user_id=cq.from_user.id,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+            reply_markup=keyboard,
+        )

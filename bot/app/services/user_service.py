@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
+from packages.redis.lock_repository import RedisLockRepository
 from packages.redis.repository import RecipeCacheRepository, UserCacheRepository
-from packages.redis.utils import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,8 @@ class UserService:
         logger.debug(f"👉 Пользователь {user_id}: существует={exists} count={recipe_count}")
         if exists is None:
             lock_key = RedisKeys.user_init_lock(user_id=user_id)
-            token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
-            logger.debug(f"🔒 Пользователь {user_id}: lock={lock_key} token={token}")
+            lock = await RedisLockRepository.acquire(self.redis, key=lock_key, ttl_sec=ttl.LOCK)
+            logger.debug("🔒 Пользователь %s: lock=%s token=%s", user_id, lock_key, lock.token if lock else None)
             try:
                 async with self.db.session() as self.session:
                     user = await UserRepository.get_by_id(self.session, user_id)
@@ -52,9 +52,9 @@ class UserService:
                         user = await UserRepository.create(self.session, payload)
                     await UserCacheRepository.set_exists(self.redis, user.id)
             finally:
-                if token:
+                if lock:
                     with suppress(Exception):
-                        await release_lock(self.redis, lock_key, token)
+                        await RedisLockRepository.release(self.redis, lock)
 
         if recipe_count is None:
             async with self.db.session() as self.session:

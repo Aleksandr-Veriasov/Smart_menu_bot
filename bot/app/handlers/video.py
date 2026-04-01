@@ -7,7 +7,8 @@ from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.check_existing_recipe import handle_existing_recipe
 from bot.app.services.video_pipeline import process_video_pipeline
 from bot.app.utils.context_helpers import get_redis_cli
-from bot.app.utils.message_cache import append_message_id_to_cache
+from bot.app.utils.message_cache import reply_text_and_cache
+from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,7 @@ async def video_link(update: Update, context: PTBContext) -> None:
         return
     url = extract_first_url(message)
     if not url:
-        reply = await message.reply_text("❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.")
-        await append_message_id_to_cache(update, context, reply.message_id)
+        await reply_text_and_cache(message, context, "❌ Не нашёл ссылку в сообщении. Пришлите корректный URL.")
         return
 
     if await handle_existing_recipe(update, context, url):
@@ -70,7 +70,7 @@ async def video_link(update: Update, context: PTBContext) -> None:
         redis,
         user_id,
         pipeline_id,
-        {"status": "started", "original_url": url},
+        PipelineDraft(status="started", original_url=url),
     )
 
     logger.debug(f"Пользователь отправил ссылку: {url}, pipeline_id={pipeline_id}")

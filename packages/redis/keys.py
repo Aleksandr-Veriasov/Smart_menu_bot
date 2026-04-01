@@ -57,6 +57,10 @@ class RedisKeys:
         return f"{cls.PREFIX}:user:{user_id}:recipe_action:{action}"
 
     @classmethod
+    def user_url_candidate_state(cls, user_id: int | str, sid: str) -> str:
+        return f"{cls.PREFIX}:user:{user_id}:url_candidate:{sid}"
+
+    @classmethod
     def user_progress_message(cls, user_id: int | str) -> str:
         return f"{cls.PREFIX}:user:{user_id}:progress_message"
 

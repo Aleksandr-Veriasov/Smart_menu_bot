@@ -7,6 +7,7 @@ from telegram import (
 
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.keyboards.builders import InlineKB
+from bot.app.keyboards.callback_data import CallbackData as CD
 from packages.common_settings.settings import settings
 
 
@@ -51,7 +52,7 @@ def random_recipe_keyboard(category_slug: str) -> InlineKeyboardMarkup:
     """Кнопки под случайным рецептом."""
     return (
         InlineKB()
-        .button(text="🎲 Еще рецепт", callback_data=f"{category_slug}_random")
+        .button(text="🎲 Еще рецепт", callback_data=CD.random_recipe(category_slug))
         .button(text="📚 Назад к категориям", callback_data="recipes_random")
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
@@ -66,7 +67,6 @@ def category_keyboard(
     callback_builder: Callable[[str], str] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создание кнопок для выбора категории рецептов."""
-    suffix = mode.value
     kb = InlineKB()
 
     for cat in categories:
@@ -77,11 +77,11 @@ def category_keyboard(
         if callback_builder is not None:
             cb = callback_builder(slug)
         else:
-            cb = f"{slug}_{suffix}:{pipeline_id}" if mode is RecipeMode.SAVE else f"{slug}_{suffix}"
+            cb = CD.category_mode(slug, mode, pipeline_id)
         kb.button(text=name, callback_data=cb)
 
     if mode is RecipeMode.SAVE:
-        kb.button(text="❌ Отмена", callback_data="cancel_save_recipe")
+        kb.button(text="❌ Отмена", callback_data=CD.cancel_save_recipe())
     else:
         kb.button(text="🔙 Назад", callback_data="start")
     return kb.adjust(1)
@@ -105,14 +105,14 @@ def build_recipes_list_keyboard(
     kb = InlineKB()
 
     for recipe in current:
-        callback = f'{category_slug}_{suffix}_{recipe["id"]}'
+        callback = CD.recipe_choice(category_slug, suffix, int(recipe["id"]))
         kb.button(text=f'▪️ {recipe["title"]}', callback_data=callback)
 
     # пагинация
     if end < total:
-        kb.button(text="Далее ⏩", callback_data=f"next_{page + 1}")
+        kb.button(text="Далее ⏩", callback_data=CD.pagination("next", page + 1))
     if page > 0:
-        kb.button(text="⏪ Назад", callback_data=f"prev_{page - 1}")
+        kb.button(text="⏪ Назад", callback_data=CD.pagination("prev", page - 1))
 
     if mode is not RecipeMode.SEARCH:  # TODO для поиска сделать возможность повторного поиска
         back_to_categories = categories_callback or f"recipes_{suffix}"
@@ -134,14 +134,14 @@ def choice_recipe_keyboard(
     """Создание клавиатуры для выбора рецепта."""
     kb = InlineKB()
     if add_to_self:
-        kb.button(text="➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")
+        kb.button(text="➕ Добавить к себе", callback_data=CD.recipe_add(recipe_id))
     else:
         if can_manage:
             base = settings.fast_api.base_url()
             webapp_url = f"{base}/webapp/edit-recipe.html?recipe_id={int(recipe_id)}"
             kb.button(text="✏️ Редактировать рецепт", web_app=WebAppInfo(url=webapp_url))
-            kb.button(text="🗑 Удалить рецепт", callback_data=f"delete_recipe_{recipe_id}")
-        kb.button(text="📤 Поделиться рецептом", callback_data=f"share_recipe_{recipe_id}")
+            kb.button(text="🗑 Удалить рецепт", callback_data=CD.recipe_delete(recipe_id))
+        kb.button(text="📤 Поделиться рецептом", callback_data=CD.recipe_share(recipe_id))
     kb.button(text="⏪ Назад", callback_data=f"next_{page}:{category_slug}:{mode}")
     kb.button(text="🏠 На главную", callback_data="start")
     return kb.adjust(1)
@@ -171,8 +171,8 @@ def keyboard_save_recipe(pipeline_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для сохранения рецепта."""
     return (
         InlineKB()
-        .button(text="✅ Сохранить рецепт", callback_data=f"save_recipe:{pipeline_id}")
-        .button(text="❌ Отмена", callback_data=f"cancel_save_recipe:{pipeline_id}")
+        .button(text="✅ Сохранить рецепт", callback_data=CD.save_recipe(pipeline_id))
+        .button(text="❌ Отмена", callback_data=CD.cancel_save_recipe(pipeline_id))
         .adjust(1)
     )
 
@@ -181,7 +181,17 @@ def add_recipe_keyboard(recipe_id: int) -> InlineKeyboardMarkup:
     """Создание клавиатуры для добавления рецепта к себе."""
     return (
         InlineKB()
-        .button(text="➕ Добавить к себе", callback_data=f"add_recipe:{recipe_id}")
+        .button(text="➕ Добавить к себе", callback_data=CD.recipe_add(recipe_id))
+        .button(text="🏠 На главную", callback_data="start")
+        .adjust(1)
+    )
+
+
+def share_recipe_keyboard(recipe_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура для сообщения со ссылкой на шаринг рецепта."""
+    return (
+        InlineKB()
+        .button(text="⬅️ Назад к рецепту", callback_data=CD.share_back(recipe_id))
         .button(text="🏠 На главную", callback_data="start")
         .adjust(1)
     )
@@ -201,3 +211,43 @@ def search_recipes_type_keyboard() -> InlineKeyboardMarkup:
 def cancel_keyboard() -> InlineKeyboardMarkup:
     """Создание клавиатуры с кнопкой отмены."""
     return InlineKB().button(text="❌ Отмена", callback_data="cancel").adjust(1)
+
+
+def url_candidate_list_keyboard(sid: str, recipe_titles: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    """Клавиатура со списком рецептов, найденных по URL."""
+    kb = InlineKB()
+    for recipe_id, title in recipe_titles:
+        text = (title or "").strip() or "Без названия"
+        if len(text) > 45:
+            text = text[:42] + "..."
+        kb.button(text=f"▪️ {text}", callback_data=CD.url_pick(sid, int(recipe_id)))
+    kb.button(text="🏠 На главную", callback_data="start")
+    return kb.adjust(1)
+
+
+def url_candidate_recipe_keyboard(*, sid: str, recipe_id: int, already_linked: bool) -> InlineKeyboardMarkup:
+    """Клавиатура карточки рецепта, открытого из списка кандидатов по URL."""
+    kb = InlineKB()
+    if not already_linked:
+        kb.button(text="➕ Добавить к себе", callback_data=CD.url_add(sid, recipe_id))
+    kb.button(text="⬅️ Назад к списку", callback_data=CD.url_list(sid))
+    kb.button(text="🏠 На главную", callback_data="start")
+    return kb.adjust(1)
+
+
+def url_candidate_category_keyboard(
+    sid: str,
+    recipe_id: int,
+    categories: Sequence[Mapping[str, object]],
+) -> InlineKeyboardMarkup:
+    """Клавиатура выбора категории для добавления рецепта из списка кандидатов по URL."""
+    kb = InlineKB()
+    for category in categories:
+        name = str(category.get("name") or "").strip()
+        slug = str(category.get("slug") or "").strip().lower()
+        if not name or not slug:
+            continue
+        kb.button(text=name, callback_data=CD.url_add_category(sid, recipe_id, slug))
+    kb.button(text="⬅️ Назад к списку", callback_data=CD.url_list(sid))
+    kb.button(text="🏠 На главную", callback_data="start")
+    return kb.adjust(1)

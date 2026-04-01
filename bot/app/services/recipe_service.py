@@ -7,8 +7,8 @@ from packages.db.database import Database
 from packages.db.repository import RecipeRepository, RecipeUserRepository
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
+from packages.redis.lock_repository import RedisLockRepository
 from packages.redis.repository import RecipeCacheRepository
-from packages.redis.utils import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +30,15 @@ class RecipeService:
 
         # 2) БД
         lock_key = RedisKeys.user_init_lock(user_id=user_id)
-        token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
+        lock = await RedisLockRepository.acquire(self.redis, key=lock_key, ttl_sec=ttl.LOCK)
         try:
             async with self.db.session() as self.session:
                 rows = await RecipeRepository.get_all_recipes_ids_and_titles(self.session, user_id, category_id)
                 await RecipeCacheRepository.set_all_recipes_ids_and_titles(self.redis, user_id, category_id, rows)
         finally:
-            if token:
+            if lock:
                 with suppress(Exception):
-                    await release_lock(self.redis, lock_key, token)
+                    await RedisLockRepository.release(self.redis, lock)
         logger.debug(f"👉 Пользователь: {user_id} категория: {category_id} " f"название рецептов и id из БД: {rows}")
         return rows
 
@@ -48,7 +48,6 @@ class RecipeService:
             category_id = await RecipeRepository.get_category_id_by_recipe_id(session, recipe_id, user_id)
             logger.debug(f"👉 Рецепт {recipe_id} category_id: {category_id}")
             await RecipeUserRepository.unlink_user(session, recipe_id, user_id)
-            await session.commit()
         if category_id is not None:
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
             # Обновляем кэш рецептов

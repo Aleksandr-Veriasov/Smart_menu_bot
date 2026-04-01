@@ -7,8 +7,8 @@ from packages.db.database import Database
 from packages.db.repository import CategoryRepository
 from packages.redis import ttl
 from packages.redis.keys import RedisKeys
+from packages.redis.lock_repository import RedisLockRepository
 from packages.redis.repository import CategoryCacheRepository
-from packages.redis.utils import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +31,15 @@ class CategoryService:
 
         # 2) БД
         lock_key = RedisKeys.user_init_lock(user_id=user_id)
-        token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
+        lock = await RedisLockRepository.acquire(self.redis, key=lock_key, ttl_sec=ttl.LOCK)
         try:
             async with self.db.session() as self.session:
                 rows = await CategoryRepository.get_name_and_slug_by_user_id(self.session, user_id)
                 await CategoryCacheRepository.set_user_categories(self.redis, user_id, rows)
         finally:
-            if token:
+            if lock:
                 with suppress(Exception):
-                    await release_lock(self.redis, lock_key, token)
+                    await RedisLockRepository.release(self.redis, lock)
         return rows
 
     async def get_id_and_name_by_slug_cached(self, slug: str) -> tuple[int, str]:
@@ -55,7 +55,7 @@ class CategoryService:
 
         # 2) DB
         lock_key = RedisKeys.slug_init_lock(slug)
-        token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
+        lock = await RedisLockRepository.acquire(self.redis, key=lock_key, ttl_sec=ttl.LOCK)
         try:
             async with self.db.session() as self.session:
                 result = await CategoryRepository.get_id_and_name_by_slug(self.session, slug)
@@ -67,9 +67,9 @@ class CategoryService:
                 # 3) Persist в Redis (без TTL)
                 await CategoryCacheRepository.set_id_name_by_slug(self.redis, slug, category_id, category_name)
         finally:
-            if token:
+            if lock:
                 with suppress(Exception):
-                    await release_lock(self.redis, lock_key, token)
+                    await RedisLockRepository.release(self.redis, lock)
         return category_id, category_name
 
     async def get_all_category(self) -> list[dict[str, int | str]]:
@@ -92,7 +92,7 @@ class CategoryService:
 
         # 2) DB
         lock_key = RedisKeys.catergory_lock()
-        token: str | None = await acquire_lock(self.redis, lock_key, ttl.LOCK)
+        lock = await RedisLockRepository.acquire(self.redis, key=lock_key, ttl_sec=ttl.LOCK)
         try:
             async with self.db.session() as self.session:
                 # Храним в кеше также id, чтобы его могли использовать другие компоненты (например WebApp).
@@ -100,7 +100,7 @@ class CategoryService:
                 await CategoryCacheRepository.set_all_name_and_slug(self.redis, rows)
                 logger.debug(f"👉 Все категории из БД: {rows}")
         finally:
-            if token:
+            if lock:
                 with suppress(Exception):
-                    await release_lock(self.redis, lock_key, token)
+                    await RedisLockRepository.release(self.redis, lock)
         return rows

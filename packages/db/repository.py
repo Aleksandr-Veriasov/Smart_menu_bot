@@ -220,6 +220,22 @@ class RecipeRepository(BaseRepository[Recipe]):
         return [{"id": int(row.id), "title": str(row.title)} for row in rows]
 
     @classmethod
+    async def get_ids_and_titles_by_ids(
+        cls,
+        session: AsyncSession,
+        recipe_ids: list[int],
+    ) -> list[dict[str, int | str]]:
+        """
+        Возвращает рецепты по списку id в виде [{"id": ..., "title": ...}].
+        """
+        if not recipe_ids:
+            return []
+        statement = select(Recipe.id, Recipe.title).where(Recipe.id.in_(recipe_ids))
+        result = await session.execute(statement)
+        rows = result.all()
+        return [{"id": int(row.id), "title": str(row.title)} for row in rows]
+
+    @classmethod
     async def get_public_recipes_ids_and_titles_by_category(
         cls,
         session: AsyncSession,
@@ -574,6 +590,36 @@ class RecipeUserRepository(BaseRepository[RecipeUser]):
             )
         )
         await session.execute(stmt)
+
+    @classmethod
+    async def upsert_user_link(
+        cls,
+        session: AsyncSession,
+        recipe_id: int,
+        user_id: int,
+        category_id: int,
+    ) -> bool:
+        """
+        Создаёт связь рецепт-пользователь или обновляет category_id для существующей.
+        Возвращает True, если связь была создана, иначе False.
+        """
+        stmt = (
+            pg_insert(RecipeUser)
+            .values(
+                {
+                    "recipe_id": int(recipe_id),
+                    "user_id": int(user_id),
+                    "category_id": int(category_id),
+                }
+            )
+            .on_conflict_do_update(
+                index_elements=[RecipeUser.recipe_id, RecipeUser.user_id],
+                set_={"category_id": int(category_id)},
+            )
+            .returning(sa.literal_column("xmax = 0"))
+        )
+        result = await session.execute(stmt)
+        return bool(result.scalar_one())
 
     @classmethod
     async def unlink_user(cls, session: AsyncSession, recipe_id: int, user_id: int) -> None:

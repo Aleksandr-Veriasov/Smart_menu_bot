@@ -32,7 +32,7 @@ from packages.db.repository import (
 from packages.db.schemas import RecipeUpdate
 from packages.redis.repository import (
     RecipeActionCacheRepository,
-    RecipeMessageCacheRepository,
+    UserMessageIdsCacheRepository,
 )
 
 
@@ -232,7 +232,7 @@ async def update_telegram_recipe_message_best_effort(
     if redis is None:
         return
 
-    cached = await RecipeMessageCacheRepository.get_user_message_ids(redis, int(user_id))
+    cached = await UserMessageIdsCacheRepository.get_user_message_ids(redis, int(user_id))
     if not cached:
         return
     chat_id = cached["chat_id"]

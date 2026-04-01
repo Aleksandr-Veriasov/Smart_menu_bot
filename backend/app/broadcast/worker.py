@@ -20,7 +20,7 @@ from packages.db.models import (
 )
 from packages.db.repository import BroadcastRepository
 from packages.redis.keys import RedisKeys
-from packages.redis.repository import RedisLockRepository
+from packages.redis.lock_repository import RedisLockRepository
 
 logger = logging.getLogger(__name__)
 

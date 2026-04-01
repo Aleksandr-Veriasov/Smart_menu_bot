@@ -1,71 +1,31 @@
-import base64
-import hashlib
 import logging
-import os
 from html import escape
 
 from telegram import Update
 from telegram.constants import ParseMode
 
+from bot.app.core.data_models import RecipesStateData
+from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
-from bot.app.keyboards.inlines import add_recipe_keyboard, home_keyboard
-from bot.app.utils.context_helpers import get_db, get_db_and_redis
-from bot.app.utils.message_cache import append_message_id_to_cache
-from packages.common_settings.settings import settings
-from packages.db.repository import RecipeRepository, VideoRepository
-from packages.redis.repository import RecipeMessageCacheRepository
+from bot.app.keyboards.inlines import (
+    add_recipe_keyboard,
+    choice_recipe_keyboard,
+    home_keyboard,
+    share_recipe_keyboard,
+)
+from bot.app.utils.callback_utils import get_answered_callback_query
+from bot.app.utils.context_helpers import get_db, get_db_and_redis, get_redis_cli
+from bot.app.utils.message_cache import (
+    delete_all_user_messages,
+    reply_text_and_cache,
+    reply_video_and_cache,
+)
+from bot.app.utils.message_utils import build_existing_recipe_text
+from bot.app.utils.share_token import decrypt_recipe_id, encrypt_recipe_id
+from packages.db.repository import RecipeRepository
+from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
-
-_NONCE_LEN = 8
-
-
-def _pepper_bytes() -> bytes:
-    """Возвращает секретный ключ (pepper) в байтах."""
-    pepper = settings.security.password_pepper
-    if not pepper:
-        raise RuntimeError("PASSWORD_PEPPER не задан")
-    return pepper.get_secret_value().encode("utf-8")
-
-
-def _keystream(pepper: bytes, nonce: bytes, length: int) -> bytes:
-    """Генерирует поток ключей для шифрования/дешифрования."""
-    out = bytearray()
-    counter = 0
-    while len(out) < length:
-        counter_bytes = counter.to_bytes(4, "big", signed=False)
-        block = hashlib.sha256(pepper + nonce + counter_bytes).digest()
-        out.extend(block)
-        counter += 1
-    return bytes(out[:length])
-
-
-def _encrypt_recipe_id(recipe_id: str) -> str:
-    """Шифрует recipe_id в токен для шаринга."""
-    pepper = _pepper_bytes()
-    nonce = os.urandom(_NONCE_LEN)
-    plaintext = recipe_id.encode("utf-8")
-    stream = _keystream(pepper, nonce, len(plaintext))
-    ciphertext = bytes(a ^ b for a, b in zip(plaintext, stream, strict=False))
-    token = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii").rstrip("=")
-    return token
-
-
-def _decrypt_recipe_id(token: str) -> str | None:
-    """Дешифрует токен и возвращает recipe_id или None, если не удалось."""
-    try:
-        padding = "=" * (-len(token) % 4)
-        raw = base64.urlsafe_b64decode(token + padding)
-        if len(raw) <= _NONCE_LEN:
-            return None
-        nonce = raw[:_NONCE_LEN]
-        ciphertext = raw[_NONCE_LEN:]
-        pepper = _pepper_bytes()
-        stream = _keystream(pepper, nonce, len(ciphertext))
-        plaintext = bytes(a ^ b for a, b in zip(ciphertext, stream, strict=False))
-        return plaintext.decode("utf-8").strip()
-    except Exception:
-        return None
 
 
 async def build_recipe_share_link(
@@ -80,9 +40,10 @@ async def build_recipe_share_link(
     """
     recipe_id_str = str(recipe_id).strip()
     if not recipe_id_str:
+        logger.error("Пустой recipe_id при формировании ссылки для шаринга")
         raise ValueError("recipe_id пустой")
 
-    token = _encrypt_recipe_id(recipe_id_str)
+    token = encrypt_recipe_id(recipe_id_str)
     payload = f"{payload_prefix}_{token}"
 
     username = context.bot.username
@@ -103,78 +64,130 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
     Хэндлер для обработки нажатия кнопки шаринга рецепта.
     Entry-point: r"^share_recipe_\\d+$""
     """
-    cq = update.callback_query
-    if not cq:
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.data:
         return
-
-    await cq.answer()
-    data = cq.data or ""
-    recipe_id = data.split("_")[-1]
+    recipe_id = cq.data.split("_")[-1]
     if not recipe_id:
         raise ValueError("recipe_id пустой")
 
     url = await build_recipe_share_link(context, recipe_id)
-    title_html = "Рецепт"
-    desc_html = "—"
-    db, redis = get_db_and_redis(context)
+    db = get_db(context)
     async with db.session() as session:
         recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
-        if recipe and recipe.title:
-            title_html = escape(recipe.title)
-        if recipe and recipe.description:
-            desc_raw = recipe.description.strip()
-            if len(desc_raw) > 150:
-                desc_raw = f"{desc_raw[:147]}..."
-            desc_html = escape(desc_raw) if desc_raw else "—"
+    title_html = escape(recipe.title) if recipe and recipe.title else "Рецепт"
+    desc_html = "—"
+    if recipe and recipe.description:
+        desc_raw = recipe.description.strip()
+        if len(desc_raw) > 150:
+            desc_raw = f"{desc_raw[:147]}..."
+        desc_html = escape(desc_raw) if desc_raw else "—"
     msg = update.effective_message
     if msg:
-        text_msg = await msg.reply_text(
+        user_id = update.effective_user.id if update.effective_user else None
+        redis = get_redis_cli(context)
+        if user_id and redis is not None:
+            await delete_all_user_messages(context, redis, user_id, msg.chat_id)
+        await reply_text_and_cache(
+            msg,
+            context,
             f"🍽 <b>Название рецепта:</b> {title_html}\n\n" f"📝 <b>Рецепт:</b>\n{desc_html}\n\n" f"Весь рецепт: {url}",
+            user_id=user_id,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
+            reply_markup=share_recipe_keyboard(int(recipe_id)),
+        )
+
+
+async def share_recipe_back_handler(update: Update, context: PTBContext) -> None:
+    """Возвращает пользователя из шаринга к карточке рецепта."""
+    cq = await get_answered_callback_query(update, require_data=True)
+    if not cq or not cq.data:
+        return
+
+    recipe_id_str = cq.data.removeprefix("share_back_").strip()
+    if not recipe_id_str.isdigit():
+        return
+
+    recipe_id = int(recipe_id_str)
+    user_id = update.effective_user.id if update.effective_user else None
+    msg = update.effective_message
+    if not user_id or not msg:
+        return
+
+    db, redis = get_db_and_redis(context)
+    await delete_all_user_messages(context, redis, user_id, msg.chat_id)
+
+    state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, user_id, "recipes_state"))
+    category_slug = state.category_slug
+    mode_value = RecipeMode.SHOW.value if state.mode == RecipeMode.SEARCH.value else state.mode
+
+    keyboard = choice_recipe_keyboard(
+        recipe_id,
+        state.recipes_page,
+        category_slug,
+        mode_value,
+        add_to_self=category_slug.startswith("book_"),
+        can_manage=mode_value == RecipeMode.SHOW.value and not category_slug.startswith("book_"),
+    )
+
+    async with db.session() as session:
+        recipe = await RecipeRepository.get_recipe_with_connections(session, recipe_id)
+        if recipe:
+            await RecipeRepository.update_last_used_at(session, int(recipe.id))
+
+    if not recipe:
+        await reply_text_and_cache(
+            msg,
+            context,
+            "❌ Рецепт не найден.",
+            user_id=user_id,
             reply_markup=home_keyboard(),
         )
-        if redis is not None and update.effective_chat and cq.from_user:
-            await RecipeMessageCacheRepository.append_user_message_ids(
-                redis,
-                cq.from_user.id,
-                update.effective_chat.id,
-                [text_msg.message_id],
-            )
+        return
+
+    video_url = getattr(getattr(recipe, "video", None), "video_url", None)
+    text = build_existing_recipe_text(recipe)
+    if video_url:
+        await reply_video_and_cache(msg, context, video_url, user_id=user_id)
+    await reply_text_and_cache(
+        msg,
+        context,
+        text,
+        user_id=user_id,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=keyboard,
+    )
 
 
 async def handle_shared_start(update: Update, context: PTBContext, token: str) -> bool:
     """Обрабатывает старт с шаренной ссылкой рецепта."""
-    recipe_id = _decrypt_recipe_id(token)
+    recipe_id = decrypt_recipe_id(token)
     if not recipe_id or not recipe_id.isdigit():
         return False
 
     db = get_db(context)
     async with db.session() as session:
-        recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
+        recipe = await RecipeRepository.get_recipe_with_connections(session, int(recipe_id))
         if not recipe:
             return False
-        video_url = await VideoRepository.get_video_url(session, int(recipe.id))
-        ingredients_text = "\n".join(f"- {ingredient.name}" for ingredient in recipe.ingredients)
-        title_html = escape(recipe.title or "Без названия")
-        description_html = escape(recipe.description or "—")
-        text = (
-            f"🍽 <b>Название рецепта:</b> {title_html}\n\n"
-            f"📝 <b>Рецепт:</b>\n{description_html}\n\n"
-            f"🥦 <b>Ингредиенты:</b>\n{ingredients_text}"
-        )
+    video_url = getattr(getattr(recipe, "video", None), "video_url", None)
+    text = build_existing_recipe_text(recipe)
 
     msg = update.effective_message
     if msg:
+        user_id = update.effective_user.id if update.effective_user else None
         if video_url:
-            video_msg = await msg.reply_video(video_url)
-            await append_message_id_to_cache(update, context, video_msg.message_id)
-        reply = await msg.reply_text(
+            await reply_video_and_cache(msg, context, video_url, user_id=user_id)
+        await reply_text_and_cache(
+            msg,
+            context,
             text,
+            user_id=user_id,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
             reply_markup=add_recipe_keyboard(int(recipe_id)),
         )
-        await append_message_id_to_cache(update, context, reply.message_id)
 
     return True

@@ -13,7 +13,8 @@ from bot.app.keyboards.inlines import keyboard_save_recipe
 from bot.app.services.ingredients_parser import parse_ingredients
 from bot.app.services.save_recipe import save_recipe_draft_service
 from bot.app.utils.context_helpers import get_db, get_redis_cli
-from bot.app.utils.message_cache import append_message_id_to_cache
+from bot.app.utils.message_cache import reply_text_and_cache, reply_video_and_cache
+from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository
 
 # Включаем логирование
@@ -45,8 +46,8 @@ async def send_recipe_confirmation(
         return
     user_id = message.from_user.id
     redis = get_redis_cli(context)
-    draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or {}
-    original_url = draft.get("original_url")
+    draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id)
+    original_url = draft.original_url if draft else None
     ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
     db = get_db(context)
     try:
@@ -61,22 +62,22 @@ async def send_recipe_confirmation(
             )
     except Exception as e:
         logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
-        error_draft = {
-            "original_url": original_url,
-            "video_file_id": video_file_id,
-            "save_error": str(e),
-        }
+        error_draft = PipelineDraft(
+            original_url=original_url,
+            video_file_id=video_file_id,
+            save_error=str(e),
+        )
         await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, error_draft)
         return
 
-    draft = {
-        "title": title,
-        "recipe": recipe,
-        "ingredients": (list(ingredients) if not isinstance(ingredients, str) else ingredients),
-        "original_url": original_url,
-        "video_file_id": video_file_id,
-        "recipe_id": recipe_id,
-    }
+    draft = PipelineDraft(
+        title=title,
+        recipe=recipe,
+        ingredients=list(ingredients) if not isinstance(ingredients, str) else ingredients,
+        original_url=original_url,
+        video_file_id=video_file_id,
+        recipe_id=recipe_id,
+    )
     await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, draft)
     logger.debug("Черновик рецепта сохранен (pipeline_id=%s, recipe_id=%s)", pipeline_id, recipe_id)
 
@@ -85,16 +86,23 @@ async def send_recipe_confirmation(
     # 1) Видео (если есть file_id) — ждём до 10 сек
     if video_file_id:
         logger.debug("Пытаемся отправить видео пользователю (file_id=%s)", video_file_id)
-        video_msg = await send_video_with_wait(message, video_file_id, total_timeout=10.0, check_interval=2.0)
-        if video_msg is not None:
-            await append_message_id_to_cache(message, context, video_msg.message_id)
+        video_msg = await send_video_with_wait(
+            message,
+            context,
+            video_file_id,
+            user_id=user_id,
+            total_timeout=10.0,
+            check_interval=2.0,
+        )
 
     # 2) Если не успели — мягкий фолбэк двумя сообщениями
     if video_msg is None and video_file_id:
-        warn_msg = await message.reply_text(
+        await reply_text_and_cache(
+            message,
+            context,
             "⚠️ Видео подготовлено, но его отправка заняла слишком долго. " "Ниже отправляю текст рецепта.",
+            user_id=user_id,
         )
-        await append_message_id_to_cache(message, context, warn_msg.message_id)
 
     # 3) Текст (экранируем только пользовательские поля)
     title_html = escape(title).strip() or "Без названия"
@@ -109,27 +117,31 @@ async def send_recipe_confirmation(
 
     try:
         # Первый кусок — с кнопками
-        reply = await message.reply_text(
+        await reply_text_and_cache(
+            message,
+            context,
             text,
+            user_id=user_id,
             parse_mode=ParseMode.HTML,
             reply_markup=keyboard_save_recipe(pipeline_id=pipeline_id),
             disable_web_page_preview=True,
         )
-        await append_message_id_to_cache(message, context, reply.message_id)
         logger.debug("Сообщение с рецептом успешно отправлено.")
     except Exception as e:
         logger.error("Ошибка при отправке текста рецепта: %s", e, exc_info=True)
         return
 
 
-async def _try_reply_video(message: Message, file_id: str) -> Message | None:
+async def _try_reply_video(message: Message, context: PTBContext, file_id: str, *, user_id: int) -> Message | None:
     """
     Единичная попытка отправить видео по file_id. Возвращает Message или None.
     """
     try:
-        # timeouts можно подправить при необходимости
-        return await message.reply_video(
-            video=file_id,
+        return await reply_video_and_cache(
+            message,
+            context,
+            file_id,
+            user_id=user_id,
             allow_sending_without_reply=True,
             read_timeout=60,  # читаем ответ Bot API
             connect_timeout=30,
@@ -145,8 +157,10 @@ async def _try_reply_video(message: Message, file_id: str) -> Message | None:
 
 async def send_video_with_wait(
     message: Message,
+    context: PTBContext,
     file_id: str,
     *,
+    user_id: int,
     total_timeout: float = 10.0,
     check_interval: float = 2.0,
 ) -> Message | None:
@@ -155,7 +169,7 @@ async def send_video_with_wait(
     секунд, проверяя каждые check_interval. Если не успели — отменяет задачу
     и возвращает None.
     """
-    task = asyncio.create_task(_try_reply_video(message, file_id))
+    task = asyncio.create_task(_try_reply_video(message, context, file_id, user_id=user_id))
     remaining = total_timeout
     try:
         while remaining > 0:

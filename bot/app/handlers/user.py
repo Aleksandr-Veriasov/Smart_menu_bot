@@ -1,18 +1,20 @@
 import logging
 
 from telegram import Update
-from telegram.error import BadRequest
 from telegram.ext import ConversationHandler
 
 from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.share_link import handle_shared_start
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
 from bot.app.services.user_service import UserService
+from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import (
-    append_message_id_to_cache,
-    collapse_user_messages,
+    delete_all_user_messages,
+    reply_text_and_cache,
+    send_message_and_cache,
 )
+from bot.app.utils.message_utils import safe_edit_message
 from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
@@ -106,7 +108,7 @@ HELP_TOPICS: dict[str, str] = {
 }
 
 
-def _help_payload(callback_data: str | None) -> tuple[str, str | None]:
+def help_payload(callback_data: str | None) -> tuple[str, str | None]:
     if callback_data and callback_data.startswith("help:"):
         topic = callback_data.split(":", 1)[1].strip().lower()
         return HELP_TOPICS.get(topic, HELP_TEXT), topic if topic in HELP_TOPICS else None
@@ -137,76 +139,47 @@ async def user_start(update: Update, context: PTBContext) -> int:
     text = text_new_user if new_user else START_TEXT_USER
     keyboard = start_keyboard(new_user)
 
-    if update.callback_query:
-        await update.callback_query.answer()
-
-    if update.effective_chat and await collapse_user_messages(
-        context,
-        redis,
-        tg_user.id,
-        update.effective_chat.id,
-        text,
-        keyboard,
-    ):
-        return ConversationHandler.END
-
-    cq = update.callback_query
-    if cq:
-        await cq.answer()  # убираем «часики»
-        # если есть исходное сообщение — отвечаем рядом
-        if cq.message:
-            try:
-                await cq.edit_message_text(
-                    text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-            except BadRequest as exc:
-                # Telegram returns this when user presses the same button again
-                # and the message content/markup is identical.
-                if "Message is not modified" not in str(exc):
-                    raise
-        return ConversationHandler.END
-    # Если это не callback_query, то обычное сообщение
-    msg = update.effective_message
-    if msg:
-        reply = await msg.reply_text(
+    if update.effective_chat:
+        await delete_all_user_messages(context, redis, tg_user.id, update.effective_chat.id)
+        await send_message_and_cache(
+            update,
+            context,
+            update.effective_chat.id,
             text,
+            user_id=tg_user.id,
             reply_markup=keyboard,
             parse_mode="HTML",
         )
-        await append_message_id_to_cache(update, context, reply.message_id)
+        return ConversationHandler.END
+
+    msg = update.effective_message
+    if msg:
+        await reply_text_and_cache(msg, context, text, user_id=tg_user.id, reply_markup=keyboard, parse_mode="HTML")
     return ConversationHandler.END
 
 
 async def user_help(update: Update, context: PTBContext) -> None:
     """Обработчик команды /help и нажатия инлайн-кнопки «Помощь»."""
-    # 1) Нажатие инлайн-кнопки «Помощь»
-    if update.callback_query:
-        cq = update.callback_query
-        await cq.answer()  # убираем «часики»
-        text, topic = _help_payload(cq.data)
-        # если есть исходное сообщение — отвечаем рядом
+    cq = await get_answered_callback_query(update)
+    if cq:
+        text, topic = help_payload(cq.data)
         if cq.message:
-            try:
-                await cq.edit_message_text(
-                    text,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True,
-                    reply_markup=help_keyboard(topic),
-                )
-            except BadRequest as exc:
-                if "Message is not modified" not in str(exc):
-                    raise
+            await safe_edit_message(
+                cq,
+                text,
+                help_keyboard(topic),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
         return
 
-    # 2) Обычная команда /help как сообщение
     msg = update.effective_message
     if msg:
-        reply = await msg.reply_text(
+        await reply_text_and_cache(
+            msg,
+            context,
             HELP_TEXT,
             parse_mode="HTML",
             disable_web_page_preview=True,
             reply_markup=help_keyboard(None),
         )
-        await append_message_id_to_cache(update, context, reply.message_id)

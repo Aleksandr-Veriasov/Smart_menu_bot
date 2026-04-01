@@ -1,13 +1,13 @@
 import json
 import logging
-from dataclasses import dataclass
 from typing import TypedDict
 
 from redis.asyncio import Redis
 
 from packages.redis import ttl
+from packages.redis.data_models import PipelineDraft
 from packages.redis.keys import RedisKeys
-from packages.redis.utils import _maybe_await
+from packages.redis.lock_repository import maybe_await
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ class CategoryCacheRepository:
         logger.debug(f"❌ Запись {RedisKeys.all_category()} удалена из кэша")
 
 
-class RecipeMessageCacheRepository:
+class UserMessageIdsCacheRepository:
 
     @classmethod
     async def get_user_message_ids(cls, r: Redis, user_id: int) -> UserMessageIds | None:
@@ -347,35 +347,37 @@ class WebAppRecipeDraftCacheRepository:
 class PipelineDraftCacheRepository:
 
     @classmethod
-    async def get(cls, r: Redis, user_id: int, pipeline_id: int) -> dict | None:
+    async def get(cls, r: Redis, user_id: int, pipeline_id: int) -> PipelineDraft | None:
         raw = await r.get(RedisKeys.user_pipeline_draft(user_id, pipeline_id))
         if raw is None:
             return None
         try:
             data = json.loads(raw)
-            return data if isinstance(data, dict) else None
+            return PipelineDraft.from_dict(data)
         except Exception:
             return None
 
     @classmethod
-    async def set(cls, r: Redis, user_id: int, pipeline_id: int, payload: dict) -> None:
+    async def set(cls, r: Redis, user_id: int, pipeline_id: int, payload: PipelineDraft | dict) -> None:
+        if isinstance(payload, PipelineDraft):
+            payload = payload.to_dict()
         value = json.dumps(payload, ensure_ascii=False)
         await r.setex(
             RedisKeys.user_pipeline_draft(user_id, pipeline_id),
             ttl.PIPELINE_DRAFT,
             value,
         )
-        await _maybe_await(r.sadd(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
-        await _maybe_await(r.expire(RedisKeys.user_pipeline_ids(user_id), ttl.PIPELINE_DRAFT))
+        await maybe_await(r.sadd(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
+        await maybe_await(r.expire(RedisKeys.user_pipeline_ids(user_id), ttl.PIPELINE_DRAFT))
 
     @classmethod
     async def delete(cls, r: Redis, user_id: int, pipeline_id: int) -> None:
         await r.delete(RedisKeys.user_pipeline_draft(user_id, pipeline_id))
-        await _maybe_await(r.srem(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
+        await maybe_await(r.srem(RedisKeys.user_pipeline_ids(user_id), pipeline_id))
 
     @classmethod
     async def list_ids(cls, r: Redis, user_id: int) -> list[int]:
-        raw = await _maybe_await(r.smembers(RedisKeys.user_pipeline_ids(user_id)))
+        raw = await maybe_await(r.smembers(RedisKeys.user_pipeline_ids(user_id)))
         return [int(x) for x in raw if isinstance(x, (int | str)) and str(x).isdigit()]
 
 
@@ -407,6 +409,39 @@ class RecipeActionCacheRepository:
         await r.delete(RedisKeys.user_recipe_action(user_id, action))
 
 
+class UrlCandidateCacheRepository:
+    @classmethod
+    async def get(cls, r: Redis, *, user_id: int, sid: str) -> dict:
+        """Получить состояние кандидата по URL для пользователя."""
+        raw = await r.get(RedisKeys.user_url_candidate_state(user_id, sid))
+        if raw is None:
+            return {}
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    @classmethod
+    async def set(cls, r: Redis, *, user_id: int, sid: str, payload: dict) -> None:
+        """Сохранить состояние кандидата по URL для пользователя."""
+        value = json.dumps(payload, ensure_ascii=False)
+        await r.setex(RedisKeys.user_url_candidate_state(user_id, sid), ttl.RECIPE_ACTION, value)
+
+    @classmethod
+    async def set_merge(cls, r: Redis, *, user_id: int, sid: str, patch: dict) -> dict:
+        """Аккуратно замерджить переданные поля в существующем состоянии кандидата по URL для пользователя."""
+        state = await cls.get(r, user_id=user_id, sid=sid)
+        state.update(patch or {})
+        await cls.set(r, user_id=user_id, sid=sid, payload=state)
+        return state
+
+    @classmethod
+    async def delete(cls, r: Redis, *, user_id: int, sid: str) -> None:
+        """Удалить состояние кандидата по URL для пользователя (например, после завершения сценария выбора рецепта)."""
+        await r.delete(RedisKeys.user_url_candidate_state(user_id, sid))
+
+
 class ProgressMessageCacheRepository:
 
     @classmethod
@@ -432,57 +467,3 @@ class ProgressMessageCacheRepository:
     @classmethod
     async def delete(cls, r: Redis, user_id: int) -> None:
         await r.delete(RedisKeys.user_progress_message(user_id))
-
-
-@dataclass(frozen=True, slots=True)
-class RedisLock:
-    key: str
-    token: str
-
-
-class RedisLockRepository:
-    """
-    Атомарный distributed lock поверх Redis (token-based ownership).
-    """
-
-    @classmethod
-    async def acquire(cls, r: Redis | None, *, key: str, token: str, ttl_sec: int) -> RedisLock | None:
-        if r is None:
-            # Best-effort режим для single-process.
-            return RedisLock(key=key, token=token)
-        ok = await r.set(key, token, ex=int(ttl_sec), nx=True)
-        return RedisLock(key=key, token=token) if ok else None
-
-    @classmethod
-    async def refresh(cls, r: Redis | None, lock: RedisLock, *, ttl_sec: int) -> bool:
-        if r is None:
-            return True
-        script = """
-        if redis.call("get", KEYS[1]) == ARGV[1] then
-          return redis.call("expire", KEYS[1], tonumber(ARGV[2]))
-        else
-          return 0
-        end
-        """
-        try:
-            res = await r.eval(script, 1, lock.key, lock.token, str(int(ttl_sec)))
-            return bool(res)
-        except Exception:
-            logger.exception("Redis lock refresh failed for key=%s", lock.key)
-            return False
-
-    @classmethod
-    async def release(cls, r: Redis | None, lock: RedisLock) -> None:
-        if r is None:
-            return
-        script = """
-        if redis.call("get", KEYS[1]) == ARGV[1] then
-          return redis.call("del", KEYS[1])
-        else
-          return 0
-        end
-        """
-        try:
-            await r.eval(script, 1, lock.key, lock.token)
-        except Exception:
-            logger.exception("Redis lock release failed for key=%s", lock.key)

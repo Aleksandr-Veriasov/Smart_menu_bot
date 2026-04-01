@@ -34,7 +34,7 @@ exclude = '''
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-src = ["bot", "backend", "downloader", "tests", "gateway", "telethon_worker"]
+src = ["bot", "backend", "downloader", "tests", "gateway", "telethon_worker", "packages"]
 fix = true
 
 [tool.ruff.lint]
