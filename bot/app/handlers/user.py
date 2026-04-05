@@ -5,6 +5,7 @@ from telegram.ext import ConversationHandler
 
 from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.share_link import handle_shared_start
+from bot.app.keyboards.callbacks import HelpCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
 from bot.app.services.user_service import UserService
 from bot.app.utils.callback_utils import get_answered_callback_query
@@ -109,8 +110,8 @@ HELP_TOPICS: dict[str, str] = {
 
 
 def help_payload(callback_data: str | None) -> tuple[str, str | None]:
-    if callback_data and callback_data.startswith("help:"):
-        topic = callback_data.split(":", 1)[1].strip().lower()
+    topic = HelpCallbacks.parse_help_topic(callback_data)
+    if topic:
         return HELP_TOPICS.get(topic, HELP_TEXT), topic if topic in HELP_TOPICS else None
     return HELP_TEXT, None
 
@@ -123,8 +124,8 @@ async def user_start(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
 
     args = context.args or []
-    if args and args[0].startswith("share_"):
-        token = args[0].removeprefix("share_")
+    token = SharedCallbacks.parse_shared_start_token(args[0]) if args else None
+    if token:
         if await handle_shared_start(update, context, token):
             return ConversationHandler.END
 

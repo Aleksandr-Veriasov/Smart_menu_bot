@@ -8,9 +8,9 @@ from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SaveRecipeState
 from bot.app.core.types import PTBContext
 from bot.app.handlers.user import user_start
+from bot.app.keyboards.callbacks import NavCallbacks, RecipeCallbacks
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
-from bot.app.services.parse_callback import parse_category
 from bot.app.services.save_recipe import link_recipe_to_user_service
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
@@ -33,10 +33,8 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return ConversationHandler.END
-    try:
-        _, pipeline_id_str = cq.data.rsplit(":", 1)
-        pipeline_id = int(pipeline_id_str)
-    except (ValueError, TypeError):
+    pipeline_id = RecipeCallbacks.parse_save_recipe(cq.data)
+    if pipeline_id is None:
         logger.error("Не удалось распарсить pipeline_id в start_save_recipe")
         return ConversationHandler.END
     db, redis = get_db_and_redis(context)
@@ -63,11 +61,13 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return ConversationHandler.END
-    try:
-        category_part, pipeline_id_str = cq.data.rsplit(":", 1)
-        pipeline_id = int(pipeline_id_str)
-    except (ValueError, TypeError):
+    parsed = RecipeCallbacks.parse_save_category(cq.data)
+    if parsed is None:
         logger.error("Не удалось распарсить pipeline_id в save_recipe")
+        return ConversationHandler.END
+    category_slug, pipeline_id = parsed
+    if pipeline_id is None:
+        logger.error("Не удалось получить pipeline_id в save_recipe")
         return ConversationHandler.END
 
     user_id = cq.from_user.id if cq.from_user else None
@@ -76,10 +76,6 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
     db, redis = get_db_and_redis(context)
     entry = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or PipelineDraft()
-    category_slug = parse_category(category_part)
-    if not category_slug:
-        logger.error("Не удалось получить slug категории в save_recipe")
-        return ConversationHandler.END
 
     recipe_id = entry.recipe_id
     title = entry.title or "Не указано"
@@ -135,10 +131,8 @@ async def cancel_recipe_save(update: Update, context: PTBContext) -> int:
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return ConversationHandler.END
-    try:
-        _, pipeline_id_str = cq.data.rsplit(":", 1)
-        pipeline_id = int(pipeline_id_str)
-    except (ValueError, TypeError):
+    pipeline_id = RecipeCallbacks.parse_cancel_save_recipe(cq.data)
+    if pipeline_id is None:
         logger.error("Не удалось распарсить pipeline_id в cancel_recipe_save")
         return ConversationHandler.END
 
@@ -160,17 +154,17 @@ def save_recipe_handlers() -> ConversationHandler:
     """Создает ConversationHandler для сохранения рецепта."""
     return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(start_save_recipe, pattern=r"^save_recipe:\d+$"),
-            CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"),
+            CallbackQueryHandler(start_save_recipe, pattern=RecipeCallbacks.pattern_save_recipe()),
+            CallbackQueryHandler(cancel_recipe_save, pattern=RecipeCallbacks.pattern_cancel_save_recipe()),
         ],
         states={
             SaveRecipeState.CHOOSE_CATEGORY: [
-                CallbackQueryHandler(save_recipe, pattern=r"^[a-z0-9][a-z0-9_-]*_save:\d+$")
+                CallbackQueryHandler(save_recipe, pattern=RecipeCallbacks.pattern_save_category())
             ]
         },
         fallbacks=[
-            CallbackQueryHandler(cancel_recipe_save, pattern=r"^cancel_save_recipe:\d+$"),
-            CallbackQueryHandler(user_start, pattern=r"^start$"),
+            CallbackQueryHandler(cancel_recipe_save, pattern=RecipeCallbacks.pattern_cancel_save_recipe()),
+            CallbackQueryHandler(user_start, pattern=NavCallbacks.pattern_start()),
         ],
         per_chat=True,
         per_user=True,

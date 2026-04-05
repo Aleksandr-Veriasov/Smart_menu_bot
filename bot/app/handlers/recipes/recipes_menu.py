@@ -7,6 +7,7 @@ from telegram.constants import ParseMode
 from bot.app.core.data_models import RecipesStateData
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
+from bot.app.keyboards.callbacks import RecipeCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import (
     build_recipes_list_keyboard,
     category_keyboard,
@@ -93,7 +94,7 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
 async def recipes_book_menu(update: Update, context: PTBContext) -> None:
     """
     Обработчик кнопки "Книга рецептов".
-    Entry-point: r"^recipes_book$"
+    Entry-point: callback `recipes:book`.
     """
     cq = await get_answered_callback_query(update)
     if not cq:
@@ -118,7 +119,7 @@ async def recipes_book_menu(update: Update, context: PTBContext) -> None:
         await safe_edit_message(
             cq=cq,
             text="📚 Выберите раздел книги рецептов:",
-            reply_markup=category_keyboard(categories, callback_builder=lambda slug: f"bookcat_{slug}"),
+            reply_markup=category_keyboard(categories, callback_builder=RecipeCallbacks.build_recipes_book_category),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -127,13 +128,13 @@ async def recipes_book_menu(update: Update, context: PTBContext) -> None:
 async def recipes_book_from_category(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора категории книги рецептов.
-    Entry-point: r"^bookcat_[a-z0-9][a-z0-9_-]*$"
+    Entry-point: callback `recipes:bookcat:<category_slug>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return
 
-    category_slug = cq.data.removeprefix("bookcat_").strip().lower()
+    category_slug = RecipeCallbacks.parse_book_category(cq.data)
     if not category_slug:
         return
 
@@ -181,9 +182,9 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
         pairs,
         page=0,
         per_page=recipes_per_page,
-        category_slug=f"book_{category_slug}",
+        category_slug=SharedCallbacks.build_book_slug(category_slug),
         mode=RecipeMode.SHOW,
-        categories_callback="recipes_book",
+        categories_callback=RecipeCallbacks.build_recipes_book(),
     )
     if cq.message:
         await safe_edit_message(
@@ -198,7 +199,7 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
 async def recipes_from_category(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора категории рецептов.
-    Entry-point: r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random))?$"
+    Entry-point: callback `recipes:cat:<category_slug>:<mode>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
@@ -326,7 +327,7 @@ async def handle_show_or_edit_from_category(
 async def recipe_choice(update: Update, context: PTBContext) -> None:
     """
     Обработчик выбора рецепта.
-    Entry-point: r'^([a-z0-9][a-z0-9_-]*)_(show|random)_(\\d+)$'
+    Entry-point: callback `recipes:choice:<category_slug>:<mode>:<recipe_id>`.
     """
     cq = await get_answered_callback_query(update)
     if not cq or not cq.data:
@@ -346,8 +347,8 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         page,
         category_slug,
         mode_str,
-        add_to_self=category_slug.startswith("book_"),
-        can_manage=mode_str == RecipeMode.SHOW.value and not category_slug.startswith("book_"),
+        add_to_self=SharedCallbacks.is_book_slug(category_slug),
+        can_manage=mode_str == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
     async with db.session() as session:

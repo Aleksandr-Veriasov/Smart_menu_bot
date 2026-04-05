@@ -35,6 +35,12 @@ from bot.app.handlers.recipes.share_link import (
 )
 from bot.app.handlers.user import user_help, user_start
 from bot.app.handlers.video import video_link
+from bot.app.keyboards.callbacks import (
+    HelpCallbacks,
+    NavCallbacks,
+    RecipeCallbacks,
+    UrlCallbacks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,28 +66,30 @@ def setup_handlers(app: Application) -> None:
     # pattern='^search_recipes$'
     app.add_handler(search_recipes_conversation())
     app.add_handler(MessageHandler(filters.Regex(video_link_pattern) & filters.TEXT, video_link))
-    app.add_handler(CallbackQueryHandler(user_help, pattern=r"^help(?::[a-z_]+)?$"))
-    app.add_handler(CallbackQueryHandler(user_start, pattern="^start$"))
-    app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=r"^add_recipe:\d+$"))
-    app.add_handler(CallbackQueryHandler(add_existing_recipe_choose_category, pattern=r"^add_recipe:\d+:[a-z0-9_-]+$"))
-    app.add_handler(CallbackQueryHandler(show_candidate_recipe, pattern=r"^urlpick:[A-Za-z0-9]+:\d+$"))
-    app.add_handler(CallbackQueryHandler(show_candidates_list, pattern=r"^urllist:[A-Za-z0-9]+$"))
-    app.add_handler(CallbackQueryHandler(add_candidate_recipe, pattern=r"^urladd:[A-Za-z0-9]+:\d+$"))
+    app.add_handler(CallbackQueryHandler(user_help, pattern=HelpCallbacks.pattern_help()))
+    app.add_handler(CallbackQueryHandler(user_start, pattern=NavCallbacks.pattern_start()))
+    app.add_handler(CallbackQueryHandler(add_existing_recipe, pattern=RecipeCallbacks.pattern_recipe_add()))
     app.add_handler(
-        CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=r"^urladdcat:[A-Za-z0-9]+:\d+:[a-z0-9_-]+$")
+        CallbackQueryHandler(add_existing_recipe_choose_category, pattern=RecipeCallbacks.pattern_recipe_add_category())
     )
-    app.add_handler(CallbackQueryHandler(recipes_menu, pattern=r"^recipes_(?:show|random)$"))
-    app.add_handler(CallbackQueryHandler(recipes_book_menu, pattern=r"^recipes_book$"))
-    app.add_handler(CallbackQueryHandler(recipes_book_from_category, pattern=r"^bookcat_[a-z0-9][a-z0-9_-]*$"))
+    app.add_handler(CallbackQueryHandler(show_candidate_recipe, pattern=UrlCallbacks.pattern_url_pick()))
+    app.add_handler(CallbackQueryHandler(show_candidates_list, pattern=UrlCallbacks.pattern_url_list()))
+    app.add_handler(CallbackQueryHandler(add_candidate_recipe, pattern=UrlCallbacks.pattern_url_add()))
+    app.add_handler(
+        CallbackQueryHandler(add_candidate_recipe_choose_category, pattern=UrlCallbacks.pattern_url_add_category())
+    )
+    app.add_handler(CallbackQueryHandler(recipes_menu, pattern=RecipeCallbacks.pattern_recipes_menu()))
+    app.add_handler(CallbackQueryHandler(recipes_book_menu, pattern=RecipeCallbacks.pattern_recipes_book()))
+    app.add_handler(CallbackQueryHandler(recipes_book_from_category, pattern=RecipeCallbacks.pattern_book_category()))
     app.add_handler(
         CallbackQueryHandler(
             handler_pagination,
-            pattern=r"^(next|prev)_\d+(?::[a-z0-9][a-z0-9_-]*:(?:show|search))?$",
+            pattern=RecipeCallbacks.pattern_pagination(),
         )
     )
-    app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=r"^share_recipe_\d+$"))
-    app.add_handler(CallbackQueryHandler(share_recipe_back_handler, pattern=r"^share_back_\d+$"))
-    app.add_handler(CallbackQueryHandler(recipe_choice, pattern=r"^([a-z0-9][a-z0-9_-]*)_(show|random)_(\d+)$"))
-    app.add_handler(CallbackQueryHandler(recipes_from_category, pattern=r"^([a-z0-9][a-z0-9_-]*)(?:_(show|random))?$"))
+    app.add_handler(CallbackQueryHandler(share_recipe_link_handler, pattern=RecipeCallbacks.pattern_recipe_share()))
+    app.add_handler(CallbackQueryHandler(share_recipe_back_handler, pattern=RecipeCallbacks.pattern_share_back()))
+    app.add_handler(CallbackQueryHandler(recipe_choice, pattern=RecipeCallbacks.pattern_recipe_choice()))
+    app.add_handler(CallbackQueryHandler(recipes_from_category, pattern=RecipeCallbacks.pattern_category_menu()))
 
     logger.info("Все хендлеры зарегистрированы.")

@@ -1,68 +1,27 @@
-import logging
-import re
-
 from bot.app.core.recipes_mode import RecipeMode
-
-logger = logging.getLogger(__name__)
-
-# slug может содержать a-z, 0-9, _ и -
-CB_RE = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*?)(?:_(?P<mode>show|random|save))?$")
-
-CB_RE_C = re.compile(r"^(?P<category>[a-z0-9][a-z0-9_-]*)_save(?:\:\d+)?$")
-
-CB_RE_M = re.compile(r"^recipes(?:_(?P<mode>show|random))?$")
-CB_CAT_MODE_ID = re.compile(r"^([a-z0-9][a-z0-9_-]*)_(show|random)_(\d+)$")
+from bot.app.keyboards.callbacks import RecipeCallbacks
 
 
 def parse_category_mode(cb: str) -> tuple[str, RecipeMode] | None:
     """
     Возвращает (category_slug, mode) или None, если формат не подошёл.
     """
-    logger.debug(f"⏩⏩⏩ m = {cb}")
-    m = CB_RE.fullmatch((cb or "").lower())
-    logger.debug(f"⏩⏩⏩ m = {m.group(0) if m else None}")
-    if not m:
-        return None
-    category = m.group("category")
-    mode_str = m.group("mode")
-    logger.debug(f"⏩⏩⏩ mode_str = {mode_str}, category = {category}")
-    if not mode_str:
-        logger.debug("⏩⏩⏩ mode_str пустой, переключаемся на SHOW")
-        mode = RecipeMode.SHOW
-    else:
-        mode = RecipeMode(mode_str)
-    return category, mode
+    return RecipeCallbacks.parse_category_mode(cb)
 
 
 def parse_category(cb: str) -> str | None:
     """
     Возвращает (category_slug) или None, если формат не подошёл.
     """
-    logger.debug(f"⏩⏩⏩ m = {cb}")
-    m = CB_RE_C.fullmatch((cb or "").lower())
-    logger.debug(f"⏩⏩⏩ m = {m}")
-    if not m:
-        return None
-    category = m.group("category")
-    return category
+    parsed = RecipeCallbacks.parse_save_category(cb)
+    return parsed[0] if parsed else None
 
 
 def parse_mode(cb: str) -> RecipeMode | None:
     """
     Возвращает (mode) или None, если формат не подошёл.
     """
-    m = CB_RE_M.fullmatch((cb or "").lower())
-    logger.debug(f"⏩⏩⏩ m = {m}")
-    if not m:
-        return None
-    mode_str = m.group("mode")
-    logger.debug(f"⏩⏩⏩ mode_str = {mode_str}")
-    if not mode_str:
-        logger.debug("⏩⏩⏩ mode_str пустой, переключаемся на SHOW")
-        mode = RecipeMode.SHOW
-    else:
-        mode = RecipeMode(mode_str)
-    return mode
+    return RecipeCallbacks.parse_recipes_menu_mode(cb)
 
 
 def parse_category_mode_id(cb: str) -> tuple[str, str, int] | None:
@@ -70,11 +29,7 @@ def parse_category_mode_id(cb: str) -> tuple[str, str, int] | None:
     Возвращает (category, mode, obj_id) или None, если формат не подошёл.
     mode: 'show' | 'random'
     """
-    m = CB_CAT_MODE_ID.fullmatch((cb or "").lower().strip())
-    if not m:
-        return None
-    category, mode, obj_id = m.groups()
-    return category, mode, int(obj_id)
+    return RecipeCallbacks.parse_recipe_choice(cb)
 
 
 #

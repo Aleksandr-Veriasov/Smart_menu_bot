@@ -14,6 +14,7 @@ from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.recipes_state import SearchRecipeState
 from bot.app.core.types import PTBContext
 from bot.app.handlers.user import user_start
+from bot.app.keyboards.callbacks import NavCallbacks, SearchCallbacks
 from bot.app.keyboards.inlines import (
     build_recipes_list_keyboard,
     cancel_keyboard,
@@ -53,14 +54,14 @@ async def choose_search_type(update: Update, context: PTBContext) -> int:
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return ConversationHandler.END
-    if cq.data == "search:title":
+    if cq.data == SearchCallbacks.build_search_type("title"):
         await safe_edit_message(
             cq,
             "Введите слово из названия рецепта:",
             reply_markup=cancel_keyboard(),
         )
         return SearchRecipeState.WAIT_TITLE
-    if cq.data == "search:ingredient":
+    if cq.data == SearchCallbacks.build_search_type("ingredient"):
         await safe_edit_message(
             cq,
             "Введите ингредиент для поиска:",
@@ -206,24 +207,24 @@ async def cancel_search(update: Update, context: PTBContext) -> int:
 def search_recipes_conversation() -> ConversationHandler:
     """ConversationHandler для поиска рецептов."""
     return ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_search, pattern=r"^search_recipes$")],
+        entry_points=[CallbackQueryHandler(start_search, pattern=SearchCallbacks.pattern_search_recipes())],
         states={
             SearchRecipeState.CHOOSE_TYPE: [
-                CallbackQueryHandler(choose_search_type, pattern=r"^search:(title|ingredient)$"),
-                CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
+                CallbackQueryHandler(choose_search_type, pattern=SearchCallbacks.pattern_search_type()),
+                CallbackQueryHandler(cancel_search, pattern=NavCallbacks.pattern_cancel()),
             ],
             SearchRecipeState.WAIT_TITLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_title_query),
-                CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
+                CallbackQueryHandler(cancel_search, pattern=NavCallbacks.pattern_cancel()),
             ],
             SearchRecipeState.WAIT_INGREDIENT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ingredient_query),
-                CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
+                CallbackQueryHandler(cancel_search, pattern=NavCallbacks.pattern_cancel()),
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(cancel_search, pattern=r"^cancel$"),
-            CallbackQueryHandler(user_start, pattern=r"^start$"),
+            CallbackQueryHandler(cancel_search, pattern=NavCallbacks.pattern_cancel()),
+            CallbackQueryHandler(user_start, pattern=NavCallbacks.pattern_start()),
         ],
         per_chat=True,
         per_user=True,

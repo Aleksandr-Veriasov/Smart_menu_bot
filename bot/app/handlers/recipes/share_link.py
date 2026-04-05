@@ -7,6 +7,7 @@ from telegram.constants import ParseMode
 from bot.app.core.data_models import RecipesStateData
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
+from bot.app.keyboards.callbacks import RecipeCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import (
     add_recipe_keyboard,
     choice_recipe_keyboard,
@@ -30,13 +31,13 @@ logger = logging.getLogger(__name__)
 
 async def build_recipe_share_link(
     context: PTBContext,
-    recipe_id: str,
+    recipe_id: int | str,
     *,
     payload_prefix: str = "share",
 ) -> str:
     """
     Собирает deep-link для шаринга рецепта через параметр start.
-    Пример: https://t.me/<bot>?start=share_<slug>
+    Пример: https://t.me/<bot>?start=share:<token>
     """
     recipe_id_str = str(recipe_id).strip()
     if not recipe_id_str:
@@ -44,7 +45,9 @@ async def build_recipe_share_link(
         raise ValueError("recipe_id пустой")
 
     token = encrypt_recipe_id(recipe_id_str)
-    payload = f"{payload_prefix}_{token}"
+    payload = (
+        SharedCallbacks.build_shared_start_payload(token) if payload_prefix == "share" else f"{payload_prefix}_{token}"
+    )
 
     username = context.bot.username
     if not username:
@@ -62,13 +65,13 @@ async def build_recipe_share_link(
 async def share_recipe_link_handler(update: Update, context: PTBContext) -> None:
     """
     Хэндлер для обработки нажатия кнопки шаринга рецепта.
-    Entry-point: r"^share_recipe_\\d+$""
+    Entry-point: callback `recipe:share:<recipe_id>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return
-    recipe_id = cq.data.split("_")[-1]
-    if not recipe_id:
+    recipe_id = RecipeCallbacks.parse_recipe_share(cq.data)
+    if recipe_id is None:
         raise ValueError("recipe_id пустой")
 
     url = await build_recipe_share_link(context, recipe_id)
@@ -95,7 +98,7 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
             user_id=user_id,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
-            reply_markup=share_recipe_keyboard(int(recipe_id)),
+            reply_markup=share_recipe_keyboard(recipe_id),
         )
 
 
@@ -105,11 +108,9 @@ async def share_recipe_back_handler(update: Update, context: PTBContext) -> None
     if not cq or not cq.data:
         return
 
-    recipe_id_str = cq.data.removeprefix("share_back_").strip()
-    if not recipe_id_str.isdigit():
+    recipe_id = RecipeCallbacks.parse_share_back(cq.data)
+    if recipe_id is None:
         return
-
-    recipe_id = int(recipe_id_str)
     user_id = update.effective_user.id if update.effective_user else None
     msg = update.effective_message
     if not user_id or not msg:
@@ -127,8 +128,8 @@ async def share_recipe_back_handler(update: Update, context: PTBContext) -> None
         state.recipes_page,
         category_slug,
         mode_value,
-        add_to_self=category_slug.startswith("book_"),
-        can_manage=mode_value == RecipeMode.SHOW.value and not category_slug.startswith("book_"),
+        add_to_self=SharedCallbacks.is_book_slug(category_slug),
+        can_manage=mode_value == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
     async with db.session() as session:

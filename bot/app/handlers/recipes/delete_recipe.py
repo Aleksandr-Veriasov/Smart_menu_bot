@@ -10,6 +10,7 @@ from telegram.ext import (
 from bot.app.core.recipes_state import DeleteRecipeState
 from bot.app.core.types import PTBContext
 from bot.app.handlers.user import user_start
+from bot.app.keyboards.callbacks import NavCallbacks, RecipeCallbacks
 from bot.app.keyboards.inlines import (
     home_keyboard,
     keyboard_delete,
@@ -31,14 +32,13 @@ logger = logging.getLogger(__name__)
 
 
 async def delete_recipe(update: Update, context: PTBContext) -> int:
-    """Entry-point: колбэк вида delete_recipe_{id}."""
+    """Entry-point: callback `recipe:delete:<recipe_id>`."""
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.data:
         return ConversationHandler.END
 
-    try:
-        recipe_id = int(cq.data.rsplit("_", 1)[1])
-    except (IndexError, ValueError):
+    recipe_id = RecipeCallbacks.parse_recipe_delete(cq.data)
+    if recipe_id is None:
         await safe_edit_message(cq, "Не смог понять ID рецепта.", reply_markup=home_keyboard())
         logger.error("Ошибка при извлечении recipe_id из callback_data: %s", cq.data)
         return ConversationHandler.END
@@ -135,17 +135,17 @@ def conversation_delete_recipe() -> ConversationHandler:
     """ConversationHandler для удаления рецепта."""
     return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(delete_recipe, pattern=r"^delete_recipe_\d+$"),
+            CallbackQueryHandler(delete_recipe, pattern=RecipeCallbacks.pattern_recipe_delete()),
         ],
         states={
             DeleteRecipeState.CONFIRM_DELETE: [
-                CallbackQueryHandler(confirm_delete, pattern=r"^delete$"),
-                CallbackQueryHandler(cancel, pattern=r"^cancel$"),
+                CallbackQueryHandler(confirm_delete, pattern=NavCallbacks.pattern_delete()),
+                CallbackQueryHandler(cancel, pattern=NavCallbacks.pattern_cancel()),
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(cancel, pattern=r"^cancel$"),
-            CallbackQueryHandler(user_start, pattern=r"^start$"),
+            CallbackQueryHandler(cancel, pattern=NavCallbacks.pattern_cancel()),
+            CallbackQueryHandler(user_start, pattern=NavCallbacks.pattern_start()),
         ],
         per_chat=True,
         per_user=True,

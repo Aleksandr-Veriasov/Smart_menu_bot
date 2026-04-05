@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from bot.app.core.recipes_mode import RecipeMode
+from bot.app.keyboards.callbacks import SharedCallbacks
 
 
 @dataclass(slots=True)
@@ -117,7 +118,7 @@ class RecipesStateData:
             recipes_page=0,
             recipes_total_pages=recipes_total_pages,
             category_name=category_name,
-            category_slug=f"book_{category_slug}",
+            category_slug=SharedCallbacks.build_book_slug(category_slug),
             category_id=0,
             mode=RecipeMode.SHOW.value,
             list_title=f"📚 Книга рецептов • {category_name}",

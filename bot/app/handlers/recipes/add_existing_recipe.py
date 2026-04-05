@@ -4,6 +4,7 @@ from telegram import Update
 
 from bot.app.core.types import PTBContext
 from bot.app.handlers.user import START_TEXT_NEW_USER
+from bot.app.keyboards.callbacks import RecipeCallbacks
 from bot.app.keyboards.inlines import (
     category_keyboard,
     home_keyboard,
@@ -19,23 +20,6 @@ from packages.db.repository import RecipeUserRepository
 from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
 
 logger = logging.getLogger(__name__)
-
-
-def parse_recipe_id(data: str) -> int | None:
-    """Извлекает recipe_id из callback вида add_recipe:<recipe_id>."""
-    try:
-        return int(data.split(":", 1)[1])
-    except (ValueError, TypeError, IndexError):
-        return None
-
-
-def parse_recipe_category_selection(data: str) -> tuple[int, str] | None:
-    """Извлекает recipe_id и slug из callback вида add_recipe:<recipe_id>:<slug>."""
-    try:
-        _, recipe_id_str, slug = data.split(":", 2)
-        return int(recipe_id_str), slug
-    except (ValueError, TypeError):
-        return None
 
 
 async def maybe_send_new_user_start_message(update: Update, context: PTBContext, recipes_count: int) -> None:
@@ -59,12 +43,12 @@ async def maybe_send_new_user_start_message(update: Update, context: PTBContext,
 async def add_existing_recipe(update: Update, context: PTBContext) -> None:
     """
     Хэндлер для начала процесса добавления существующего рецепта пользователю.
-    Entry-point: r"^add_recipe:\\d+$"
+    Entry-point: callback `recipe:add:<recipe_id>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq:
         return
-    recipe_id = parse_recipe_id(cq.data)
+    recipe_id = RecipeCallbacks.parse_recipe_add(cq.data)
     if recipe_id is None:
         return
 
@@ -76,7 +60,7 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
         "Выберите категорию для добавления рецепта:",
         reply_markup=category_keyboard(
             categories,
-            callback_builder=lambda slug: f"add_recipe:{recipe_id}:{slug}",
+            callback_builder=lambda slug: RecipeCallbacks.build_recipe_add_category(recipe_id, slug),
         ),
     )
 
@@ -84,12 +68,12 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
 async def add_existing_recipe_choose_category(update: Update, context: PTBContext) -> None:
     """
     Хэндлер для выбора категории при добавлении существующего рецепта пользователю.
-    Entry-point: r"^add_recipe:\\d+:[a-z0-9_-]+$"
+    Entry-point: callback `recipe:addcat:<recipe_id>:<category_slug>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq:
         return
-    parsed = parse_recipe_category_selection(cq.data)
+    parsed = RecipeCallbacks.parse_recipe_add_category(cq.data)
     if parsed is None:
         return
     recipe_id, slug = parsed

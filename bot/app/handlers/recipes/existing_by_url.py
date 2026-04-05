@@ -6,6 +6,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
 from bot.app.core.types import PTBContext
+from bot.app.keyboards.callbacks import UrlCallbacks
 from bot.app.keyboards.inlines import (
     home_keyboard,
     url_candidate_category_keyboard,
@@ -36,36 +37,6 @@ logger = logging.getLogger(__name__)
 
 STALE_LIST_TEXT = "Список по ссылке устарел. Пришлите ссылку ещё раз."
 UNAVAILABLE_RECIPE_TEXT = "Этот рецепт больше недоступен в списке."
-
-
-def parse_sid_and_recipe_id(data: str) -> tuple[str, int] | None:
-    """Извлекает sid и recipe_id из callback вида prefix:<sid>:<recipe_id>."""
-    try:
-        _, sid, recipe_id_str = data.split(":", 2)
-        return sid, int(recipe_id_str)
-    except ValueError:
-        logger.warning("Не удалось распарсить sid и recipe_id из callback data: %s", data)
-        return None
-
-
-def parse_sid(data: str) -> str | None:
-    """Извлекает sid из callback вида prefix:<sid>."""
-    try:
-        _, sid = data.split(":", 1)
-        return sid
-    except ValueError:
-        logger.warning("Не удалось распарсить sid из callback data: %s", data)
-        return None
-
-
-def parse_sid_recipe_id_and_slug(data: str) -> tuple[str, int, str] | None:
-    """Извлекает sid, recipe_id и slug из callback вида prefix:<sid>:<recipe_id>:<slug>."""
-    try:
-        _, sid, recipe_id_str, slug = data.split(":", 3)
-        return sid, int(recipe_id_str), slug
-    except ValueError:
-        logger.warning("Не удалось распарсить sid, recipe_id и slug из callback data: %s", data)
-        return None
 
 
 def extract_allowed_recipe_ids(state: dict) -> list[int]:
@@ -150,14 +121,15 @@ async def maybe_handle_multiple_existing_recipes(
 
 async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
     """
-    Entry-point: r"^urlpick:[A-Za-z0-9]+:\\d+$"
+    Entry-point: callback `url:pick:<sid>:<recipe_id>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.from_user or not cq.data:
         return
 
-    parsed = parse_sid_and_recipe_id(cq.data)
+    parsed = UrlCallbacks.parse_url_pick(cq.data)
     if parsed is None:
+        logger.warning("Не удалось распарсить sid и recipe_id из callback data: %s", cq.data)
         return
     sid, recipe_id = parsed
 
@@ -244,13 +216,14 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
 
 async def show_candidates_list(update: Update, context: PTBContext) -> None:
     """
-    Entry-point: r"^urllist:[A-Za-z0-9]+$"
+    Entry-point: callback `url:list:<sid>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.from_user or not cq.data:
         return
-    sid = parse_sid(cq.data)
+    sid = UrlCallbacks.parse_url_list(cq.data)
     if sid is None:
+        logger.warning("Не удалось распарсить sid из callback data: %s", cq.data)
         return
 
     user_id = int(cq.from_user.id)
@@ -302,14 +275,15 @@ async def show_candidates_list(update: Update, context: PTBContext) -> None:
 
 async def add_candidate_recipe(update: Update, context: PTBContext) -> None:
     """
-    Entry-point: r"^urladd:[A-Za-z0-9]+:\\d+$"
+    Entry-point: callback `url:add:<sid>:<recipe_id>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.from_user or not cq.data:
         return
 
-    parsed = parse_sid_and_recipe_id(cq.data)
+    parsed = UrlCallbacks.parse_url_add(cq.data)
     if parsed is None:
+        logger.warning("Не удалось распарсить sid и recipe_id из callback data: %s", cq.data)
         return
     sid, recipe_id = parsed
 
@@ -340,14 +314,15 @@ async def add_candidate_recipe(update: Update, context: PTBContext) -> None:
 
 async def add_candidate_recipe_choose_category(update: Update, context: PTBContext) -> None:
     """
-    Entry-point: r"^urladdcat:[A-Za-z0-9]+:\\d+:[a-z0-9_-]+$"
+    Entry-point: callback `url:addcat:<sid>:<recipe_id>:<category_slug>`.
     """
     cq = await get_answered_callback_query(update, require_data=True)
     if not cq or not cq.from_user or not cq.data:
         return
 
-    parsed = parse_sid_recipe_id_and_slug(cq.data)
+    parsed = UrlCallbacks.parse_url_add_category(cq.data)
     if parsed is None:
+        logger.warning("Не удалось распарсить sid, recipe_id и slug из callback data: %s", cq.data)
         return
     sid, recipe_id, slug = parsed
 

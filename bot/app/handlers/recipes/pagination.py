@@ -1,11 +1,11 @@
 import logging
-import re
 
 from telegram import Update
 
 from bot.app.core.data_models import RecipesStateData
 from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
+from bot.app.keyboards.callbacks import RecipeCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
 from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
@@ -16,11 +16,6 @@ from packages.redis.repository import RecipeActionCacheRepository
 
 # Включаем логирование
 logger = logging.getLogger(__name__)
-
-# допустимые callback_data:
-# 'next_3' / 'prev_0'
-# 'next_3:breakfast:show' / 'prev_1:search:search'
-_PAGE_RE = re.compile(r"^(next|prev)_(\d+)(?:\:([a-z0-9][a-z0-9_-]*)\:(show|search))?$")
 
 
 async def handler_pagination(update: Update, context: PTBContext) -> None:
@@ -35,16 +30,12 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     user_id = cq.from_user.id if cq.from_user else None
     if not user_id:
         return
-    m = _PAGE_RE.match(cq.data or "")
-    if not m:
+    parsed = RecipeCallbacks.parse_pagination(cq.data)
+    if parsed is None:
         # незнакомый callback — просто игнор
         return
 
-    _, page_str, callback_category_slug, callback_mode = m.groups()
-    try:
-        page = int(page_str)
-    except ValueError:
-        page = 0
+    page, callback_category_slug, callback_mode = parsed
 
     db, redis = get_db_and_redis(context)
     state_data = await RecipeActionCacheRepository.get(redis, user_id, "recipes_state")
@@ -81,7 +72,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     )
     await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", updated_state.to_dict())
 
-    categories_callback = "recipes_book" if str(category_slug).startswith("book_") else None
+    categories_callback = RecipeCallbacks.build_recipes_book() if SharedCallbacks.is_book_slug(category_slug) else None
     logger.debug("Пагинация рецептов: page=%s category_slug=%s", updated_state.recipes_page, category_slug)
     markup = build_recipes_list_keyboard(
         items,
