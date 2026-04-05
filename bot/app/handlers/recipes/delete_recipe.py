@@ -149,8 +149,6 @@ def conversation_delete_recipe() -> ConversationHandler:
         ],
         per_chat=True,
         per_user=True,
-        # per_message=True,
-        # conversation_timeout=600,  # 10 минут
-        # name='edit_recipe_conv',   # если используешь persistence
-        # persistent=True,
+        name="delete_recipe_conversation",
+        persistent=True,
     )

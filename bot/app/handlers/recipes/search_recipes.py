@@ -228,4 +228,6 @@ def search_recipes_conversation() -> ConversationHandler:
         ],
         per_chat=True,
         per_user=True,
+        name="search_recipes_conversation",
+        persistent=True,
     )

@@ -169,7 +169,6 @@ def save_recipe_handlers() -> ConversationHandler:
         per_chat=True,
         per_user=True,
         per_message=True,
-        # conversation_timeout=600,
-        # name='save_recipe_conversation',
-        # persistent=True
+        name="save_recipe_conversation",
+        persistent=True,
     )

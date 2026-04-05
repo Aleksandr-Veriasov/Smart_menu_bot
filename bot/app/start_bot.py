@@ -11,6 +11,9 @@ from telegram.ext import Application
 
 from bot.app.core.types import AppState, PTBApp
 from bot.app.handlers.setup import setup_handlers
+from bot.app.persistence.redis_conversation_persistence import (
+    RedisConversationPersistence,
+)
 from packages.common_settings.settings import settings
 from packages.db.backup import run_daily_dump_scheduler
 from packages.db.database import Database
@@ -127,8 +130,10 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
     if not token:
         raise ValueError("❌ TELEGRAM_BOT_TOKEN пуст.")
 
+    persistence = RedisConversationPersistence(ttl_seconds=3600)
+
     # Собираем PTB
-    ptb_app = cast(PTBApp, Application.builder().token(token).build())
+    ptb_app = cast(PTBApp, Application.builder().token(token).persistence(persistence).build())
     setup_handlers(ptb_app)
 
     if attach_ptb_hooks:
@@ -142,7 +147,12 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
 
         ptb_app = cast(
             PTBApp,
-            Application.builder().token(token).post_init(on_startup).post_shutdown(on_shutdown).build(),
+            Application.builder()
+            .token(token)
+            .persistence(persistence)
+            .post_init(on_startup)
+            .post_shutdown(on_shutdown)
+            .build(),
         )
         setup_handlers(ptb_app)
 
