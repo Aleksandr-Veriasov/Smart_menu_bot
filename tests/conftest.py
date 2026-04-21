@@ -69,8 +69,12 @@ def get_test_database_url() -> str:
 def get_sync_database_url() -> str:
     """Получить синхронный URL БД для миграций."""
     url = get_test_database_url()
-    # Convert asyncpg to psycopg3 for sync operations
-    return url.replace("postgresql+asyncpg://", "postgresql://")
+    # Normalize to psycopg3 for sync operations.
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
 def _reset_public_schema(engine) -> None:
