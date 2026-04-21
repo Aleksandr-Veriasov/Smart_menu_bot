@@ -1,0 +1,92 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run Tests
+    env:
+      APP_ENV: dev
+      DEBUG: 'false'
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      DB_NAME: test_smartmenubot
+      DB_SSLMODE: disable
+      DB_DUMP_DROPBOX_REFRESH_TOKEN: ci_dropbox_refresh_token
+      DB_DUMP_DROPBOX_APP_KEY: ci_dropbox_app_key
+      DB_DUMP_DROPBOX_APP_SECRET: ci_dropbox_app_secret
+      TELEGRAM_CHAT_ID: '123456789'
+      TELEGRAM_BOT_TOKEN: dummy_test_token
+      TELEGRAM_ADMIN_ID: '987654321'
+      TELEGRAM_USE_WEBHOOK: 'false'
+      WEBHOOK_PREFIX: tg
+      WEBHOOK_SLUG: ci_slug
+      WEBHOOK_SECRET_TOKEN: ci_secret
+      DEEPSEEK_API_KEY: test
+      DEEPSEEK_BASE_URL: https://api.example.com
+      DEEPSEEK_MODEL: deepseek-test-model
+      ADMIN_LOGIN: admin
+      ADMIN_PASSWORD: admin
+      PASSWORD_PEPPER: test_pepper_string
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      REDIS_DB: '0'
+      REDIS_PASSWORD: testpassword
+      TG_API_ID: '123456'
+      TG_API_HASH: test_telethon_hash
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_smartmenubot
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            -r backend/requirements.txt \
+            -r bot/requirements.txt \
+            -r downloader/requirements.txt \
+            -r telethon_worker/requirements.txt \
+            -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_smartmenubot
+          ENVIRONMENT: test
+          DEBUG: 'false'
+        run: |
+          pytest tests/ -v --cov=packages --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false

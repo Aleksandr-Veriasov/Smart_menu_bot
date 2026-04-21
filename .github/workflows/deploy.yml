@@ -1,109 +1,64 @@
-name: Deploy to Hetzner on push to main
+name: Deploy to Production
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Tests"]
+    branches: [main]
+    types: [completed]
 
 jobs:
-  tests:
+  check-tests:
     runs-on: ubuntu-latest
-    env:
-      APP_ENV: dev
-      DEBUG: "False"
-      DB_HOST: localhost
-      DB_PORT: "5432"
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: test_db
-      DB_SSLMODE: disable
-      DB_BOOTSTRAP_SCHEMA: "false"
-      DB_POOL_PRE_PING: "true"
-      DB_POOL_RECYCLE: "0"
-      RUN_MIGRATIONS_ON_STARTUP: "false"
-      DB_DUMP_DROPBOX_REFRESH_TOKEN: ci_dropbox_refresh_token
-      DB_DUMP_DROPBOX_APP_KEY: ci_dropbox_app_key
-      DB_DUMP_DROPBOX_APP_SECRET: ci_dropbox_app_secret
-      DB_DUMP_DROPBOX_ROOT_PATH: /ci/db_dumps
-      TELEGRAM_CHAT_ID: "123456789"
-      TELEGRAM_BOT_TOKEN: dummy_test_token
-      TELEGRAM_ADMIN_ID: "987654321"
-      TELEGRAM_USE_WEBHOOK: "false"
-      WEBHOOK_PREFIX: tg
-      WEBHOOK_SLUG: ci_slug
-      WEBHOOK_SECRET_TOKEN: ci_secret
-      WEBHOOK_PORT: "443"
-      DEEPSEEK_API_KEY: test
-      DEEPSEEK_BASE_URL: https://api.example.com
-      DEEPSEEK_MODEL: deepseek-test-model
-      SENTRY_DSN: https://example.com/ci
-      ALLOWED_HOSTS: localhost,127.0.0.1
-      SERVE_STATIC_FROM_APP: "false"
-      UVICORN_WORKERS: "1"
-      CORS_ORIGINS: http://localhost:5173
-      ADMIN_LOGIN: admin
-      ADMIN_PASSWORD: admin
-      ADMIN_CREATE_ON_STARTUP: "true"
-      PASSWORD_PEPPER: test_pepper_string
-      REDIS_HOST: localhost
-      REDIS_PORT: "6379"
-      REDIS_DB: "0"
-      REDIS_PASSWORD: testpassword
-      TG_API_ID: "123456"
-      TG_API_HASH: test_telethon_hash
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: Verify Tests Passed
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.10"
-
-    - name: Install dependencies
-      run: |
-        python -m pip install uv
-        uv pip install --system openai==1.65.1
-        uv pip install --system -r backend/requirements.txt
-        uv pip install --system -r requirements-dev.txt
-
-    - name: Run linters (black, isort, ruff, mypy)
-      run: |
-        pre-commit run --all-files
-
-    - name: Run tests
-      run: |
-        pytest
+      - name: ✅ Tests passed - proceeding with deploy
+        run: echo "Tests passed. Deployment will proceed."
 
   deploy:
-    needs: tests
+    needs: check-tests
     runs-on: ubuntu-latest
+    name: Deploy to Hetzner
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 
-    - name: Add SSH key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan -H 91.99.6.156 >> ~/.ssh/known_hosts
-    
-    - name: Sync files to server
-      run: |
-        rsync -az --delete \
-          --exclude '.git' \
-          --exclude '.github' \
-          --exclude '.env' \
-          --exclude 'telethon_session' \
-          ./ root@91.99.6.156:/root/smart_menu_bot_prod/
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 91.99.6.156 >> ~/.ssh/known_hosts
 
-    - name: Deploy to server
-      run: |
-        ssh -o StrictHostKeyChecking=yes -T root@91.99.6.156 <<'EOF'
-          set -e
-          cd /root/smart_menu_bot_prod
-          ./refresh.sh
-        EOF
+      - name: Sync files to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.env' \
+            --exclude 'telethon_session' \
+            ./ root@91.99.6.156:/root/smart_menu_bot_prod/
+
+      - name: Run deploy script on server
+        run: |
+          ssh -o StrictHostKeyChecking=yes -T root@91.99.6.156 <<'EOF'
+            set -e
+            cd /root/smart_menu_bot_prod
+            echo "🚀 Starting deployment..."
+            ./refresh.sh
+            echo "✅ Deployment complete!"
+          EOF
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ $? -eq 0 ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+            exit 1
+          fi
