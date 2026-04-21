@@ -3,6 +3,7 @@
 import logging
 import os
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -16,16 +17,27 @@ from sqlalchemy.ext.asyncio import (
 # Configure pytest-asyncio to use auto mode (creates event loop for each test)
 pytest_plugins = ("pytest_asyncio",)
 
-# Set test database environment variables BEFORE any imports from packages
-# These are used by packages.common_settings.settings
-os.environ.setdefault("DB_HOST", "localhost")
-os.environ.setdefault("DB_PORT", "5432")
-os.environ.setdefault("DB_USER", "test_user")
-os.environ.setdefault("DB_PASSWORD", "test_password")
-os.environ.setdefault("DB_NAME", "test_smartmenubot")
-os.environ.setdefault("DB_SSLMODE", "disable")
-
 logger = logging.getLogger(__name__)
+
+
+def _load_env_file(path: Path) -> None:
+    """Load simple KEY=VALUE pairs from a local env file if present."""
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.split("#", 1)[0].strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env_file(Path(__file__).resolve().parents[1] / ".env.test")
 
 
 # Configure asyncio mode
@@ -61,6 +73,19 @@ def get_sync_database_url() -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
+def _reset_public_schema(engine) -> None:
+    """Удалить все таблицы в public schema перед прогоном миграций.
+
+    Тестовая база должна быть disposable. Если в ней уже есть таблицы
+    от предыдущих запусков, Alembic будет падать на create_table().
+    """
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO postgres"))
+
+
 @pytest.fixture(scope="session")
 def test_db_engine():
     """Создать синхронный engine для миграций.
@@ -87,6 +112,7 @@ def test_db_engine():
 
     # Запуск миграций
     try:
+        _reset_public_schema(engine)
         from alembic.command import upgrade
         from alembic.config import Config
 
@@ -150,7 +176,7 @@ async def _truncate_tables(engine) -> None:
 
 
 @pytest_asyncio.fixture
-async def db_session(test_session_factory, test_async_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(test_db_engine, test_session_factory, test_async_engine) -> AsyncGenerator[AsyncSession, None]:
     """Предоставить чистую тестовую сессию.
 
     Рабочий процесс:
@@ -160,6 +186,7 @@ async def db_session(test_session_factory, test_async_engine) -> AsyncGenerator[
     4. Явно закрыть сессию (освободить asyncpg соединение)
     5. Очистить после теста (уборка)
     """
+    # test_db_engine ensures migrations are applied before we touch the DB.
     # Clean before test using separate connection
     await _truncate_tables(test_async_engine)
 
