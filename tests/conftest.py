@@ -87,7 +87,6 @@ def _reset_public_schema(engine) -> None:
         conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
         conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
-        conn.execute(text("GRANT ALL ON SCHEMA public TO postgres"))
 
 
 @pytest.fixture(scope="session")
