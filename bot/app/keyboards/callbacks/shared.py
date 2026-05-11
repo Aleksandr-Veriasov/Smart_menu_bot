@@ -9,7 +9,9 @@ class SharedCallbacks:
     LIST_MODE_PATTERN = r"show|search"
 
     BOOK_SLUG_PREFIX = "book_"
-    SHARED_START_PREFIX = "share:"
+    # Telegram deep-link `start` payloads allow only A-Z, a-z, 0-9, `_` and `-`.
+    SHARED_START_PREFIX = "share_"
+    LEGACY_SHARED_START_PREFIX = "share:"
 
     @classmethod
     def build_book_slug(cls, category_slug: str) -> str:
@@ -32,9 +34,14 @@ class SharedCallbacks:
 
     @classmethod
     def parse_shared_start_token(cls, data: str | None) -> str | None:
-        if not data or not data.startswith(cls.SHARED_START_PREFIX):
+        if not data:
             return None
-        token = data.removeprefix(cls.SHARED_START_PREFIX).strip()
+        if data.startswith(cls.SHARED_START_PREFIX):
+            token = data.removeprefix(cls.SHARED_START_PREFIX).strip()
+        elif data.startswith(cls.LEGACY_SHARED_START_PREFIX):
+            token = data.removeprefix(cls.LEGACY_SHARED_START_PREFIX).strip()
+        else:
+            return None
         return token or None
 
     @classmethod

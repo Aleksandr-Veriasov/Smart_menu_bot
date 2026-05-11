@@ -37,7 +37,7 @@ async def build_recipe_share_link(
 ) -> str:
     """
     Собирает deep-link для шаринга рецепта через параметр start.
-    Пример: https://t.me/<bot>?start=share:<token>
+    Пример: https://t.me/<bot>?start=share_<token>
     """
     recipe_id_str = str(recipe_id).strip()
     if not recipe_id_str:
