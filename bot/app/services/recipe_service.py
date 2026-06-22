@@ -1,4 +1,6 @@
 import logging
+import random
+from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field
 
@@ -191,6 +193,38 @@ class RecipeService:
             await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
             # Обновляем кэш рецептов
             await self.get_all_recipes_ids_and_titles(user_id=user_id, category_id=category_id)
+
+    async def get_random_recipe(self, user_id: int, category_id: int) -> Recipe | None:
+        """Возвращает случайный рецепт пользователя из категории."""
+        recipes = await self.get_all_recipes_ids_and_titles(user_id, category_id)
+        if not recipes:
+            return None
+        recipe_id = int(random.choice([r["id"] for r in recipes]))
+        return await self.get_recipe_for_view(recipe_id)
+
+    async def save_recipe_draft(
+        self,
+        *,
+        title: str,
+        description: str | None,
+        ingredients: str | Iterable[object],
+        video_url: str | None = None,
+        original_url: str | None = None,
+    ) -> int:
+        """Сохраняет черновик рецепта без привязки к пользователю и категории."""
+        from bot.app.services.save_recipe import save_recipe_draft_service
+        from bot.app.utils.ingredients_parser import parse_ingredients
+
+        ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
+        async with self.db.session() as session:
+            return await save_recipe_draft_service(
+                session,
+                title=title,
+                description=description,
+                ingredients_raw=ingredients_raw,
+                video_url=video_url,
+                original_url=original_url,
+            )
 
     async def update_recipe_title(self, user_id: int, recipe_id: int, new_title: str) -> None:
         """Обновляет название рецепта и инвалидирует кэш."""

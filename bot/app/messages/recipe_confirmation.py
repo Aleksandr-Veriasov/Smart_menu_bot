@@ -10,9 +10,7 @@ from telegram.error import NetworkError, TimedOut
 
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.inlines import keyboard_save_recipe
-from bot.app.services.ingredients_parser import parse_ingredients
-from bot.app.services.save_recipe import save_recipe_draft_service
-from bot.app.utils.context_helpers import get_db, get_redis_cli
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import reply_text_and_cache, reply_video_and_cache
 from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository
@@ -48,18 +46,14 @@ async def send_recipe_confirmation(
     redis = get_redis_cli(context)
     draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id)
     original_url = draft.original_url if draft else None
-    ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
-    db = get_db(context)
     try:
-        async with db.session() as session:
-            recipe_id = await save_recipe_draft_service(
-                session,
-                title=title,
-                description=recipe,
-                ingredients_raw=ingredients_raw,
-                video_url=video_file_id,
-                original_url=original_url,
-            )
+        recipe_id = await context.recipe_service.save_recipe_draft(
+            title=title,
+            description=recipe,
+            ingredients=ingredients,
+            video_url=video_file_id,
+            original_url=original_url,
+        )
     except Exception as e:
         logger.exception("Ошибка при сохранении черновика рецепта: %s", e)
         error_draft = PipelineDraft(

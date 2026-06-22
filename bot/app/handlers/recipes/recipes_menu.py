@@ -14,20 +14,14 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     random_recipe_keyboard,
 )
-from bot.app.services.parse_callback import (
-    parse_category_mode,
-    parse_category_mode_id,
-    parse_mode,
-)
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     reply_text_and_cache,
     reply_video_and_cache,
     send_message_and_cache,
 )
-from bot.app.utils.message_random import random_recipe
 from bot.app.utils.message_utils import (
     build_existing_recipe_text,
     delete_message_safely,
@@ -57,7 +51,7 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
     redis = get_redis_cli(context)
     categories = await context.category_service.get_user_categories_cached(user_id)
 
-    mode = parse_mode(cq.data or "")
+    mode = RecipeCallbacks.parse_recipes_menu_mode(cq.data or "")
     if not mode:
         mode = RecipeMode.SHOW
     if mode is RecipeMode.RANDOM and cq.message and update.effective_chat:
@@ -194,7 +188,7 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
     if not cq or not cq.data:
         return
 
-    parsed = parse_category_mode(cq.data)
+    parsed = RecipeCallbacks.parse_category_mode(cq.data)
     if parsed is None:
         logger.error("Некорректный формат callback_query: %s", cq.data)
         return
@@ -215,15 +209,23 @@ async def handle_random_from_category(
     category_slug: str,
 ) -> None:
     """Сценарий выдачи случайного рецепта из категории."""
-    db, redis = get_db_and_redis(context)
-    video_url, text = await random_recipe(db, redis, user_id, category_slug)
+    try:
+        category_id, category_name = await context.category_service.get_id_and_name_by_slug_cached(category_slug)
+    except ValueError:
+        if cq.message:
+            await safe_edit_message(cq, "Категория не найдена.", reply_markup=home_keyboard())
+        return
+
+    redis = get_redis_cli(context)
     random_markup = random_recipe_keyboard(category_slug)
 
     if not cq.message or not update.effective_chat:
         return
 
     await delete_all_user_messages(context, redis, user_id, update.effective_chat.id)
-    if not text:
+
+    recipe = await context.recipe_service.get_random_recipe(user_id, category_id)
+    if not recipe:
         await send_message_and_cache(
             update,
             context,
@@ -233,6 +235,9 @@ async def handle_random_from_category(
             reply_markup=random_markup,
         )
         return
+
+    video_url = getattr(getattr(recipe, "video", None), "video_url", None)
+    text = f"Вот случайный рецепт из категории '{category_name}':\n\n{build_existing_recipe_text(recipe)}"
     if update.effective_message:
         if video_url:
             await reply_video_and_cache(update.effective_message, context, video_url, user_id=user_id)
@@ -318,7 +323,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
     if not cq or not cq.data:
         return
 
-    parsed = parse_category_mode_id(cq.data)
+    parsed = RecipeCallbacks.parse_recipe_choice(cq.data)
     if parsed is None:
         logger.error("Некорректный формат callback_query в recipe_choice: %s", cq.data)
         return

@@ -21,7 +21,7 @@ from bot.app.utils.message_cache import (
     delete_all_user_messages,
     send_message_and_cache,
 )
-from bot.app.utils.message_utils import delete_message_safely, safe_edit_message
+from bot.app.utils.message_utils import safe_edit_message
 from packages.redis.repository import (
     RecipeActionCacheRepository,
 )
@@ -89,10 +89,7 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
 
     if cq.message and update.effective_chat:
         chat_id = update.effective_chat.id
-        if redis is not None:
-            await delete_all_user_messages(context, redis, cq.from_user.id, chat_id)
-        else:
-            await delete_message_safely(cq.message)
+        await delete_all_user_messages(context, redis, cq.from_user.id, chat_id)
         await send_message_and_cache(
             chat_id=chat_id,
             source=update,
