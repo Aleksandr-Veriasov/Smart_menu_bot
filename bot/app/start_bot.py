@@ -19,7 +19,7 @@ from packages.db.backup import run_daily_dump_scheduler
 from packages.db.database import Database
 from packages.db.migrate_and_seed import ensure_db_up_to_date
 from packages.db.models import Base
-from packages.logging_config import setup_logging
+from packages.logging_config import notify_startup, setup_logging
 from packages.media.video_downloader import cleanup_old_videos
 from packages.redis.redis_conn import close_redis, get_redis
 
@@ -83,6 +83,8 @@ async def runtime_start(ptb_app: PTBApp, state: AppState) -> None:
             allowed_updates=["message", "callback_query", "inline_query"],
         )
         logger.info("🔗 Webhook установлен")
+
+    notify_startup("SmartMenuBot")
 
 
 async def runtime_stop(state: AppState) -> None:
