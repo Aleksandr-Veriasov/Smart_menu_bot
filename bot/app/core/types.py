@@ -8,9 +8,9 @@ from telegram.ext import Application, CallbackContext, ExtBot, JobQueue
 from packages.app_state import AppState
 
 if TYPE_CHECKING:
-    from bot.app.services.category_service import CategoryService
-    from bot.app.services.recipe_service import RecipeService
-    from bot.app.services.user_service import UserService
+    from packages.services.category_service import CategoryService
+    from packages.services.recipe_service import RecipeService
+    from packages.services.user_service import UserService
 
 
 class BotData(TypedDict):
@@ -48,19 +48,19 @@ class AppContext(
 
     @property
     def recipe_service(self) -> RecipeService:
-        from bot.app.services.recipe_service import RecipeService
+        from packages.services.recipe_service import RecipeService
 
         return RecipeService(self.app_state.db, self._require_redis())
 
     @property
     def category_service(self) -> CategoryService:
-        from bot.app.services.category_service import CategoryService
+        from packages.services.category_service import CategoryService
 
         return CategoryService(self.app_state.db, self._require_redis())
 
     @property
     def user_service(self) -> UserService:
-        from bot.app.services.user_service import UserService
+        from packages.services.user_service import UserService
 
         return UserService(self.app_state.db, self._require_redis())
 

@@ -15,6 +15,7 @@ from bot.app.utils.message_cache import (
     send_message_and_cache,
 )
 from bot.app.utils.message_utils import safe_edit_message
+from packages.db.schemas import UserCreate
 from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
@@ -129,7 +130,9 @@ async def user_start(update: Update, context: PTBContext) -> int:
             return ConversationHandler.END
 
     redis = get_redis_cli(context)
-    count = await context.user_service.ensure_user_exists_and_count(tg_user)
+    count = await context.user_service.ensure_user_exists_and_count(
+        UserCreate(id=tg_user.id, username=tg_user.username, first_name=tg_user.first_name, last_name=tg_user.last_name)
+    )
 
     await RecipeActionCacheRepository.delete_all(redis, tg_user.id)
 

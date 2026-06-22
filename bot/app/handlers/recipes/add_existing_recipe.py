@@ -13,6 +13,7 @@ from bot.app.keyboards.inlines import (
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.message_cache import reply_text_and_cache
 from bot.app.utils.message_utils import safe_edit_message
+from packages.db.schemas import UserCreate
 
 logger = logging.getLogger(__name__)
 
@@ -92,5 +93,12 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
 
     await safe_edit_message(cq, message_text, reply_markup=home_keyboard())
 
-    recipes_count = await context.user_service.ensure_user_exists_and_count(cq.from_user)
+    recipes_count = await context.user_service.ensure_user_exists_and_count(
+        UserCreate(
+            id=cq.from_user.id,
+            username=cq.from_user.username,
+            first_name=cq.from_user.first_name,
+            last_name=cq.from_user.last_name,
+        )
+    )
     await maybe_send_new_user_start_message(update, context, recipes_count)
