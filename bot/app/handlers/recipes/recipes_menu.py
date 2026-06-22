@@ -1,6 +1,5 @@
 import logging
 
-from redis.asyncio import Redis
 from telegram import CallbackQuery, Update
 from telegram.constants import ParseMode
 
@@ -15,15 +14,13 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     random_recipe_keyboard,
 )
-from bot.app.services.category_service import CategoryService
 from bot.app.services.parse_callback import (
     parse_category_mode,
     parse_category_mode_id,
     parse_mode,
 )
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     reply_text_and_cache,
@@ -38,7 +35,6 @@ from bot.app.utils.message_utils import (
     safe_edit_message,
 )
 from packages.common_settings.settings import settings
-from packages.db.database import Database
 from packages.redis.repository import (
     RecipeActionCacheRepository,
     UserMessageIdsCacheRepository,
@@ -58,9 +54,8 @@ async def recipes_menu(update: Update, context: PTBContext) -> None:
         return
 
     user_id = cq.from_user.id
-    db, redis = get_db_and_redis(context)
-    service = CategoryService(db, redis)
-    categories = await service.get_user_categories_cached(user_id)
+    redis = get_redis_cli(context)
+    categories = await context.category_service.get_user_categories_cached(user_id)
 
     mode = parse_mode(cq.data or "")
     if not mode:
@@ -99,9 +94,7 @@ async def recipes_book_menu(update: Update, context: PTBContext) -> None:
     if not cq:
         return
 
-    db, redis = get_db_and_redis(context)
-    service = CategoryService(db, redis)
-    categories = await service.get_all_category()
+    categories = await context.category_service.get_all_category()
 
     if not categories:
         if cq.message:
@@ -138,10 +131,9 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
         return
 
     user_id = cq.from_user.id
-    db, redis = get_db_and_redis(context)
-    service = CategoryService(db, redis)
+    redis = get_redis_cli(context)
     try:
-        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+        category_id, category_name = await context.category_service.get_id_and_name_by_slug_cached(category_slug)
     except ValueError:
         logger.warning("Категория книги рецептов не найдена: slug=%s", category_slug)
         if cq.message:
@@ -151,7 +143,7 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
                 reply_markup=home_keyboard(),
             )
         return
-    pairs = await RecipeService(db, redis).get_public_recipes_ids_and_titles(
+    pairs = await context.recipe_service.get_public_recipes_ids_and_titles(
         category_id,
         exclude_user_id=user_id,
     )
@@ -208,24 +200,22 @@ async def recipes_from_category(update: Update, context: PTBContext) -> None:
         return
     category_slug, mode = parsed
     user_id = cq.from_user.id
-    db, redis = get_db_and_redis(context)
     if mode is RecipeMode.RANDOM:
-        await handle_random_from_category(update, context, cq, db, redis, user_id, category_slug)
+        await handle_random_from_category(update, context, cq, user_id, category_slug)
         return
 
-    await handle_show_or_edit_from_category(cq, user_id, db, redis, category_slug, mode)
+    await handle_show_or_edit_from_category(context, cq, user_id, category_slug, mode)
 
 
 async def handle_random_from_category(
     update: Update,
     context: PTBContext,
     cq: CallbackQuery,
-    db: Database,
-    redis: Redis,
     user_id: int,
     category_slug: str,
 ) -> None:
     """Сценарий выдачи случайного рецепта из категории."""
+    db, redis = get_db_and_redis(context)
     video_url, text = await random_recipe(db, redis, user_id, category_slug)
     random_markup = random_recipe_keyboard(category_slug)
 
@@ -258,18 +248,16 @@ async def handle_random_from_category(
 
 
 async def handle_show_or_edit_from_category(
+    context: PTBContext,
     cq: CallbackQuery,
     user_id: int,
-    db: Database,
-    redis: Redis,
     category_slug: str,
     mode: RecipeMode,
 ) -> None:
     """Сценарий показа/редактирования списка рецептов в категории."""
     pairs: list[dict[str, str | int]] = []
-    service = CategoryService(db, redis)
     try:
-        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
+        category_id, category_name = await context.category_service.get_id_and_name_by_slug_cached(category_slug)
     except ValueError:
         logger.warning("Категория пользователя не найдена: slug=%s user_id=%s", category_slug, user_id)
         if cq.message:
@@ -279,9 +267,8 @@ async def handle_show_or_edit_from_category(
                 home_keyboard(),
             )
         return
-    service_recipe = RecipeService(db, redis)
     if category_id:
-        pairs = await service_recipe.get_all_recipes_ids_and_titles(user_id, category_id)
+        pairs = await context.recipe_service.get_all_recipes_ids_and_titles(user_id, category_id)
 
     if not pairs:
         if cq.message:
@@ -302,6 +289,7 @@ async def handle_show_or_edit_from_category(
         mode=mode,
         recipes_total_pages=recipes_total_pages,
     )
+    redis = get_redis_cli(context)
     await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", state.to_dict())
 
     # рисуем первую страницу
@@ -336,7 +324,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         return
     category_slug, mode_str, recipe_id = parsed
     await delete_message_safely(cq.message)
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, cq.from_user.id, "recipes_state"))
     page = state.recipes_page
     keyboard = choice_recipe_keyboard(
@@ -348,7 +336,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         can_manage=mode_str == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
-    recipe = await RecipeService(db, redis).get_recipe_for_view(recipe_id)
+    recipe = await context.recipe_service.get_recipe_for_view(recipe_id)
 
     if not recipe:
         if update.effective_chat:

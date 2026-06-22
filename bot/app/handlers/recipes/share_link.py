@@ -14,9 +14,8 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     share_recipe_keyboard,
 )
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     reply_text_and_cache,
@@ -75,8 +74,8 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
         raise ValueError("recipe_id пустой")
 
     url = await build_recipe_share_link(context, recipe_id)
-    db, redis = get_db_and_redis(context)
-    recipe = await RecipeService(db, redis).get_recipe_basic(int(recipe_id))
+    redis = get_redis_cli(context)
+    recipe = await context.recipe_service.get_recipe_basic(int(recipe_id))
     title_html = escape(recipe.title) if recipe and recipe.title else "Рецепт"
     desc_html = "—"
     if recipe and recipe.description:
@@ -114,7 +113,7 @@ async def share_recipe_back_handler(update: Update, context: PTBContext) -> None
     if not user_id or not msg:
         return
 
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     await delete_all_user_messages(context, redis, user_id, msg.chat_id)
 
     state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, user_id, "recipes_state"))
@@ -130,7 +129,7 @@ async def share_recipe_back_handler(update: Update, context: PTBContext) -> None
         can_manage=mode_value == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
-    recipe = await RecipeService(db, redis).get_recipe_for_view(recipe_id)
+    recipe = await context.recipe_service.get_recipe_for_view(recipe_id)
 
     if not recipe:
         await reply_text_and_cache(
@@ -163,8 +162,7 @@ async def handle_shared_start(update: Update, context: PTBContext, token: str) -
     if not recipe_id or not recipe_id.isdigit():
         return False
 
-    db, redis = get_db_and_redis(context)
-    recipe = await RecipeService(db, redis).get_recipe_with_details(int(recipe_id))
+    recipe = await context.recipe_service.get_recipe_with_details(int(recipe_id))
     if not recipe:
         return False
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)

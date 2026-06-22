@@ -15,9 +15,8 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     keyboard_delete,
 )
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     send_message_and_cache,
@@ -42,8 +41,8 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
         logger.error("Ошибка при извлечении recipe_id из callback_data: %s", cq.data)
         return ConversationHandler.END
 
-    db, redis = get_db_and_redis(context)
-    recipe_name = await RecipeService(db, redis).get_recipe_name(recipe_id)
+    redis = get_redis_cli(context)
+    recipe_name = await context.recipe_service.get_recipe_name(recipe_id)
     if not recipe_name:
         await safe_edit_message(cq, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден в delete_recipe", recipe_id)
@@ -76,7 +75,7 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
         logger.error("Не удалось получить user_id в confirm_delete")
         return ConversationHandler.END
 
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     delete_data = await RecipeActionCacheRepository.get(redis, user_id, "delete")
     if delete_data and "recipe_id" in delete_data:
         recipe_id = delete_data["recipe_id"]
@@ -86,8 +85,7 @@ async def confirm_delete(update: Update, context: PTBContext) -> int:
         logger.error("Ошибка при извлечении recipe_id из кэша в confirm_delete для user_id=%s", user_id)
         return ConversationHandler.END
 
-    service = RecipeService(db, redis)
-    await service.delete_recipe(user_id, recipe_id)
+    await context.recipe_service.delete_recipe(user_id, recipe_id)
 
     if cq.message and update.effective_chat:
         chat_id = update.effective_chat.id

@@ -1,20 +1,72 @@
-from typing import Any, TypeAlias, TypedDict
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+
+from redis.asyncio import Redis
 from telegram.ext import Application, CallbackContext, ExtBot, JobQueue
 
 from packages.app_state import AppState
+
+if TYPE_CHECKING:
+    from bot.app.services.category_service import CategoryService
+    from bot.app.services.recipe_service import RecipeService
+    from bot.app.services.user_service import UserService
 
 
 class BotData(TypedDict):
     state: AppState
 
 
-PTBContext: TypeAlias = CallbackContext[
-    ExtBot[None],
-    dict[Any, Any],
-    dict[Any, Any],
-    BotData,
-]
+class AppContext(
+    CallbackContext[
+        ExtBot[None],
+        dict[Any, Any],
+        dict[Any, Any],
+        BotData,
+    ]
+):
+    """
+    Контекст PTB с доступом к общему состоянию приложения и сервисам.
+
+    Сервисы отдаются как property — хендлерам не нужно доставать db/redis и
+    конструировать сервис вручную. Импорты сервисов ленивые (внутри property),
+    чтобы избежать циклов импорта; сами сервисы дёшевы в создании.
+    """
+
+    @property
+    def app_state(self) -> AppState:
+        state = self.bot_data.get("state")
+        if not isinstance(state, AppState):
+            raise RuntimeError("AppState не инициализирован в bot_data")
+        return state
+
+    def _require_redis(self) -> Redis:
+        redis = self.app_state.redis
+        if redis is None:
+            raise RuntimeError("Redis не инициализирован в AppState")
+        return redis
+
+    @property
+    def recipe_service(self) -> RecipeService:
+        from bot.app.services.recipe_service import RecipeService
+
+        return RecipeService(self.app_state.db, self._require_redis())
+
+    @property
+    def category_service(self) -> CategoryService:
+        from bot.app.services.category_service import CategoryService
+
+        return CategoryService(self.app_state.db, self._require_redis())
+
+    @property
+    def user_service(self) -> UserService:
+        from bot.app.services.user_service import UserService
+
+        return UserService(self.app_state.db, self._require_redis())
+
+
+# Имя сохранено для обратной совместимости: хендлеры аннотируют context как PTBContext.
+PTBContext: TypeAlias = AppContext
 
 PTBApp: TypeAlias = Application[
     ExtBot[None],
@@ -25,4 +77,4 @@ PTBApp: TypeAlias = Application[
     JobQueue[PTBContext],
 ]
 
-__all__ = ["AppState", "BotData", "PTBContext", "PTBApp"]
+__all__ = ["AppContext", "AppState", "BotData", "PTBContext", "PTBApp"]

@@ -10,11 +10,7 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     start_keyboard,
 )
-from bot.app.services.category_service import CategoryService
-from bot.app.services.recipe_service import RecipeService
-from bot.app.services.user_service import UserService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import reply_text_and_cache
 from bot.app.utils.message_utils import safe_edit_message
 
@@ -51,9 +47,7 @@ async def add_existing_recipe(update: Update, context: PTBContext) -> None:
     if recipe_id is None:
         return
 
-    db, redis = get_db_and_redis(context)
-    category_service = CategoryService(db, redis)
-    categories = await category_service.get_all_category()
+    categories = await context.category_service.get_all_category()
     await safe_edit_message(
         cq,
         "Выберите категорию для добавления рецепта:",
@@ -81,10 +75,8 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
     if not user_id:
         return
 
-    db, redis = get_db_and_redis(context)
-    category_service = CategoryService(db, redis)
     try:
-        category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)
+        category_id, _ = await context.category_service.get_id_and_name_by_slug_cached(slug)
     except ValueError:
         await safe_edit_message(
             cq,
@@ -94,12 +86,11 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
         logger.error("Категория с slug '%s' не найдена для пользователя %s", slug, user_id)
         return
 
-    created = await RecipeService(db, redis).link_recipe_to_user(recipe_id, user_id, category_id)
+    created = await context.recipe_service.link_recipe_to_user(recipe_id, user_id, category_id)
 
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
 
     await safe_edit_message(cq, message_text, reply_markup=home_keyboard())
 
-    user_service = UserService(db, redis)
-    recipes_count = await user_service.ensure_user_exists_and_count(cq.from_user)
+    recipes_count = await context.user_service.ensure_user_exists_and_count(cq.from_user)
     await maybe_send_new_user_start_message(update, context, recipes_count)

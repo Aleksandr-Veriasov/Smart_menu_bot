@@ -10,10 +10,8 @@ from bot.app.core.types import PTBContext
 from bot.app.handlers.user import user_start
 from bot.app.keyboards.callbacks import NavCallbacks, RecipeCallbacks
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
-from bot.app.services.category_service import CategoryService
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_utils import safe_edit_message
 from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository
@@ -33,9 +31,8 @@ async def start_save_recipe(update: Update, context: PTBContext) -> int:
     if pipeline_id is None:
         logger.error("Не удалось распарсить pipeline_id в start_save_recipe")
         return ConversationHandler.END
-    db, redis = get_db_and_redis(context)
-    service = CategoryService(db, redis)
-    categories = await service.get_all_category()
+    redis = get_redis_cli(context)
+    categories = await context.category_service.get_all_category()
 
     user_id = cq.from_user.id if cq.from_user else None
     if not user_id:
@@ -70,7 +67,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     if not user_id:
         logger.error("Не удалось получить user_id в save_recipe")
         return ConversationHandler.END
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     entry = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or PipelineDraft()
 
     recipe_id = entry.recipe_id
@@ -91,9 +88,8 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
 
     category_name = ""
     try:
-        service = CategoryService(db, redis)
-        category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
-        await RecipeService(db, redis).link_recipe_to_user(int(recipe_id), user_id, category_id)
+        category_id, category_name = await context.category_service.get_id_and_name_by_slug_cached(category_slug)
+        await context.recipe_service.link_recipe_to_user(int(recipe_id), user_id, category_id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await safe_edit_message(

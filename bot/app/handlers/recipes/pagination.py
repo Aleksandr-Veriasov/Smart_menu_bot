@@ -7,9 +7,8 @@ from bot.app.core.recipes_mode import RecipeMode
 from bot.app.core.types import PTBContext
 from bot.app.keyboards.callbacks import RecipeCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import build_recipes_list_keyboard, home_keyboard
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_utils import collapse_or_edit_recipes_list, safe_edit_message
 from packages.common_settings.settings import settings
 from packages.redis.repository import RecipeActionCacheRepository
@@ -37,7 +36,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
 
     page, callback_category_slug, callback_mode = parsed
 
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     state_data = await RecipeActionCacheRepository.get(redis, user_id, "recipes_state")
     if not state_data:
         return
@@ -49,8 +48,7 @@ async def handler_pagination(update: Update, context: PTBContext) -> None:
     if not items:
         category_id = state.category_id
         if category_id > 0:
-            recipe_service = RecipeService(db, redis)
-            items = await recipe_service.get_all_recipes_ids_and_titles(user_id, category_id)
+            items = await context.recipe_service.get_all_recipes_ids_and_titles(user_id, category_id)
     if not items:
         if cq.message:
             await safe_edit_message(cq, "Список рецептов пуст.", reply_markup=home_keyboard())

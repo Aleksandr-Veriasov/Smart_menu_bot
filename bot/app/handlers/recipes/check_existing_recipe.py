@@ -8,8 +8,6 @@ from bot.app.handlers.recipes.existing_by_url import (
     maybe_handle_multiple_existing_recipes,
 )
 from bot.app.keyboards.inlines import add_recipe_keyboard, home_keyboard
-from bot.app.services.recipe_service import RecipeService
-from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import reply_text_and_cache, reply_video_and_cache
 from bot.app.utils.message_utils import build_existing_recipe_text
 
@@ -27,9 +25,8 @@ async def handle_existing_recipe(update: Update, context: PTBContext, url: str) 
     if not message:
         return False
 
-    db, redis = get_db_and_redis(context)
     user_id = message.from_user.id if message.from_user else None
-    match = await RecipeService(db, redis).find_existing_by_url(url, user_id, limit=EXISTING_RECIPE_VIDEOS_LIMIT)
+    match = await context.recipe_service.find_existing_by_url(url, user_id, limit=EXISTING_RECIPE_VIDEOS_LIMIT)
 
     if not match.recipe_ids:
         return False

@@ -13,10 +13,8 @@ from bot.app.keyboards.inlines import (
     url_candidate_list_keyboard,
     url_candidate_recipe_keyboard,
 )
-from bot.app.services.category_service import CategoryService
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import (
     send_message_and_cache,
     send_video_and_cache,
@@ -89,8 +87,8 @@ async def maybe_handle_multiple_existing_recipes(
     if len(candidates) < 2:
         return False
 
-    db, redis = get_db_and_redis(context)
-    recipe_titles = await RecipeService(db, redis).get_titles_for_ids(candidates)
+    redis = get_redis_cli(context)
+    recipe_titles = await context.recipe_service.get_titles_for_ids(candidates)
 
     sid = secrets.token_urlsafe(6).replace("-", "").replace("_", "")
     payload = {"url": original_url, "recipe_ids": [int(x) for x in candidates], "v": 1}
@@ -127,7 +125,7 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
     sid, recipe_id = parsed
 
     user_id = int(cq.from_user.id)
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
         await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
@@ -142,7 +140,7 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
         )
         return
 
-    recipe, already_linked = await RecipeService(db, redis).get_recipe_with_link_status(int(recipe_id), int(user_id))
+    recipe, already_linked = await context.recipe_service.get_recipe_with_link_status(int(recipe_id), int(user_id))
     if recipe is None:
         await safe_edit_message(cq, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден при показе кандидата", recipe_id)
@@ -210,7 +208,7 @@ async def show_candidates_list(update: Update, context: PTBContext) -> None:
         return
 
     user_id = int(cq.from_user.id)
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
         await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
@@ -230,7 +228,7 @@ async def show_candidates_list(update: Update, context: PTBContext) -> None:
     await delete_messages(context, chat_id=chat_id, message_ids=msg_ids_to_delete)
 
     recipe_ids = extract_allowed_recipe_ids(state)
-    recipe_titles = await RecipeService(db, redis).get_titles_for_ids(recipe_ids)
+    recipe_titles = await context.recipe_service.get_titles_for_ids(recipe_ids)
 
     sent = await send_message_and_cache(
         update,
@@ -268,7 +266,7 @@ async def add_candidate_recipe(update: Update, context: PTBContext) -> None:
     sid, recipe_id = parsed
 
     user_id = int(cq.from_user.id)
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
     state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
     if not state:
         await safe_edit_message(cq, STALE_LIST_TEXT, reply_markup=home_keyboard())
@@ -283,8 +281,7 @@ async def add_candidate_recipe(update: Update, context: PTBContext) -> None:
         )
         return
 
-    service = CategoryService(db, redis)
-    categories = await service.get_all_category()
+    categories = await context.category_service.get_all_category()
     await safe_edit_message(
         cq,
         "Выберите категорию для добавления рецепта:",
@@ -307,11 +304,10 @@ async def add_candidate_recipe_choose_category(update: Update, context: PTBConte
     sid, recipe_id, slug = parsed
 
     user_id = int(cq.from_user.id)
-    db, redis = get_db_and_redis(context)
-    service = CategoryService(db, redis)
-    category_id, _ = await service.get_id_and_name_by_slug_cached(slug)
+    redis = get_redis_cli(context)
+    category_id, _ = await context.category_service.get_id_and_name_by_slug_cached(slug)
 
-    created = await RecipeService(db, redis).link_recipe_to_user(recipe_id, user_id, category_id)
+    created = await context.recipe_service.link_recipe_to_user(recipe_id, user_id, category_id)
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
 
     # Пользователь уже выбрал рецепт и категорию. К списку по ссылке возвращаться не нужно.

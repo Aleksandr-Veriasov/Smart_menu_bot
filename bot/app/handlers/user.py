@@ -7,9 +7,8 @@ from bot.app.core.types import PTBContext
 from bot.app.handlers.recipes.share_link import handle_shared_start
 from bot.app.keyboards.callbacks import HelpCallbacks, SharedCallbacks
 from bot.app.keyboards.inlines import help_keyboard, start_keyboard
-from bot.app.services.user_service import UserService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     reply_text_and_cache,
@@ -129,9 +128,8 @@ async def user_start(update: Update, context: PTBContext) -> int:
         if await handle_shared_start(update, context, token):
             return ConversationHandler.END
 
-    db, redis = get_db_and_redis(context)
-    service = UserService(db, redis)
-    count = await service.ensure_user_exists_and_count(tg_user)
+    redis = get_redis_cli(context)
+    count = await context.user_service.ensure_user_exists_and_count(tg_user)
 
     await RecipeActionCacheRepository.delete_all(redis, tg_user.id)
 

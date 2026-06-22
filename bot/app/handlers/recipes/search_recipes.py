@@ -21,9 +21,8 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     search_recipes_type_keyboard,
 )
-from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
+from bot.app.utils.context_helpers import get_redis_cli
 from bot.app.utils.message_cache import delete_all_user_messages, reply_text_and_cache
 from bot.app.utils.message_utils import safe_edit_message
 from packages.common_settings.settings import settings
@@ -85,11 +84,11 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
         await reply_text_and_cache(msg, context, "Не удалось определить пользователя.", reply_markup=home_keyboard())
         return ConversationHandler.END
 
-    db, redis = get_db_and_redis(context)
+    redis = get_redis_cli(context)
 
     await delete_all_user_messages(context, redis, user_id, msg.chat_id)
 
-    items = await RecipeService(db, redis).search_by_title(user_id, query)
+    items = await context.recipe_service.search_by_title(user_id, query)
 
     if not items:
         await reply_text_and_cache(
@@ -146,8 +145,7 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
     if redis is not None:
         await delete_all_user_messages(context, redis, user_id, msg.chat_id)
 
-    db, redis = get_db_and_redis(context)
-    items = await RecipeService(db, redis).search_by_ingredient(user_id, query)
+    items = await context.recipe_service.search_by_ingredient(user_id, query)
 
     if not items:
         await reply_text_and_cache(

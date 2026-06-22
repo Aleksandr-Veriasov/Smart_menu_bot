@@ -7,9 +7,9 @@ from typing import cast
 from fastapi import FastAPI, HTTPException, Request
 from prometheus_fastapi_instrumentator import Instrumentator
 from telegram import Update
-from telegram.ext import Application
+from telegram.ext import Application, ContextTypes
 
-from bot.app.core.types import AppState, PTBApp
+from bot.app.core.types import AppContext, AppState, PTBApp
 from bot.app.handlers.setup import setup_handlers
 from bot.app.persistence.redis_conversation_persistence import (
     RedisConversationPersistence,
@@ -131,9 +131,13 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
         raise ValueError("❌ TELEGRAM_BOT_TOKEN пуст.")
 
     persistence = RedisConversationPersistence(ttl_seconds=3600)
+    context_types = ContextTypes(context=AppContext)
 
     # Собираем PTB
-    ptb_app = cast(PTBApp, Application.builder().token(token).persistence(persistence).build())
+    ptb_app = cast(
+        PTBApp,
+        Application.builder().token(token).persistence(persistence).context_types(context_types).build(),
+    )
     setup_handlers(ptb_app)
 
     if attach_ptb_hooks:
@@ -150,6 +154,7 @@ def create_ptb_app(attach_ptb_hooks: bool) -> PTBApp:
             Application.builder()
             .token(token)
             .persistence(persistence)
+            .context_types(context_types)
             .post_init(on_startup)
             .post_shutdown(on_shutdown)
             .build(),
