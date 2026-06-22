@@ -35,3 +35,8 @@ docker-compose.override.yml
 docker-compose.db.yml
 
 **/user.session
+
+# Внутренние рабочие документы
+PRODUCT_PLAN.md
+CODE_REVIEW.md
+ROADMAP.md

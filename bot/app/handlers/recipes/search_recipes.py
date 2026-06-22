@@ -21,12 +21,12 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     search_recipes_type_keyboard,
 )
+from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
 from bot.app.utils.message_cache import delete_all_user_messages, reply_text_and_cache
 from bot.app.utils.message_utils import safe_edit_message
 from packages.common_settings.settings import settings
-from packages.db.repository import RecipeRepository
 from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
@@ -89,8 +89,7 @@ async def handle_title_query(update: Update, context: PTBContext) -> int:
 
     await delete_all_user_messages(context, redis, user_id, msg.chat_id)
 
-    async with db.session() as session:
-        items = await RecipeRepository.search_ids_and_titles_by_title(session, user_id, query)
+    items = await RecipeService(db, redis).search_by_title(user_id, query)
 
     if not items:
         await reply_text_and_cache(
@@ -148,8 +147,7 @@ async def handle_ingredient_query(update: Update, context: PTBContext) -> int:
         await delete_all_user_messages(context, redis, user_id, msg.chat_id)
 
     db, redis = get_db_and_redis(context)
-    async with db.session() as session:
-        items = await RecipeRepository.search_ids_and_titles_by_ingredient(session, user_id, query)
+    items = await RecipeService(db, redis).search_by_ingredient(user_id, query)
 
     if not items:
         await reply_text_and_cache(

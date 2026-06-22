@@ -23,7 +23,6 @@ from bot.app.utils.message_cache import (
     send_message_and_cache,
 )
 from bot.app.utils.message_utils import delete_message_safely, safe_edit_message
-from packages.db.repository import RecipeRepository
 from packages.redis.repository import (
     RecipeActionCacheRepository,
 )
@@ -44,8 +43,7 @@ async def delete_recipe(update: Update, context: PTBContext) -> int:
         return ConversationHandler.END
 
     db, redis = get_db_and_redis(context)
-    async with db.session() as session:
-        recipe_name = await RecipeRepository.get_name_by_id(session, recipe_id)
+    recipe_name = await RecipeService(db, redis).get_recipe_name(recipe_id)
     if not recipe_name:
         await safe_edit_message(cq, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден в delete_recipe", recipe_id)

@@ -14,8 +14,9 @@ from bot.app.keyboards.inlines import (
     home_keyboard,
     share_recipe_keyboard,
 )
+from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
-from bot.app.utils.context_helpers import get_db, get_db_and_redis, get_redis_cli
+from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import (
     delete_all_user_messages,
     reply_text_and_cache,
@@ -23,7 +24,6 @@ from bot.app.utils.message_cache import (
 )
 from bot.app.utils.message_utils import build_existing_recipe_text
 from bot.app.utils.share_token import decrypt_recipe_id, encrypt_recipe_id
-from packages.db.repository import RecipeRepository
 from packages.redis.repository import RecipeActionCacheRepository
 
 logger = logging.getLogger(__name__)
@@ -75,9 +75,8 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
         raise ValueError("recipe_id пустой")
 
     url = await build_recipe_share_link(context, recipe_id)
-    db = get_db(context)
-    async with db.session() as session:
-        recipe = await RecipeRepository.get_by_id(session, int(recipe_id))
+    db, redis = get_db_and_redis(context)
+    recipe = await RecipeService(db, redis).get_recipe_basic(int(recipe_id))
     title_html = escape(recipe.title) if recipe and recipe.title else "Рецепт"
     desc_html = "—"
     if recipe and recipe.description:
@@ -88,8 +87,7 @@ async def share_recipe_link_handler(update: Update, context: PTBContext) -> None
     msg = update.effective_message
     if msg:
         user_id = update.effective_user.id if update.effective_user else None
-        redis = get_redis_cli(context)
-        if user_id and redis is not None:
+        if user_id:
             await delete_all_user_messages(context, redis, user_id, msg.chat_id)
         await reply_text_and_cache(
             msg,
@@ -132,10 +130,7 @@ async def share_recipe_back_handler(update: Update, context: PTBContext) -> None
         can_manage=mode_value == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
-    async with db.session() as session:
-        recipe = await RecipeRepository.get_recipe_with_connections(session, recipe_id)
-        if recipe:
-            await RecipeRepository.update_last_used_at(session, int(recipe.id))
+    recipe = await RecipeService(db, redis).get_recipe_for_view(recipe_id)
 
     if not recipe:
         await reply_text_and_cache(
@@ -168,11 +163,10 @@ async def handle_shared_start(update: Update, context: PTBContext, token: str) -
     if not recipe_id or not recipe_id.isdigit():
         return False
 
-    db = get_db(context)
-    async with db.session() as session:
-        recipe = await RecipeRepository.get_recipe_with_connections(session, int(recipe_id))
-        if not recipe:
-            return False
+    db, redis = get_db_and_redis(context)
+    recipe = await RecipeService(db, redis).get_recipe_with_details(int(recipe_id))
+    if not recipe:
+        return False
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)
     text = build_existing_recipe_text(recipe)
 

@@ -14,6 +14,7 @@ from bot.app.keyboards.inlines import (
     url_candidate_recipe_keyboard,
 )
 from bot.app.services.category_service import CategoryService
+from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import (
@@ -26,12 +27,7 @@ from bot.app.utils.message_utils import (
     delete_messages,
     safe_edit_message,
 )
-from packages.db.repository import RecipeRepository, RecipeUserRepository
-from packages.redis.repository import (
-    CategoryCacheRepository,
-    RecipeCacheRepository,
-    UrlCandidateCacheRepository,
-)
+from packages.redis.repository import UrlCandidateCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +90,7 @@ async def maybe_handle_multiple_existing_recipes(
         return False
 
     db, redis = get_db_and_redis(context)
-    async with db.session() as session:
-        rows = await RecipeRepository.get_ids_and_titles_by_ids(session, [int(x) for x in candidates])
-        id_to_title = {int(row["id"]): str(row["title"]) for row in rows}
-        recipe_titles = [(rid, id_to_title.get(int(rid), "")) for rid in candidates if int(rid) in id_to_title]
+    recipe_titles = await RecipeService(db, redis).get_titles_for_ids(candidates)
 
     sid = secrets.token_urlsafe(6).replace("-", "").replace("_", "")
     payload = {"url": original_url, "recipe_ids": [int(x) for x in candidates], "v": 1}
@@ -149,16 +142,8 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
         )
         return
 
-    async with db.session() as session:
-        recipe = await RecipeRepository.get_recipe_with_connections(session, int(recipe_id))
-        if not recipe:
-            recipe_not_found = True
-            already_linked = False
-        else:
-            recipe_not_found = False
-            already_linked = await RecipeUserRepository.is_linked(session, int(recipe_id), int(user_id))
-
-    if recipe_not_found:
+    recipe, already_linked = await RecipeService(db, redis).get_recipe_with_link_status(int(recipe_id), int(user_id))
+    if recipe is None:
         await safe_edit_message(cq, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден при показе кандидата", recipe_id)
         return
@@ -169,9 +154,7 @@ async def show_candidate_recipe(update: Update, context: PTBContext) -> None:
 
     # Удаляем текущее сообщение с кнопкой "Назад" и видео (если было), чтобы не засорять чат.
     await delete_message_safely(cq.message)
-    text = "Рецепт найден, но не удалось загрузить его детали."
-    if recipe is not None:
-        text = build_existing_recipe_text(recipe)
+    text = build_existing_recipe_text(recipe)
 
     header = "Этот рецепт у Вас уже сохранён ✅" if already_linked else "Рецепт из каталога ✅"
     body = f"{header}\n\n{text}"
@@ -247,10 +230,7 @@ async def show_candidates_list(update: Update, context: PTBContext) -> None:
     await delete_messages(context, chat_id=chat_id, message_ids=msg_ids_to_delete)
 
     recipe_ids = extract_allowed_recipe_ids(state)
-    async with db.session() as session:
-        rows = await RecipeRepository.get_ids_and_titles_by_ids(session, recipe_ids)
-        id_to_title = {int(row["id"]): str(row["title"]) for row in rows}
-        recipe_titles = [(rid, id_to_title.get(int(rid), "")) for rid in recipe_ids if int(rid) in id_to_title]
+    recipe_titles = await RecipeService(db, redis).get_titles_for_ids(recipe_ids)
 
     sent = await send_message_and_cache(
         update,
@@ -331,14 +311,8 @@ async def add_candidate_recipe_choose_category(update: Update, context: PTBConte
     service = CategoryService(db, redis)
     category_id, _ = await service.get_id_and_name_by_slug_cached(slug)
 
-    message_text = "✅ Рецепт успешно сохранён."
-    async with db.session() as session:
-        created = await RecipeUserRepository.upsert_user_link(session, recipe_id, user_id, category_id)
-    if not created:
-        message_text = "ℹ️ Рецепт уже есть у вас, обновили категорию."
-
-    await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
-    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
+    created = await RecipeService(db, redis).link_recipe_to_user(recipe_id, user_id, category_id)
+    message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
 
     # Пользователь уже выбрал рецепт и категорию. К списку по ссылке возвращаться не нужно.
     # Заодно подчистим состояние выбора по ссылке.

@@ -39,7 +39,6 @@ from bot.app.utils.message_utils import (
 )
 from packages.common_settings.settings import settings
 from packages.db.database import Database
-from packages.db.repository import RecipeRepository
 from packages.redis.repository import (
     RecipeActionCacheRepository,
     UserMessageIdsCacheRepository,
@@ -152,12 +151,10 @@ async def recipes_book_from_category(update: Update, context: PTBContext) -> Non
                 reply_markup=home_keyboard(),
             )
         return
-    async with db.session() as session:
-        pairs = await RecipeRepository.get_public_recipes_ids_and_titles_by_category(
-            session,
-            category_id,
-            exclude_user_id=user_id,
-        )
+    pairs = await RecipeService(db, redis).get_public_recipes_ids_and_titles(
+        category_id,
+        exclude_user_id=user_id,
+    )
 
     if not pairs:
         if cq.message:
@@ -351,10 +348,7 @@ async def recipe_choice(update: Update, context: PTBContext) -> None:
         can_manage=mode_str == RecipeMode.SHOW.value and not SharedCallbacks.is_book_slug(category_slug),
     )
 
-    async with db.session() as session:
-        recipe = await RecipeRepository.get_recipe_with_connections(session, recipe_id)
-        if recipe:
-            await RecipeRepository.update_last_used_at(session, int(recipe.id))
+    recipe = await RecipeService(db, redis).get_recipe_for_view(recipe_id)
 
     if not recipe:
         if update.effective_chat:

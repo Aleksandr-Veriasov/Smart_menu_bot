@@ -11,16 +11,12 @@ from bot.app.handlers.user import user_start
 from bot.app.keyboards.callbacks import NavCallbacks, RecipeCallbacks
 from bot.app.keyboards.inlines import category_keyboard, home_keyboard
 from bot.app.services.category_service import CategoryService
-from bot.app.services.save_recipe import link_recipe_to_user_service
+from bot.app.services.recipe_service import RecipeService
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis, get_redis_cli
 from bot.app.utils.message_utils import safe_edit_message
 from packages.redis.data_models import PipelineDraft
-from packages.redis.repository import (
-    CategoryCacheRepository,
-    PipelineDraftCacheRepository,
-    RecipeCacheRepository,
-)
+from packages.redis.repository import PipelineDraftCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -97,15 +93,7 @@ async def save_recipe(update: Update, context: PTBContext) -> int:
     try:
         service = CategoryService(db, redis)
         category_id, category_name = await service.get_id_and_name_by_slug_cached(category_slug)
-        async with db.session() as session:
-            await link_recipe_to_user_service(
-                session,
-                recipe_id=int(recipe_id),
-                user_id=user_id,
-                category_id=category_id,
-            )
-        await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
-        await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
+        await RecipeService(db, redis).link_recipe_to_user(int(recipe_id), user_id, category_id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await safe_edit_message(

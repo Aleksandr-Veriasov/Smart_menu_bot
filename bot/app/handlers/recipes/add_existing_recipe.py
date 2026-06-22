@@ -11,13 +11,12 @@ from bot.app.keyboards.inlines import (
     start_keyboard,
 )
 from bot.app.services.category_service import CategoryService
+from bot.app.services.recipe_service import RecipeService
 from bot.app.services.user_service import UserService
 from bot.app.utils.callback_utils import get_answered_callback_query
 from bot.app.utils.context_helpers import get_db_and_redis
 from bot.app.utils.message_cache import reply_text_and_cache
 from bot.app.utils.message_utils import safe_edit_message
-from packages.db.repository import RecipeUserRepository
-from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +94,9 @@ async def add_existing_recipe_choose_category(update: Update, context: PTBContex
         logger.error("Категория с slug '%s' не найдена для пользователя %s", slug, user_id)
         return
 
-    async with db.session() as session:
-        created = await RecipeUserRepository.upsert_user_link(session, recipe_id, user_id, category_id)
+    created = await RecipeService(db, redis).link_recipe_to_user(recipe_id, user_id, category_id)
 
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
-
-    await CategoryCacheRepository.invalidate_user_categories(redis, user_id)
-    await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, user_id, category_id)
 
     await safe_edit_message(cq, message_text, reply_markup=home_keyboard())
 

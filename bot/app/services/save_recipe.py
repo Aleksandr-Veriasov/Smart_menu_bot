@@ -6,7 +6,6 @@ from packages.db.repository import (
     IngredientRepository,
     RecipeIngredientRepository,
     RecipeRepository,
-    RecipeUserRepository,
     VideoRepository,
 )
 
@@ -50,15 +49,3 @@ async def save_recipe_draft_service(
     except Exception:
         await session.rollback()
         raise
-
-
-async def link_recipe_to_user_service(
-    session: AsyncSession,
-    *,
-    recipe_id: int,
-    user_id: int,
-    category_id: int,
-) -> None:
-    """Привязывает рецепт к пользователю и категории."""
-    await RecipeUserRepository.link_user(session, recipe_id, user_id, category_id)
-    await session.commit()
