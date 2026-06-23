@@ -4,13 +4,12 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, User
-from redis.asyncio import Redis
 
+from bot.src.bot_ui.messages import MessageService
 from bot.src.keyboards.callback_data import NavCB, RecipeCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import delete_confirm_keyboard
 from bot.src.recipe_flow.states import DeleteRecipeStates
-from bot.src.utils.messaging import delete_tracked_messages, safe_edit, send_and_track
 from packages.services.recipe_service import RecipeService
 
 logger = logging.getLogger(__name__)
@@ -24,19 +23,20 @@ async def delete_recipe(
     callback_data: RecipeCB,
     state: FSMContext,
     recipe_service: RecipeService,
+    message_service: MessageService,
 ) -> None:
     """Кнопка «Удалить рецепт» — запрос подтверждения."""
     await callback.answer()
     recipe_id = callback_data.recipe_id
     recipe_name = await recipe_service.get_recipe_name(recipe_id)
     if not recipe_name:
-        await safe_edit(callback.message, "Рецепт не найден.", reply_markup=home_keyboard())
+        await message_service.safe_edit(callback.message, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден в delete_recipe", recipe_id)
         return
 
     await state.set_state(DeleteRecipeStates.CONFIRM_DELETE)
     await state.update_data(recipe_id=recipe_id)
-    await safe_edit(
+    await message_service.safe_edit(
         callback.message,
         f"Вы точно хотите удалить рецепт <b>{recipe_name}</b>?",
         reply_markup=delete_confirm_keyboard(),
@@ -50,8 +50,8 @@ async def confirm_delete(
     state: FSMContext,
     user: User,
     recipe_service: RecipeService,
-    redis: Redis,
     bot: Bot,
+    message_service: MessageService,
 ) -> None:
     """Подтверждение удаления рецепта."""
     await callback.answer()
@@ -60,7 +60,7 @@ async def confirm_delete(
     await state.clear()
 
     if not recipe_id:
-        await safe_edit(callback.message, "Не смог понять ID рецепта.", reply_markup=home_keyboard())
+        await message_service.safe_edit(callback.message, "Не смог понять ID рецепта.", reply_markup=home_keyboard())
         logger.error("recipe_id отсутствует в state при подтверждении удаления (user_id=%s)", user.id)
         return
 
@@ -68,23 +68,21 @@ async def confirm_delete(
 
     if isinstance(callback.message, Message):
         chat_id = callback.message.chat.id
-        await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=chat_id)
-        await send_and_track(
+        await message_service.delete_tracked_messages(bot, chat_id=chat_id)
+        await message_service.send_and_track(
             bot,
-            redis,
             chat_id=chat_id,
             text="✅ Рецепт успешно удалён.",
-            user_id=user.id,
             reply_markup=home_keyboard(),
             parse_mode=ParseMode.HTML,
         )
     else:
-        await safe_edit(callback.message, "✅ Рецепт успешно удалён.", reply_markup=home_keyboard())
+        await message_service.safe_edit(callback.message, "✅ Рецепт успешно удалён.", reply_markup=home_keyboard())
 
 
 @router.callback_query(NavCB.filter(F.action == "cancel"), DeleteRecipeStates.CONFIRM_DELETE)
-async def cancel_delete(callback: CallbackQuery, state: FSMContext) -> None:
+async def cancel_delete(callback: CallbackQuery, state: FSMContext, message_service: MessageService) -> None:
     """Отмена удаления рецепта."""
     await callback.answer()
     await state.clear()
-    await safe_edit(callback.message, "Отменено.", reply_markup=home_keyboard())
+    await message_service.safe_edit(callback.message, "Отменено.", reply_markup=home_keyboard())

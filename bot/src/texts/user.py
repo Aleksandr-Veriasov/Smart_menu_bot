@@ -1,4 +1,6 @@
-START_TEXT_NEW_USER = (
+from aiogram.types import User
+
+_START_TEXT_NEW_USER = (
     "Привет, {user.first_name}! 👋\n\n"
     "Я помогу сохранить рецепт из видео и быстро вернуть его, когда он понадобится.\n\n"
     "<b>Как начать:</b>\n"
@@ -10,7 +12,7 @@ START_TEXT_NEW_USER = (
     "После первого сохранения откроются разделы «Мои рецепты», «Поиск» и «Случайное блюдо»."
 )
 
-START_TEXT_USER = (
+_START_TEXT_USER = (
     "Выберите, что хотите сделать:\n\n"
     "• <b>Мои рецепты</b> — ваши сохранённые рецепты по категориям\n"
     "• <b>Книга рецептов</b> — рецепты сообщества\n"
@@ -20,13 +22,13 @@ START_TEXT_USER = (
     "Чтобы добавить новый рецепт, отправьте ссылку на видео из TikTok, Reels или Pinterest."
 )
 
-HELP_TEXT = (
+_HELP_TEXT = (
     "📚 <b>Справка SmartMenuBot</b>\n\n"
     "SmartMenuBot автоматизирует сохранение и управление рецептами из видео.\n\n"
     "Выберите раздел ниже, чтобы получить детальную инструкцию по конкретной функции."
 )
 
-HELP_TOPICS: dict[str, str] = {
+_HELP_TOPICS: dict[str, str] = {
     "upload": (
         "📥 <b>Загрузка рецепта</b>\n\n"
         "Отправьте ссылку на видео из TikTok, Reels или Pinterest обычным сообщением.\n"
@@ -84,3 +86,17 @@ HELP_TOPICS: dict[str, str] = {
         "После добавления получатель сможет редактировать рецепт у себя отдельно."
     ),
 }
+
+
+def render_start_text(user: User, *, new_user: bool) -> str:
+    """Возвращает текст стартового меню для нового или существующего пользователя."""
+    if new_user:
+        return _START_TEXT_NEW_USER.format(user=user)
+    return _START_TEXT_USER
+
+
+def render_help_text(topic: str | None) -> tuple[str, str | None]:
+    """Возвращает текст справки и нормализованный активный раздел."""
+    if topic in _HELP_TOPICS:
+        return _HELP_TOPICS[topic], topic
+    return _HELP_TEXT, None

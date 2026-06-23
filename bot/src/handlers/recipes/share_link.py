@@ -3,23 +3,18 @@ from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, User
-from redis.asyncio import Redis
 
+from bot.src.bot_ui.messages import MessageService
 from bot.src.keyboards.callback_data import RecipeCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import choice_recipe_keyboard, share_recipe_keyboard
 from bot.src.recipe_flow.book_slug import is_book_slug
 from bot.src.recipe_flow.list_state import RecipesStateData
 from bot.src.recipe_flow.modes import RecipeMode
-from bot.src.utils.messaging import (
-    answer_and_track,
-    answer_video_and_track,
-    delete_tracked_messages,
-)
 from bot.src.utils.recipe_text import build_existing_recipe_text
 from bot.src.utils.share_token import encrypt_recipe_id
-from packages.redis.repository import RecipeActionCacheRepository
 from packages.services.recipe_service import RecipeService
 
 logger = logging.getLogger(__name__)
@@ -56,8 +51,8 @@ async def share_recipe_link_handler(
     callback_data: RecipeCB,
     user: User,
     recipe_service: RecipeService,
-    redis: Redis,
     bot: Bot,
+    message_service: MessageService,
 ) -> None:
     """Нажатие кнопки «Поделиться рецептом»."""
     await callback.answer()
@@ -75,12 +70,10 @@ async def share_recipe_link_handler(
 
     if not isinstance(callback.message, Message):
         return
-    await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=callback.message.chat.id)
-    await answer_and_track(
+    await message_service.delete_tracked_messages(bot, chat_id=callback.message.chat.id)
+    await message_service.answer_and_track(
         callback.message,
-        redis,
         f"🍽 <b>Название рецепта:</b> {title_html}\n\n" f"📝 <b>Рецепт:</b>\n{desc_html}\n\n" f"Весь рецепт: {url}",
-        user_id=user.id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=share_recipe_keyboard(recipe_id),
@@ -92,9 +85,10 @@ async def share_recipe_back_handler(
     callback: CallbackQuery,
     callback_data: RecipeCB,
     user: User,
+    state: FSMContext,
     recipe_service: RecipeService,
-    redis: Redis,
     bot: Bot,
+    message_service: MessageService,
 ) -> None:
     """Возврат из шаринга к карточке рецепта."""
     await callback.answer()
@@ -103,15 +97,16 @@ async def share_recipe_back_handler(
         return
     message = callback.message
 
-    await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=message.chat.id)
+    await message_service.delete_tracked_messages(bot, chat_id=message.chat.id)
 
-    state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, user.id, "recipes_state"))
-    category_slug = state.category_slug
-    mode_value = RecipeMode.SHOW.value if state.mode == RecipeMode.SEARCH.value else state.mode
+    data = await state.get_data()
+    recipes_state = RecipesStateData.from_dict(data.get("recipes_state"))
+    category_slug = recipes_state.category_slug
+    mode_value = RecipeMode.SHOW.value if recipes_state.mode == RecipeMode.SEARCH.value else recipes_state.mode
 
     keyboard = choice_recipe_keyboard(
         recipe_id,
-        state.recipes_page,
+        recipes_state.recipes_page,
         category_slug,
         mode_value,
         add_to_self=is_book_slug(category_slug),
@@ -120,17 +115,15 @@ async def share_recipe_back_handler(
 
     recipe = await recipe_service.get_recipe_for_view(recipe_id)
     if not recipe:
-        await answer_and_track(message, redis, "❌ Рецепт не найден.", user_id=user.id, reply_markup=home_keyboard())
+        await message_service.answer_and_track(message, "❌ Рецепт не найден.", reply_markup=home_keyboard())
         return
 
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)
     if video_url:
-        await answer_video_and_track(message, redis, video_url, user_id=user.id)
-    await answer_and_track(
+        await message_service.answer_video_and_track(message, video_url)
+    await message_service.answer_and_track(
         message,
-        redis,
         build_existing_recipe_text(recipe),
-        user_id=user.id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=keyboard,

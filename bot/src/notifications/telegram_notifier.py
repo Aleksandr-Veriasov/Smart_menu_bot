@@ -8,7 +8,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message
 from redis.asyncio import Redis
 
-from bot.src.utils.messaging import track_message
+from bot.src.bot_ui.message_ids import MessageIdsStore
+from bot.src.bot_ui.messages import MessageService
 from packages.notifications.base import Notifier
 from packages.redis.repository import ProgressMessageCacheRepository
 
@@ -35,6 +36,7 @@ class TelegramNotifier(Notifier):
         self.chat_id = chat_id
         self._redis = redis
         self._progress_user_id = source_message.from_user.id if source_message and source_message.from_user else chat_id
+        self._message_service = MessageService(MessageIdsStore(redis, self._progress_user_id))
         self.message_id: int | None = None
         self._last_edit_ts = 0.0
         self._min_edit_interval = min_edit_interval
@@ -166,10 +168,7 @@ class TelegramNotifier(Notifier):
         if self.message_id is None:
             return
         if self._source_message is not None:
-            user_id = self._source_message.from_user.id if self._source_message.from_user else None
-            await track_message(
-                self._redis,
-                user_id=user_id,
+            await self._message_service.track_message(
                 chat_id=self._source_message.chat.id,
                 message_id=self.message_id,
             )

@@ -9,8 +9,9 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import Message
 from redis.asyncio import Redis
 
+from bot.src.bot_ui.message_ids import MessageIdsStore
+from bot.src.bot_ui.messages import MessageService
 from bot.src.keyboards.recipe import save_recipe_keyboard
-from bot.src.utils.messaging import answer_and_track, answer_video_and_track
 from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository
 from packages.services.recipe_service import RecipeService
@@ -44,6 +45,7 @@ async def send_recipe_confirmation(
         logger.warning("Пользователь не найден (from_user is None)")
         return
     user_id = message.from_user.id
+    message_service = MessageService(MessageIdsStore(redis, user_id))
     draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id)
     original_url = draft.original_url if draft else None
     try:
@@ -82,20 +84,17 @@ async def send_recipe_confirmation(
         logger.debug("Пытаемся отправить видео пользователю (file_id=%s)", video_file_id)
         video_msg = await send_video_with_wait(
             message,
-            redis,
+            message_service,
             video_file_id,
-            user_id=user_id,
             total_timeout=10.0,
             check_interval=2.0,
         )
 
     # 2) Если не успели — мягкий фолбэк двумя сообщениями
     if video_msg is None and video_file_id:
-        await answer_and_track(
+        await message_service.answer_and_track(
             message,
-            redis,
             "⚠️ Видео подготовлено, но его отправка заняла слишком долго. " "Ниже отправляю текст рецепта.",
-            user_id=user_id,
         )
 
     # 3) Текст (экранируем только пользовательские поля)
@@ -111,11 +110,9 @@ async def send_recipe_confirmation(
 
     try:
         # Первый кусок — с кнопками
-        await answer_and_track(
+        await message_service.answer_and_track(
             message,
-            redis,
             text,
-            user_id=user_id,
             parse_mode=ParseMode.HTML,
             reply_markup=save_recipe_keyboard(pipeline_id),
             disable_web_page_preview=True,
@@ -126,12 +123,16 @@ async def send_recipe_confirmation(
         return
 
 
-async def _try_reply_video(message: Message, redis: Redis, file_id: str, *, user_id: int) -> Message | None:
+async def _try_reply_video(
+    message: Message,
+    message_service: MessageService,
+    file_id: str,
+) -> Message | None:
     """
     Единичная попытка отправить видео по file_id. Возвращает Message или None.
     """
     try:
-        return await answer_video_and_track(message, redis, file_id, user_id=user_id)
+        return await message_service.answer_video_and_track(message, file_id)
     except TelegramNetworkError as e:
         logger.warning("Таймаут/сеть при отправке видео: %s", e)
         return None
@@ -142,10 +143,9 @@ async def _try_reply_video(message: Message, redis: Redis, file_id: str, *, user
 
 async def send_video_with_wait(
     message: Message,
-    redis: Redis,
+    message_service: MessageService,
     file_id: str,
     *,
-    user_id: int,
     total_timeout: float = 10.0,
     check_interval: float = 2.0,
 ) -> Message | None:
@@ -154,7 +154,7 @@ async def send_video_with_wait(
     секунд, проверяя каждые check_interval. Если не успели — отменяет задачу
     и возвращает None.
     """
-    task = asyncio.create_task(_try_reply_video(message, redis, file_id, user_id=user_id))
+    task = asyncio.create_task(_try_reply_video(message, message_service, file_id))
     remaining = total_timeout
     while remaining > 0:
         try:

@@ -16,7 +16,7 @@ class DependencyMiddleware(BaseMiddleware):
     aiogram DI вместо PTB-овского god-object `context`).
 
     Хендлер объявляет ровно то, что ему нужно:
-        async def handler(message: Message, recipe_service: RecipeService, redis: Redis): ...
+        async def handler(message: Message, recipe_service: RecipeService): ...
 
     `bot` aiogram прокидывает сам, поэтому здесь его не дублируем.
     """

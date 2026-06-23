@@ -60,12 +60,12 @@ class RecipeService(BaseService):
         self.video_repo = VideoRepository
         self.ingredient_repo = IngredientRepository
         self.recipe_ingredient_repo = RecipeIngredientRepository
-        self.recipe_cache = RecipeCacheRepository
-        self.category_cache = CategoryCacheRepository
+        self.recipe_cache = RecipeCacheRepository(self.redis)
+        self.category_cache = CategoryCacheRepository(self.redis)
 
     async def get_all_recipes_ids_and_titles(self, user_id: int, category_id: int) -> list[dict[str, int | str]]:
         """Все id и названия рецептов пользователя."""
-        cached = await self.recipe_cache.get_all_recipes_ids_and_titles(self.redis, user_id, category_id)
+        cached = await self.recipe_cache.get_all_recipes_ids_and_titles(user_id, category_id)
         logger.debug(f"👉 Пользователь: {user_id} категория: {category_id} " f"название рецептов и id: {cached}")
         if cached:
             return cached
@@ -73,7 +73,7 @@ class RecipeService(BaseService):
         async with self._lock(RedisKeys.user_init_lock(user_id=user_id)):
             async with self.db.session() as self.session:
                 rows = await self.recipe_repo.get_all_recipes_ids_and_titles(self.session, user_id, category_id)
-                await self.recipe_cache.set_all_recipes_ids_and_titles(self.redis, user_id, category_id, rows)
+                await self.recipe_cache.set_all_recipes_ids_and_titles(user_id, category_id, rows)
         logger.debug(f"👉 Пользователь: {user_id} категория: {category_id} " f"название рецептов и id из БД: {rows}")
         return rows
 
@@ -163,8 +163,9 @@ class RecipeService(BaseService):
         """
         async with self.db.session() as session:
             created = await self.user_link_repo.upsert_user_link(session, recipe_id, user_id, category_id)
-        await self.category_cache.invalidate_user_categories(self.redis, user_id)
-        await self.recipe_cache.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
+        await self.category_cache.invalidate_user_categories(user_id)
+        await self.recipe_cache.invalidate_recipe_count(user_id)
+        await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
         return created
 
     async def search_by_title(self, user_id: int, query: str) -> list[dict[str, int | str]]:
@@ -189,7 +190,7 @@ class RecipeService(BaseService):
             logger.debug(f"👉 Рецепт {recipe_id} category_id: {category_id}")
             await self.user_link_repo.unlink_user(session, recipe_id, user_id)
         if category_id is not None:
-            await self.recipe_cache.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
+            await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
             # Обновляем кэш рецептов
             await self.get_all_recipes_ids_and_titles(user_id=user_id, category_id=category_id)
 
@@ -234,6 +235,6 @@ class RecipeService(BaseService):
             logger.debug(f"👉 Рецепт {recipe_id} category_id: {category_id}")
             await self.recipe_repo.update_title(session, recipe_id, new_title)
         if category_id is not None:
-            await self.recipe_cache.invalidate_all_recipes_ids_and_titles(self.redis, user_id, category_id)
+            await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
             # Обновляем кэш рецептов
             await self.get_all_recipes_ids_and_titles(user_id=user_id, category_id=category_id)

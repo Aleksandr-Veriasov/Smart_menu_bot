@@ -7,6 +7,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 
 from bot.src.handlers import setup_routers
 from bot.src.middlewares.deps import DependencyMiddleware
+from bot.src.middlewares.store import StoreMiddleware
 from bot.src.middlewares.user import UserMiddleware
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
@@ -53,5 +54,7 @@ async def build_dispatcher(state: AppState) -> Dispatcher:
     dp.update.outer_middleware(DependencyMiddleware(state))
     # Пользователь из апдейта кладётся в data["user"].
     dp.update.outer_middleware(UserMiddleware())
+    # UI-сервисы собираются после пользователя, чтобы message_id хранились по user_id.
+    dp.update.outer_middleware(StoreMiddleware())
     setup_routers(dp)
     return dp

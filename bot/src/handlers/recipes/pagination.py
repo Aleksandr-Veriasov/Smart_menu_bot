@@ -1,18 +1,17 @@
 import logging
 
 from aiogram import Bot, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, User
-from redis.asyncio import Redis
 
+from bot.src.bot_ui.messages import MessageService
 from bot.src.keyboards.callback_data import BookCB, PageCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import recipes_list_keyboard
 from bot.src.recipe_flow.book_slug import is_book_slug
 from bot.src.recipe_flow.list_state import RecipesStateData
 from bot.src.recipe_flow.modes import RecipeMode
-from bot.src.utils.messaging import collapse_or_edit, safe_edit
 from packages.common_settings.settings import settings
-from packages.redis.repository import RecipeActionCacheRepository
 from packages.services.recipe_service import RecipeService
 
 logger = logging.getLogger(__name__)
@@ -25,25 +24,27 @@ async def handler_pagination(
     callback: CallbackQuery,
     callback_data: PageCB,
     user: User,
+    state: FSMContext,
     recipe_service: RecipeService,
-    redis: Redis,
     bot: Bot,
+    message_service: MessageService,
 ) -> None:
     """Перелистывание страниц списка рецептов."""
     await callback.answer()
 
-    state_data = await RecipeActionCacheRepository.get(redis, user.id, "recipes_state")
-    if not state_data:
+    data = await state.get_data()
+    recipes_state_data = data.get("recipes_state")
+    if not recipes_state_data:
         return
-    state = RecipesStateData.from_dict(state_data)
-    category_slug = callback_data.category or state.category_slug
-    mode_raw = callback_data.mode or state.mode
+    recipes_state = RecipesStateData.from_dict(recipes_state_data)
+    category_slug = callback_data.category or recipes_state.category_slug
+    mode_raw = callback_data.mode or recipes_state.mode
 
-    items = state.search_items
-    if not items and state.category_id > 0:
-        items = await recipe_service.get_all_recipes_ids_and_titles(user.id, state.category_id)
+    items = recipes_state.search_items
+    if not items and recipes_state.category_id > 0:
+        items = await recipe_service.get_all_recipes_ids_and_titles(user.id, recipes_state.category_id)
     if not items:
-        await safe_edit(callback.message, "Список рецептов пуст.", reply_markup=home_keyboard())
+        await message_service.safe_edit(callback.message, "Список рецептов пуст.", reply_markup=home_keyboard())
         return
 
     per_page = settings.telegram.recipes_per_page
@@ -54,13 +55,13 @@ async def handler_pagination(
     except ValueError:
         mode = RecipeMode.SHOW
 
-    updated_state = state.with_pagination(
+    updated_recipes_state = recipes_state.with_pagination(
         page=page,
         total_pages=total_pages,
         category_slug=category_slug,
         mode=mode,
     )
-    await RecipeActionCacheRepository.set(redis, user.id, "recipes_state", updated_state.to_dict())
+    await state.update_data(recipes_state=updated_recipes_state.to_dict())
 
     categories_callback = BookCB() if is_book_slug(category_slug) else None
     logger.debug("Пагинация рецептов: page=%s category_slug=%s", page, category_slug)
@@ -73,12 +74,10 @@ async def handler_pagination(
         categories_callback=categories_callback,
     )
 
-    await collapse_or_edit(
+    await message_service.collapse_or_edit(
         callback.message,
         bot,
-        redis,
-        user_id=user.id,
-        title=updated_state.display_title,
+        title=updated_recipes_state.display_title,
         reply_markup=markup,
         disable_web_page_preview=True,
     )
