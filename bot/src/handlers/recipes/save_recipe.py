@@ -6,10 +6,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, User
 from redis.asyncio import Redis
 
-from bot.src.core.recipes_state import SaveRecipeStates
 from bot.src.keyboards.callback_data import CatCB, SaveCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import categories_save_keyboard
+from bot.src.recipe_flow.states import SaveRecipeStates
 from bot.src.utils.messaging import safe_edit
 from packages.redis.data_models import PipelineDraft
 from packages.redis.repository import PipelineDraftCacheRepository

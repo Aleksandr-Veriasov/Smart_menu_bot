@@ -4,12 +4,12 @@ from aiogram import Bot, Router
 from aiogram.types import CallbackQuery, User
 from redis.asyncio import Redis
 
-from bot.src.core.book_slug import is_book_slug
-from bot.src.core.data_models import RecipesStateData
-from bot.src.core.recipes_mode import RecipeMode
 from bot.src.keyboards.callback_data import BookCB, PageCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import recipes_list_keyboard
+from bot.src.recipe_flow.book_slug import is_book_slug
+from bot.src.recipe_flow.list_state import RecipesStateData
+from bot.src.recipe_flow.modes import RecipeMode
 from bot.src.utils.messaging import collapse_or_edit, safe_edit
 from packages.common_settings.settings import settings
 from packages.redis.repository import RecipeActionCacheRepository

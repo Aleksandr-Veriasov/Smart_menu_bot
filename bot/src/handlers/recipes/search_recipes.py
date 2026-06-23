@@ -7,9 +7,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
-from bot.src.core.data_models import RecipesStateData
-from bot.src.core.recipes_mode import RecipeMode
-from bot.src.core.recipes_state import SearchRecipeStates
 from bot.src.keyboards.callback_data import NavCB, SearchCB, SearchTypeCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import (
@@ -17,6 +14,9 @@ from bot.src.keyboards.recipe import (
     recipes_list_keyboard,
     search_type_keyboard,
 )
+from bot.src.recipe_flow.list_state import RecipesStateData
+from bot.src.recipe_flow.modes import RecipeMode
+from bot.src.recipe_flow.states import SearchRecipeStates
 from bot.src.utils.messaging import answer_and_track, delete_tracked_messages, safe_edit
 from packages.common_settings.settings import settings
 from packages.redis.repository import RecipeActionCacheRepository

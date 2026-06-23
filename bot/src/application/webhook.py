@@ -29,7 +29,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # сохраним в app.state, чтобы роуты имели доступ
     app.state.bot = bot
     app.state.dp = dp
-    app.state.state = state
     logger.info("✅ aiogram-приложение запущено (режим webhook).")
 
     try:
@@ -41,7 +40,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await bot.session.close()
         app.state.bot = None
         app.state.dp = None
-        app.state.state = None
 
 
 fastapi_app = FastAPI(title="Webhook Telegram-бота", lifespan=lifespan)

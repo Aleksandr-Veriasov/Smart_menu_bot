@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bot.src.core.book_slug import build_book_slug
-from bot.src.core.recipes_mode import RecipeMode
+from bot.src.recipe_flow.book_slug import build_book_slug
+from bot.src.recipe_flow.modes import RecipeMode
 
 
 @dataclass(slots=True)

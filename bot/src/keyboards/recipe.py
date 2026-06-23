@@ -6,7 +6,6 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.src.core.recipes_mode import RecipeMode
 from bot.src.keyboards.callback_data import (
     AddCatCB,
     BookCatCB,
@@ -20,6 +19,7 @@ from bot.src.keyboards.callback_data import (
     SearchTypeCB,
     UrlCB,
 )
+from bot.src.recipe_flow.modes import RecipeMode
 from packages.common_settings.settings import settings
 
 

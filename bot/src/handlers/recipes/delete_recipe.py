@@ -6,10 +6,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
-from bot.src.core.recipes_state import DeleteRecipeStates
 from bot.src.keyboards.callback_data import NavCB, RecipeCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import delete_confirm_keyboard
+from bot.src.recipe_flow.states import DeleteRecipeStates
 from bot.src.utils.messaging import delete_tracked_messages, safe_edit, send_and_track
 from packages.services.recipe_service import RecipeService
 

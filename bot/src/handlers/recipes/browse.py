@@ -5,9 +5,6 @@ from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
-from bot.src.core.book_slug import build_book_slug, is_book_slug
-from bot.src.core.data_models import RecipesStateData
-from bot.src.core.recipes_mode import RecipeMode
 from bot.src.keyboards.callback_data import BookCatCB, BookCB, CatCB, ChoiceCB, MenuCB
 from bot.src.keyboards.menu import home_keyboard
 from bot.src.keyboards.recipe import (
@@ -17,6 +14,9 @@ from bot.src.keyboards.recipe import (
     random_recipe_keyboard,
     recipes_list_keyboard,
 )
+from bot.src.recipe_flow.book_slug import build_book_slug, is_book_slug
+from bot.src.recipe_flow.list_state import RecipesStateData
+from bot.src.recipe_flow.modes import RecipeMode
 from bot.src.utils.messaging import (
     answer_and_track,
     answer_video_and_track,
