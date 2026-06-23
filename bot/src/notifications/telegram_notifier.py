@@ -34,8 +34,8 @@ class TelegramNotifier(Notifier):
     ):
         self.bot = bot
         self.chat_id = chat_id
-        self._redis = redis
         self._progress_user_id = source_message.from_user.id if source_message and source_message.from_user else chat_id
+        self._progress_repo = ProgressMessageCacheRepository(redis)
         self._message_service = MessageService(MessageIdsStore(redis, self._progress_user_id))
         self.message_id: int | None = None
         self._last_edit_ts = 0.0
@@ -154,14 +154,14 @@ class TelegramNotifier(Notifier):
         """Загружает message_id из кеша, если он там есть."""
         if self.message_id is not None:
             return
-        state = await ProgressMessageCacheRepository.get(self._redis, self._progress_user_id) or {}
+        state = await self._progress_repo.get(self._progress_user_id) or {}
         msg_id = state.get("message_id")
         if isinstance(msg_id, int):
             self.message_id = msg_id
 
     async def _store_message_id(self, message_id: int) -> None:
         """Сохраняет message_id в кеш."""
-        await ProgressMessageCacheRepository.set(self._redis, self._progress_user_id, {"message_id": message_id})
+        await self._progress_repo.set(self._progress_user_id, {"message_id": message_id})
 
     async def finalize(self) -> None:
         """Вызывается в конце, чтобы почистить кеш."""
@@ -172,4 +172,4 @@ class TelegramNotifier(Notifier):
                 chat_id=self._source_message.chat.id,
                 message_id=self.message_id,
             )
-        await ProgressMessageCacheRepository.delete(self._redis, self._progress_user_id)
+        await self._progress_repo.delete(self._progress_user_id)

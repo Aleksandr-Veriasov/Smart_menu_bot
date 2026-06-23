@@ -46,7 +46,8 @@ async def send_recipe_confirmation(
         return
     user_id = message.from_user.id
     message_service = MessageService(MessageIdsStore(redis, user_id))
-    draft = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id)
+    repo = PipelineDraftCacheRepository(redis)
+    draft = await repo.get(user_id, pipeline_id)
     original_url = draft.original_url if draft else None
     try:
         recipe_id = await recipe_service.save_recipe_draft(
@@ -63,7 +64,7 @@ async def send_recipe_confirmation(
             video_file_id=video_file_id,
             save_error=str(e),
         )
-        await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, error_draft)
+        await repo.set(user_id, pipeline_id, error_draft)
         return
 
     draft = PipelineDraft(
@@ -74,7 +75,7 @@ async def send_recipe_confirmation(
         video_file_id=video_file_id,
         recipe_id=recipe_id,
     )
-    await PipelineDraftCacheRepository.set(redis, user_id, pipeline_id, draft)
+    await repo.set(user_id, pipeline_id, draft)
     logger.debug("Черновик рецепта сохранен (pipeline_id=%s, recipe_id=%s)", pipeline_id, recipe_id)
 
     video_msg = None

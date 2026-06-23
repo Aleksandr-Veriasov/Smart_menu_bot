@@ -69,12 +69,12 @@ async def invalidate_bot_caches_best_effort(
         return
     try:
         if title_changed or category_changed or membership_changed:
+            recipe_repo = RecipeCacheRepository(redis)
             for cid in {int(old_category_id), int(new_category_id)}:
-                await RecipeCacheRepository.invalidate_all_recipes_ids_and_titles(redis, int(user_id), int(cid))
+                await recipe_repo.invalidate_all_recipes_ids_and_titles(int(user_id), int(cid))
         if category_changed or membership_changed:
-            await CategoryCacheRepository.invalidate_user_categories(redis, int(user_id))
-        await WebAppRecipeDraftCacheRepository.clear(
-            redis,
+            await CategoryCacheRepository(redis).invalidate_user_categories(int(user_id))
+        await WebAppRecipeDraftCacheRepository(redis).clear(
             user_id=int(user_id),
             recipe_id=int(draft_recipe_id_to_clear),
         )

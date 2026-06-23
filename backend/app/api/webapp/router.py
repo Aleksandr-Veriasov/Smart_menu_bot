@@ -117,7 +117,7 @@ async def get_recipe_draft(
     async with db.session() as session:
         await load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=int(user_id))
 
-    data = await WebAppRecipeDraftCacheRepository.get(redis, user_id=int(user_id), recipe_id=int(recipe_id)) or {}
+    data = await WebAppRecipeDraftCacheRepository(redis).get(user_id=int(user_id), recipe_id=int(recipe_id)) or {}
     return WebAppRecipeDraft(title=data.get("title"), category_id=data.get("category_id"))
 
 
@@ -137,14 +137,13 @@ async def put_recipe_draft(
     async with db.session() as session:
         await load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=int(user_id))
 
-    await WebAppRecipeDraftCacheRepository.set_merge(
-        redis,
+    await WebAppRecipeDraftCacheRepository(redis).set_merge(
         user_id=int(user_id),
         recipe_id=int(recipe_id),
         title=payload.title,
         category_id=payload.category_id,
     )
-    data = await WebAppRecipeDraftCacheRepository.get(redis, user_id=int(user_id), recipe_id=int(recipe_id)) or {}
+    data = await WebAppRecipeDraftCacheRepository(redis).get(user_id=int(user_id), recipe_id=int(recipe_id)) or {}
     return WebAppRecipeDraft(title=data.get("title"), category_id=data.get("category_id"))
 
 
@@ -159,7 +158,7 @@ async def delete_recipe_draft(
     user_id = _get_user_id(x_tg_init_data)
     redis = get_backend_redis(request)
 
-    await WebAppRecipeDraftCacheRepository.clear(redis, user_id=int(user_id), recipe_id=int(recipe_id))
+    await WebAppRecipeDraftCacheRepository(redis).clear(user_id=int(user_id), recipe_id=int(recipe_id))
     return {"ok": True}
 
 

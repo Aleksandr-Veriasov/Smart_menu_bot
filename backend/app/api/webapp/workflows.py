@@ -232,16 +232,16 @@ async def update_telegram_recipe_message_best_effort(
     if redis is None:
         return
 
-    cached = await UserMessageIdsCacheRepository.get_user_message_ids(redis, int(user_id))
+    cached = await UserMessageIdsCacheRepository(redis).get_user_message_ids(int(user_id))
     if not cached:
         return
-    chat_id = cached["chat_id"]
-    message_ids = cached["message_ids"]
+    chat_id = cached.chat_id
+    message_ids = cached.message_ids
     if not message_ids:
         return
     target_message_id = int(message_ids[-1])
 
-    recipes_state = await RecipeActionCacheRepository.get(redis, int(user_id), "recipes_state") or {}
+    recipes_state = await RecipeActionCacheRepository(redis).get(int(user_id), "recipes_state") or {}
     try:
         page = int(recipes_state.get("recipes_page", 0))
     except Exception:

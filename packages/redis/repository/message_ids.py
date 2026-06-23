@@ -1,17 +1,14 @@
 import json
 
-from redis.asyncio import Redis
-
 from packages.redis.data_models import UserMessageIds
-from packages.redis.keys import RedisKeys
+from packages.redis.repository.base import BaseRedisRepository
 
 
-class UserMessageIdsCacheRepository:
+class UserMessageIdsCacheRepository(BaseRedisRepository):
 
-    @classmethod
-    async def get_user_message_ids(cls, r: Redis, user_id: int) -> UserMessageIds | None:
+    async def get_user_message_ids(self, user_id: int) -> UserMessageIds | None:
         """Вернёт chat_id и message_ids пользователя или None."""
-        raw = await r.get(RedisKeys.user_last_recipe_messages(user_id))
+        raw = await self.redis.get(self.keys.user_last_recipe_messages(user_id))
         if raw is None:
             return None
         try:
@@ -29,26 +26,23 @@ class UserMessageIdsCacheRepository:
             pass
         return None
 
-    @classmethod
-    async def append_user_message_ids(cls, r: Redis, user_id: int, chat_id: int, message_ids: list[int]) -> None:
+    async def append_user_message_ids(self, user_id: int, chat_id: int, message_ids: list[int]) -> None:
         """Добавляет message_ids к существующим для пользователя."""
-        existing = await cls.get_user_message_ids(r, user_id)
+        existing = await self.get_user_message_ids(user_id)
         if existing and existing.chat_id == int(chat_id):
             ids = [int(i) for i in existing.message_ids if isinstance(i, int)]
         else:
             ids = []
         ids.extend([int(i) for i in message_ids if isinstance(i, int)])
         payload = json.dumps({"chat_id": int(chat_id), "message_ids": ids}, ensure_ascii=False)
-        await r.set(RedisKeys.user_last_recipe_messages(user_id), payload)
+        await self.redis.set(self.keys.user_last_recipe_messages(user_id), payload)
 
-    @classmethod
-    async def set_user_message_ids(cls, r: Redis, user_id: int, chat_id: int, message_ids: list[int]) -> None:
+    async def set_user_message_ids(self, user_id: int, chat_id: int, message_ids: list[int]) -> None:
         """Перезаписывает message_ids пользователя."""
         ids = [int(i) for i in message_ids if isinstance(i, int)]
         payload = json.dumps({"chat_id": int(chat_id), "message_ids": ids}, ensure_ascii=False)
-        await r.set(RedisKeys.user_last_recipe_messages(user_id), payload)
+        await self.redis.set(self.keys.user_last_recipe_messages(user_id), payload)
 
-    @classmethod
-    async def clear_user_message_ids(cls, r: Redis, user_id: int) -> None:
+    async def clear_user_message_ids(self, user_id: int) -> None:
         """Удаляет message_ids пользователя."""
-        await r.delete(RedisKeys.user_last_recipe_messages(user_id))
+        await self.redis.delete(self.keys.user_last_recipe_messages(user_id))

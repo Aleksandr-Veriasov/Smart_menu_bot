@@ -1,17 +1,13 @@
 import json
 
-from redis.asyncio import Redis
-
-from packages.redis import ttl
-from packages.redis.keys import RedisKeys
+from packages.redis.repository.base import BaseRedisRepository
 
 
-class ProgressMessageCacheRepository:
+class ProgressMessageCacheRepository(BaseRedisRepository):
 
-    @classmethod
-    async def get(cls, r: Redis, user_id: int) -> dict | None:
+    async def get(self, user_id: int) -> dict | None:
         """Возвращает данные прогресс-сообщения или None."""
-        raw = await r.get(RedisKeys.user_progress_message(user_id))
+        raw = await self.redis.get(self.keys.user_progress_message(user_id))
         if raw is None:
             return None
         try:
@@ -20,17 +16,15 @@ class ProgressMessageCacheRepository:
         except Exception:
             return None
 
-    @classmethod
-    async def set(cls, r: Redis, user_id: int, payload: dict) -> None:
+    async def set(self, user_id: int, payload: dict) -> None:
         """Сохраняет данные прогресс-сообщения."""
         value = json.dumps(payload, ensure_ascii=False)
-        await r.setex(
-            RedisKeys.user_progress_message(user_id),
-            ttl.RECIPE_ACTION,
+        await self.redis.setex(
+            self.keys.user_progress_message(user_id),
+            self.ttl.RECIPE_ACTION,
             value,
         )
 
-    @classmethod
-    async def delete(cls, r: Redis, user_id: int) -> None:
+    async def delete(self, user_id: int) -> None:
         """Удаляет данные прогресс-сообщения."""
-        await r.delete(RedisKeys.user_progress_message(user_id))
+        await self.redis.delete(self.keys.user_progress_message(user_id))

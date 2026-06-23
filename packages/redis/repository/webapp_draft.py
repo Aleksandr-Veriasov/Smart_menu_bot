@@ -1,23 +1,19 @@
 import json
 
-from redis.asyncio import Redis
-
-from packages.redis import ttl
-from packages.redis.keys import RedisKeys
+from packages.redis.repository.base import BaseRedisRepository
 
 
-class WebAppRecipeDraftCacheRepository:
+class WebAppRecipeDraftCacheRepository(BaseRedisRepository):
     """
     Короткоживущий черновик редактирования рецепта в Telegram WebApp.
 
     Используется для восстановления title/category при навигации между страницами WebApp.
     """
 
-    @classmethod
-    async def get(cls, r: Redis, *, user_id: int, recipe_id: int) -> dict | None:
+    async def get(self, *, user_id: int, recipe_id: int) -> dict | None:
         """Прочитать черновик (по возможности)."""
-        key = RedisKeys.user_webapp_recipe_draft(int(user_id), int(recipe_id))
-        raw = await r.get(key)
+        key = self.keys.user_webapp_recipe_draft(int(user_id), int(recipe_id))
+        raw = await self.redis.get(key)
         if not raw:
             return None
         try:
@@ -26,10 +22,8 @@ class WebAppRecipeDraftCacheRepository:
         except Exception:
             return None
 
-    @classmethod
     async def set_merge(
-        cls,
-        r: Redis,
+        self,
         *,
         user_id: int,
         recipe_id: int,
@@ -43,8 +37,8 @@ class WebAppRecipeDraftCacheRepository:
         - пустое название не затирает уже сохранённое в черновике
         - невалидный/нулевой category_id не затирает уже сохранённый
         """
-        key = RedisKeys.user_webapp_recipe_draft(int(user_id), int(recipe_id))
-        prev = await cls.get(r, user_id=int(user_id), recipe_id=int(recipe_id)) or {}
+        key = self.keys.user_webapp_recipe_draft(int(user_id), int(recipe_id))
+        prev = await self.get(user_id=int(user_id), recipe_id=int(recipe_id)) or {}
 
         next_title = prev.get("title")
         if title is not None:
@@ -63,10 +57,9 @@ class WebAppRecipeDraftCacheRepository:
 
         payload_dict = {"title": next_title, "category_id": next_category_id}
         payload = json.dumps(payload_dict, ensure_ascii=False)
-        await r.setex(key, int(ttl.WEBAPP_RECIPE_DRAFT), payload)
+        await self.redis.setex(key, int(self.ttl.WEBAPP_RECIPE_DRAFT), payload)
         return payload_dict
 
-    @classmethod
-    async def clear(cls, r: Redis, *, user_id: int, recipe_id: int) -> None:
+    async def clear(self, *, user_id: int, recipe_id: int) -> None:
         """Удалить черновик."""
-        await r.delete(RedisKeys.user_webapp_recipe_draft(int(user_id), int(recipe_id)))
+        await self.redis.delete(self.keys.user_webapp_recipe_draft(int(user_id), int(recipe_id)))
