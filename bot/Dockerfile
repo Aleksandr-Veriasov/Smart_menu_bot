@@ -32,6 +32,6 @@ COPY packages /app/packages
 COPY bot  /app/bot
 COPY ./alembic.ini /app/alembic.ini
 
-# Команда запуска
+# Команда запуска (aiogram)
 ENTRYPOINT ["/usr/bin/tini","--"]
-CMD ["python", "-m", "bot.app.start_bot"]
+CMD ["python", "-m", "bot.src.start_bot"]
