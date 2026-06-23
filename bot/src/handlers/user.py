@@ -200,6 +200,7 @@ async def cmd_start(
     message: Message,
     command: CommandObject,
     state: FSMContext,
+    user: User,
     bot: Bot,
     redis: Redis,
     user_service: UserService,
@@ -207,22 +208,19 @@ async def cmd_start(
 ) -> None:
     """/start — стартовое меню, в т.ч. deep-link шаринга рецептов."""
     await state.clear()
-    tg_user = message.from_user
-    if not tg_user:
-        logger.error("message.from_user отсутствует в /start")
-        return
 
     token = _parse_shared_token(command.args)
     if token and await handle_shared_start(message, recipe_service, redis, token):
         return
 
-    await _show_start_menu(message, tg_user, bot=bot, redis=redis, user_service=user_service)
+    await _show_start_menu(message, user, bot=bot, redis=redis, user_service=user_service)
 
 
 @router.callback_query(NavCB.filter(F.action == "start"))
 async def cb_start(
     callback: CallbackQuery,
     state: FSMContext,
+    user: User,
     bot: Bot,
     redis: Redis,
     user_service: UserService,
@@ -230,10 +228,9 @@ async def cb_start(
     """Кнопка «На главную» — возврат в стартовое меню."""
     await callback.answer()
     await state.clear()
-    tg_user = callback.from_user
     if not isinstance(callback.message, Message):
         return
-    await _show_start_menu(callback.message, tg_user, bot=bot, redis=redis, user_service=user_service)
+    await _show_start_menu(callback.message, user, bot=bot, redis=redis, user_service=user_service)
 
 
 @router.message(Command("help"))

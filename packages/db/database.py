@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from sqlalchemy import MetaData, text
+from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -128,12 +128,3 @@ class Database:
         except Exception:
             logger.exception("❌ Проверка доступности БД завершилась ошибкой")
             return False
-
-    async def create_all(self, base_metadata: MetaData) -> None:
-        """
-        Bootstrap схемы (dev-only).
-        Пример: await db.create_all(Base.metadata)
-        """
-        async with self.engine.begin() as conn:
-            await conn.run_sync(base_metadata.create_all)
-        logger.info("📦 Metadata.create_all() завершён")

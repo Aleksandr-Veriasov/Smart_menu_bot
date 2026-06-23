@@ -3,7 +3,7 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
 from bot.src.core.recipes_state import DeleteRecipeStates
@@ -48,35 +48,33 @@ async def delete_recipe(
 async def confirm_delete(
     callback: CallbackQuery,
     state: FSMContext,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Подтверждение удаления рецепта."""
     await callback.answer()
-    if not callback.from_user:
-        return
-    user_id = callback.from_user.id
     data = await state.get_data()
     recipe_id = data.get("recipe_id")
     await state.clear()
 
     if not recipe_id:
         await safe_edit(callback.message, "Не смог понять ID рецепта.", reply_markup=home_keyboard())
-        logger.error("recipe_id отсутствует в state при подтверждении удаления (user_id=%s)", user_id)
+        logger.error("recipe_id отсутствует в state при подтверждении удаления (user_id=%s)", user.id)
         return
 
-    await recipe_service.delete_recipe(user_id, recipe_id)
+    await recipe_service.delete_recipe(user.id, recipe_id)
 
     if isinstance(callback.message, Message):
         chat_id = callback.message.chat.id
-        await delete_tracked_messages(bot, redis, user_id=user_id, chat_id=chat_id)
+        await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=chat_id)
         await send_and_track(
             bot,
             redis,
             chat_id=chat_id,
             text="✅ Рецепт успешно удалён.",
-            user_id=user_id,
+            user_id=user.id,
             reply_markup=home_keyboard(),
             parse_mode=ParseMode.HTML,
         )

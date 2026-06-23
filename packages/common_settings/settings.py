@@ -96,13 +96,10 @@ class DatabaseSettings(BaseAppSettings):
     ssl_root_cert_file: str | None = Field(default=None, alias="DB_SSLROOTCERT")  # путь к CA
 
     # Рантайм-флаги
-    # dev-bootstrap: Base.metadata.create_all()
-    bootstrap_schema: bool = Field(default=False, alias="DB_BOOTSTRAP_SCHEMA")
     # ping перед выдачей коннекта из пула
     pool_pre_ping: bool = Field(default=True, alias="DB_POOL_PRE_PING")
     # время жизни коннекта в пуле
     pool_recycle: int = Field(default=1800, alias="DB_POOL_RECYCLE")
-    run_migrations_on_startup: bool = Field(default=True, alias="RUN_MIGRATIONS_ON_STARTUP")
     dump_dir: str = Field(default="/app/data/db_dumps", alias="DB_DUMP_DIR")
     dump_schedule_hour_utc: int = Field(default=3, ge=0, le=23, alias="DB_DUMP_SCHEDULE_HOUR_UTC")
     dump_schedule_minute_utc: int = Field(default=0, ge=0, le=59, alias="DB_DUMP_SCHEDULE_MINUTE_UTC")

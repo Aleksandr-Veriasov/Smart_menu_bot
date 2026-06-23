@@ -4,7 +4,7 @@ import secrets
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
 from bot.src.keyboards.callback_data import UrlCB
@@ -109,30 +109,28 @@ async def maybe_handle_multiple_existing_recipes(
 async def show_candidate_recipe(
     callback: CallbackQuery,
     callback_data: UrlCB,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Показ конкретного рецепта из списка кандидатов по ссылке."""
     await callback.answer()
-    if not callback.from_user:
-        return
     sid, recipe_id = callback_data.sid, callback_data.recipe_id
 
-    user_id = int(callback.from_user.id)
-    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user.id, sid=sid)
     if not state:
         await safe_edit(callback.message, STALE_LIST_TEXT, reply_markup=home_keyboard())
-        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе кандидата", user_id, sid)
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе кандидата", user.id, sid)
         return
 
     allowed = extract_allowed_recipe_ids(state)
     if recipe_id not in allowed:
         await safe_edit(callback.message, UNAVAILABLE_RECIPE_TEXT, reply_markup=home_keyboard())
-        logger.warning("recipe_id=%s не в allowed (user_id=%s, sid=%s)", recipe_id, user_id, sid)
+        logger.warning("recipe_id=%s не в allowed (user_id=%s, sid=%s)", recipe_id, user.id, sid)
         return
 
-    recipe, already_linked = await recipe_service.get_recipe_with_link_status(int(recipe_id), int(user_id))
+    recipe, already_linked = await recipe_service.get_recipe_with_link_status(int(recipe_id), user.id)
     if recipe is None:
         await safe_edit(callback.message, "Рецепт не найден.", reply_markup=home_keyboard())
         logger.warning("Рецепт recipe_id=%s не найден при показе кандидата", recipe_id)
@@ -152,7 +150,7 @@ async def show_candidate_recipe(
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)
     if video_url:
         try:
-            video_msg = await send_video_and_track(bot, redis, chat_id=chat_id, video=video_url, user_id=user_id)
+            video_msg = await send_video_and_track(bot, redis, chat_id=chat_id, video=video_url, user_id=user.id)
             video_mid = int(video_msg.message_id)
         except TelegramBadRequest as e:
             logger.warning("Не удалось отправить видео для recipe_id=%s: %s", recipe_id, e)
@@ -162,7 +160,7 @@ async def show_candidate_recipe(
         redis,
         chat_id=chat_id,
         text=body,
-        user_id=user_id,
+        user_id=user.id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=url_candidate_recipe_keyboard(sid=sid, recipe_id=recipe_id, already_linked=already_linked),
@@ -170,7 +168,7 @@ async def show_candidate_recipe(
 
     await UrlCandidateCacheRepository.set_merge(
         redis,
-        user_id=user_id,
+        user_id=user.id,
         sid=sid,
         patch={
             "chat_id": chat_id,
@@ -185,21 +183,19 @@ async def show_candidate_recipe(
 async def show_candidates_list(
     callback: CallbackQuery,
     callback_data: UrlCB,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Возврат к списку рецептов, найденных по ссылке."""
     await callback.answer()
-    if not callback.from_user:
-        return
     sid = callback_data.sid
 
-    user_id = int(callback.from_user.id)
-    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user.id, sid=sid)
     if not state:
         await safe_edit(callback.message, STALE_LIST_TEXT, reply_markup=home_keyboard())
-        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе списка", user_id, sid)
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при показе списка", user.id, sid)
         return
 
     chat_id = _message_chat_id(callback.message) or int(state.get("chat_id") or 0)
@@ -222,12 +218,12 @@ async def show_candidates_list(
         redis,
         chat_id=chat_id,
         text="По этой ссылке найдено несколько рецептов. Выберите нужный:",
-        user_id=user_id,
+        user_id=user.id,
         reply_markup=url_candidate_list_keyboard(sid, recipe_titles),
     )
     await UrlCandidateCacheRepository.set_merge(
         redis,
-        user_id=user_id,
+        user_id=user.id,
         sid=sid,
         patch={
             "chat_id": chat_id,
@@ -242,26 +238,24 @@ async def show_candidates_list(
 async def add_candidate_recipe(
     callback: CallbackQuery,
     callback_data: UrlCB,
+    user: User,
     category_service: CategoryService,
     redis: Redis,
 ) -> None:
     """Запрос категории для добавления рецепта, выбранного по ссылке."""
     await callback.answer()
-    if not callback.from_user:
-        return
     sid, recipe_id = callback_data.sid, callback_data.recipe_id
 
-    user_id = int(callback.from_user.id)
-    state = await UrlCandidateCacheRepository.get(redis, user_id=user_id, sid=sid)
+    state = await UrlCandidateCacheRepository.get(redis, user_id=user.id, sid=sid)
     if not state:
         await safe_edit(callback.message, STALE_LIST_TEXT, reply_markup=home_keyboard())
-        logger.warning("Состояние для user_id=%s, sid=%s не найдено при добавлении", user_id, sid)
+        logger.warning("Состояние для user_id=%s, sid=%s не найдено при добавлении", user.id, sid)
         return
 
     allowed = extract_allowed_recipe_ids(state)
     if recipe_id not in allowed:
         await safe_edit(callback.message, UNAVAILABLE_RECIPE_TEXT, reply_markup=home_keyboard())
-        logger.warning("recipe_id=%s не в allowed (user_id=%s, sid=%s)", recipe_id, user_id, sid)
+        logger.warning("recipe_id=%s не в allowed (user_id=%s, sid=%s)", recipe_id, user.id, sid)
         return
 
     categories = await category_service.get_all_category()
@@ -276,23 +270,21 @@ async def add_candidate_recipe(
 async def add_candidate_recipe_choose_category(
     callback: CallbackQuery,
     callback_data: UrlCB,
+    user: User,
     recipe_service: RecipeService,
     category_service: CategoryService,
     redis: Redis,
 ) -> None:
     """Привязка выбранного по ссылке рецепта к категории пользователя."""
     await callback.answer()
-    if not callback.from_user:
-        return
     sid, recipe_id, slug = callback_data.sid, callback_data.recipe_id, callback_data.slug
 
-    user_id = int(callback.from_user.id)
     category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)
 
-    created = await recipe_service.link_recipe_to_user(recipe_id, user_id, category_id)
+    created = await recipe_service.link_recipe_to_user(recipe_id, user.id, category_id)
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
 
     # Пользователь уже выбрал рецепт и категорию — чистим состояние выбора по ссылке.
-    await UrlCandidateCacheRepository.delete(redis, user_id=user_id, sid=sid)
+    await UrlCandidateCacheRepository.delete(redis, user_id=user.id, sid=sid)
 
     await safe_edit(callback.message, message_text, reply_markup=home_keyboard())

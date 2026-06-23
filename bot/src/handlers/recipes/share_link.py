@@ -3,7 +3,7 @@ from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
 from bot.src.core.book_slug import is_book_slug
@@ -54,6 +54,7 @@ async def build_recipe_share_link(bot: Bot, recipe_id: int | str) -> str:
 async def share_recipe_link_handler(
     callback: CallbackQuery,
     callback_data: RecipeCB,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
@@ -74,14 +75,12 @@ async def share_recipe_link_handler(
 
     if not isinstance(callback.message, Message):
         return
-    user_id = callback.from_user.id if callback.from_user else None
-    if user_id:
-        await delete_tracked_messages(bot, redis, user_id=user_id, chat_id=callback.message.chat.id)
+    await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=callback.message.chat.id)
     await answer_and_track(
         callback.message,
         redis,
         f"🍽 <b>Название рецепта:</b> {title_html}\n\n" f"📝 <b>Рецепт:</b>\n{desc_html}\n\n" f"Весь рецепт: {url}",
-        user_id=user_id,
+        user_id=user.id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=share_recipe_keyboard(recipe_id),
@@ -92,6 +91,7 @@ async def share_recipe_link_handler(
 async def share_recipe_back_handler(
     callback: CallbackQuery,
     callback_data: RecipeCB,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
@@ -99,14 +99,13 @@ async def share_recipe_back_handler(
     """Возврат из шаринга к карточке рецепта."""
     await callback.answer()
     recipe_id = callback_data.recipe_id
-    user_id = callback.from_user.id if callback.from_user else None
-    if not user_id or not isinstance(callback.message, Message):
+    if not isinstance(callback.message, Message):
         return
     message = callback.message
 
-    await delete_tracked_messages(bot, redis, user_id=user_id, chat_id=message.chat.id)
+    await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=message.chat.id)
 
-    state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, user_id, "recipes_state"))
+    state = RecipesStateData.from_dict(await RecipeActionCacheRepository.get(redis, user.id, "recipes_state"))
     category_slug = state.category_slug
     mode_value = RecipeMode.SHOW.value if state.mode == RecipeMode.SEARCH.value else state.mode
 
@@ -121,17 +120,17 @@ async def share_recipe_back_handler(
 
     recipe = await recipe_service.get_recipe_for_view(recipe_id)
     if not recipe:
-        await answer_and_track(message, redis, "❌ Рецепт не найден.", user_id=user_id, reply_markup=home_keyboard())
+        await answer_and_track(message, redis, "❌ Рецепт не найден.", user_id=user.id, reply_markup=home_keyboard())
         return
 
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)
     if video_url:
-        await answer_video_and_track(message, redis, video_url, user_id=user_id)
+        await answer_video_and_track(message, redis, video_url, user_id=user.id)
     await answer_and_track(
         message,
         redis,
         build_existing_recipe_text(recipe),
-        user_id=user_id,
+        user_id=user.id,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=keyboard,

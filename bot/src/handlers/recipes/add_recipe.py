@@ -2,7 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
 from bot.src.handlers.user import START_TEXT_NEW_USER
@@ -40,6 +40,7 @@ async def add_existing_recipe(
 async def add_existing_recipe_choose_category(
     callback: CallbackQuery,
     callback_data: AddCatCB,
+    user: User,
     category_service: CategoryService,
     recipe_service: RecipeService,
     user_service: UserService,
@@ -47,10 +48,7 @@ async def add_existing_recipe_choose_category(
 ) -> None:
     """Привязка существующего рецепта к выбранной категории пользователя."""
     await callback.answer()
-    if not callback.from_user:
-        return
     recipe_id, slug = callback_data.recipe_id, callback_data.slug
-    user = callback.from_user
 
     try:
         category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)

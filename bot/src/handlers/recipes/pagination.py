@@ -1,7 +1,7 @@
 import logging
 
 from aiogram import Bot, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, User
 from redis.asyncio import Redis
 
 from bot.src.core.book_slug import is_book_slug
@@ -24,17 +24,15 @@ router = Router(name="pagination")
 async def handler_pagination(
     callback: CallbackQuery,
     callback_data: PageCB,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Перелистывание страниц списка рецептов."""
     await callback.answer()
-    if not callback.from_user:
-        return
-    user_id = callback.from_user.id
 
-    state_data = await RecipeActionCacheRepository.get(redis, user_id, "recipes_state")
+    state_data = await RecipeActionCacheRepository.get(redis, user.id, "recipes_state")
     if not state_data:
         return
     state = RecipesStateData.from_dict(state_data)
@@ -43,7 +41,7 @@ async def handler_pagination(
 
     items = state.search_items
     if not items and state.category_id > 0:
-        items = await recipe_service.get_all_recipes_ids_and_titles(user_id, state.category_id)
+        items = await recipe_service.get_all_recipes_ids_and_titles(user.id, state.category_id)
     if not items:
         await safe_edit(callback.message, "Список рецептов пуст.", reply_markup=home_keyboard())
         return
@@ -62,7 +60,7 @@ async def handler_pagination(
         category_slug=category_slug,
         mode=mode,
     )
-    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", updated_state.to_dict())
+    await RecipeActionCacheRepository.set(redis, user.id, "recipes_state", updated_state.to_dict())
 
     categories_callback = BookCB() if is_book_slug(category_slug) else None
     logger.debug("Пагинация рецептов: page=%s category_slug=%s", page, category_slug)
@@ -79,7 +77,7 @@ async def handler_pagination(
         callback.message,
         bot,
         redis,
-        user_id=user_id,
+        user_id=user.id,
         title=updated_state.display_title,
         reply_markup=markup,
         disable_web_page_preview=True,

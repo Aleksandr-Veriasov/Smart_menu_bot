@@ -3,7 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, User
 from redis.asyncio import Redis
 
 from bot.src.core.recipes_state import SaveRecipeStates
@@ -26,16 +26,15 @@ async def start_save_recipe(
     callback: CallbackQuery,
     callback_data: SaveCB,
     state: FSMContext,
+    user: User,
     category_service: CategoryService,
     redis: Redis,
 ) -> None:
     """Кнопка «Сохранить рецепт» — предложить выбрать категорию."""
     await callback.answer()
-    if not callback.from_user:
-        return
     pipeline_id = callback_data.pipeline_id
     categories = await category_service.get_all_category()
-    entry = await PipelineDraftCacheRepository.get(redis, callback.from_user.id, pipeline_id) or PipelineDraft()
+    entry = await PipelineDraftCacheRepository.get(redis, user.id, pipeline_id) or PipelineDraft()
     title = entry.title or ""
 
     await safe_edit(
@@ -52,12 +51,12 @@ async def cancel_recipe_save(
     callback: CallbackQuery,
     callback_data: SaveCB,
     state: FSMContext,
+    user: User,
     redis: Redis,
 ) -> None:
     """Кнопка «Отмена» — чистим черновик и выходим из сценария."""
     await callback.answer()
-    if callback.from_user:
-        await PipelineDraftCacheRepository.delete(redis, callback.from_user.id, callback_data.pipeline_id)
+    await PipelineDraftCacheRepository.delete(redis, user.id, callback_data.pipeline_id)
     await state.clear()
     await safe_edit(callback.message, "Рецепт не сохранен.", reply_markup=home_keyboard(), parse_mode=ParseMode.HTML)
 
@@ -67,17 +66,15 @@ async def save_recipe(
     callback: CallbackQuery,
     callback_data: CatCB,
     state: FSMContext,
+    user: User,
     category_service: CategoryService,
     recipe_service: RecipeService,
     redis: Redis,
 ) -> None:
     """Привязка распознанного рецепта к пользователю и выбранной категории."""
     await callback.answer()
-    if not callback.from_user:
-        return
     category_slug, pipeline_id = callback_data.slug, callback_data.pipeline_id
-    user_id = callback.from_user.id
-    entry = await PipelineDraftCacheRepository.get(redis, user_id, pipeline_id) or PipelineDraft()
+    entry = await PipelineDraftCacheRepository.get(redis, user.id, pipeline_id) or PipelineDraft()
     recipe_id = entry.recipe_id
     title = entry.title or "Не указано"
 
@@ -93,7 +90,7 @@ async def save_recipe(
 
     try:
         category_id, category_name = await category_service.get_id_and_name_by_slug_cached(category_slug)
-        await recipe_service.link_recipe_to_user(int(recipe_id), user_id, category_id)
+        await recipe_service.link_recipe_to_user(int(recipe_id), user.id, category_id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await state.clear()
@@ -112,5 +109,5 @@ async def save_recipe(
         parse_mode=ParseMode.HTML,
         reply_markup=home_keyboard(),
     )
-    await PipelineDraftCacheRepository.delete(redis, user_id, pipeline_id)
+    await PipelineDraftCacheRepository.delete(redis, user.id, pipeline_id)
     await state.clear()

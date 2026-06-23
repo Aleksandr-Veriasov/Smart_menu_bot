@@ -4,7 +4,7 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 from redis.asyncio import Redis
 
 from bot.src.core.data_models import RecipesStateData
@@ -58,6 +58,7 @@ async def choose_search_type(callback: CallbackQuery, callback_data: SearchTypeC
 async def _run_search(
     message: Message,
     state: FSMContext,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
@@ -65,8 +66,6 @@ async def _run_search(
     search_type: str,
 ) -> None:
     """Общая логика поиска по названию/ингредиенту и вывода результатов."""
-    if not message.from_user:
-        return
     query = (message.text or "").strip()
     label = "названию" if search_type == "title" else "ингредиенту"
     empty_hint = "Пусто. Введите слово ещё раз." if search_type == "title" else "Пусто. Введите ингредиент ещё раз."
@@ -74,13 +73,12 @@ async def _run_search(
         await answer_and_track(message, redis, empty_hint)
         return
 
-    user_id = message.from_user.id
-    await delete_tracked_messages(bot, redis, user_id=user_id, chat_id=message.chat.id)
+    await delete_tracked_messages(bot, redis, user_id=user.id, chat_id=message.chat.id)
 
     if search_type == "title":
-        items = await recipe_service.search_by_title(user_id, query)
+        items = await recipe_service.search_by_title(user.id, query)
     else:
-        items = await recipe_service.search_by_ingredient(user_id, query)
+        items = await recipe_service.search_by_ingredient(user.id, query)
 
     if not items:
         await state.clear()
@@ -101,7 +99,7 @@ async def _run_search(
         recipes_total_pages=recipes_total_pages,
         search_items=items,
     )
-    await RecipeActionCacheRepository.set(redis, user_id, "recipes_state", search_state.to_dict())
+    await RecipeActionCacheRepository.set(redis, user.id, "recipes_state", search_state.to_dict())
 
     markup = recipes_list_keyboard(
         items,
@@ -125,24 +123,26 @@ async def _run_search(
 async def handle_title_query(
     message: Message,
     state: FSMContext,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Поиск по названию."""
-    await _run_search(message, state, recipe_service, redis, bot, search_type="title")
+    await _run_search(message, state, user, recipe_service, redis, bot, search_type="title")
 
 
 @router.message(SearchRecipeStates.WAIT_INGREDIENT, F.text)
 async def handle_ingredient_query(
     message: Message,
     state: FSMContext,
+    user: User,
     recipe_service: RecipeService,
     redis: Redis,
     bot: Bot,
 ) -> None:
     """Поиск по ингредиенту."""
-    await _run_search(message, state, recipe_service, redis, bot, search_type="ingredient")
+    await _run_search(message, state, user, recipe_service, redis, bot, search_type="ingredient")
 
 
 @router.callback_query(
@@ -153,10 +153,9 @@ async def handle_ingredient_query(
         SearchRecipeStates.WAIT_INGREDIENT,
     ),
 )
-async def cancel_search(callback: CallbackQuery, state: FSMContext, redis: Redis) -> None:
+async def cancel_search(callback: CallbackQuery, state: FSMContext, user: User, redis: Redis) -> None:
     """Отмена поиска."""
     await callback.answer()
-    if callback.from_user:
-        await RecipeActionCacheRepository.delete(redis, callback.from_user.id, "recipes_state")
+    await RecipeActionCacheRepository.delete(redis, user.id, "recipes_state")
     await state.clear()
     await safe_edit(callback.message, "Поиск отменен.", reply_markup=home_keyboard())
