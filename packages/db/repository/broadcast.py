@@ -1,7 +1,7 @@
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from packages.db.models import (
@@ -17,6 +17,18 @@ from .base import SessionMixin
 
 class BroadcastRepository(SessionMixin):
     """Репозиторий для управления рассылочными кампаниями и их сообщениями."""
+
+    async def count(self) -> int:
+        """Вернуть общее количество кампаний."""
+        result = await self.session.execute(select(func.count(BroadcastCampaign.id)))
+        return result.scalar_one_or_none() or 0
+
+    async def count_running(self) -> int:
+        """Вернуть количество активных (running) кампаний."""
+        result = await self.session.execute(
+            select(func.count(BroadcastCampaign.id)).where(BroadcastCampaign.status == BroadcastCampaignStatus.running)
+        )
+        return result.scalar_one_or_none() or 0
 
     async def build_outbox_all_users(self, *, campaign_id: int) -> None:
         """Построить outbox для кампании по аудитории all_users. Дубликаты игнорируются."""

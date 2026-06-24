@@ -10,7 +10,6 @@ from packages.db.models import BroadcastAudienceType, BroadcastCampaignStatus
 
 
 def _coerce_utc(dt: datetime) -> datetime:
-    # Store in UTC; if naive assume UTC.
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
@@ -23,7 +22,6 @@ class BroadcastCampaignCreate(BaseModel):
     status: BroadcastCampaignStatus = BroadcastCampaignStatus.draft
     audience_type: BroadcastAudienceType = BroadcastAudienceType.all_users
     audience_params_json: str | None = None
-
     parse_mode: str = "HTML"
     disable_web_page_preview: bool = True
     reply_markup_json: str | None = None
@@ -54,7 +52,6 @@ class BroadcastCampaignUpdate(BaseModel):
     text: str | None = Field(default=None, min_length=1)
     scheduled_at: datetime | None = None
     status: BroadcastCampaignStatus | None = None
-
     parse_mode: str | None = None
     disable_web_page_preview: bool | None = None
     reply_markup_json: str | None = None
@@ -69,9 +66,7 @@ class BroadcastCampaignUpdate(BaseModel):
     @field_validator("reply_markup_json")
     @classmethod
     def _validate_reply_markup(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        if not v.strip():
+        if v is None or not v.strip():
             return None
         try:
             obj = json.loads(v)
@@ -83,6 +78,8 @@ class BroadcastCampaignUpdate(BaseModel):
 
 
 class BroadcastCampaignRead(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     status: BroadcastCampaignStatus
@@ -104,15 +101,10 @@ class BroadcastCampaignRead(BaseModel):
     failed_count: int
     last_error: str | None
 
-    class Config:
-        from_attributes = True
-
-
-class BroadcastAction(BaseModel):
-    status: BroadcastCampaignStatus
-
 
 class BroadcastMessageRead(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     campaign_id: int
     chat_id: int
@@ -123,6 +115,3 @@ class BroadcastMessageRead(BaseModel):
     created_at: datetime
     sent_at: datetime | None
     last_error: str | None
-
-    class Config:
-        from_attributes = True

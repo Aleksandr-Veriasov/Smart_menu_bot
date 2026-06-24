@@ -1,15 +1,17 @@
 import logging
 from typing import Any, ClassVar
 
+from fastapi import FastAPI
 from markupsafe import Markup, escape
 from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from backend.app.utils.fastapi_state import get_backend_redis
+from packages.common_settings.settings import settings
 from packages.db.database import Database
 from packages.db.models import Admin as AdminModel
 from packages.db.models import (
@@ -622,3 +624,18 @@ def setup_admin(admin: Admin) -> None:
     admin.add_view(BroadcastMessageAdmin)
     admin.add_view(RedisKeysAdmin)
     # admin.add_view(AdminUserAdmin)
+
+
+def setup_sqladmin(app: FastAPI, engine: AsyncEngine, db: Database) -> None:
+    pepper = settings.security.password_pepper
+    if pepper is None:
+        raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware/AdminAuth не может стартовать.")
+    authentication_backend = AdminAuth(db, secret_key=pepper.get_secret_value())
+    admin = Admin(
+        app,
+        engine,
+        authentication_backend=authentication_backend,
+        templates_dir="backend/web/templates",
+    )
+    setup_admin(admin)
+    logger.info("Админка загружена")

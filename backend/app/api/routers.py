@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from backend.app.api.admin import admin_router
 from backend.app.api.broadcast_admin import broadcast_admin_router
 from backend.app.api.webapp import webapp_router
 
@@ -10,3 +11,6 @@ api_router.include_router(webapp_router, prefix="/webapp", tags=["webapp"])
 
 # Admin-only Broadcast API (session-based auth)
 api_router.include_router(broadcast_admin_router, prefix="/broadcast-admin", tags=["broadcast-admin"])
+
+# Admin stats & utilities
+api_router.include_router(admin_router, prefix="/admin", tags=["admin"])

@@ -1,6 +1,6 @@
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import Select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 M = TypeVar("M")
@@ -32,6 +32,11 @@ class BaseRepository(SessionMixin, Generic[M]):
     """Базовый репозиторий с типизированной моделью и CRUD-методами."""
 
     model: type[M]
+
+    async def count(self) -> int:
+        """Вернуть общее количество записей в таблице."""
+        result = await self.session.execute(select(func.count()).select_from(self.model))
+        return result.scalar_one_or_none() or 0
 
     async def get_by_id(self, id: int) -> M | None:
         """Найти запись по первичному ключу."""

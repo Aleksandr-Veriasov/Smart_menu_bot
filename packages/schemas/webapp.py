@@ -1,5 +1,3 @@
-"""Pydantic-схемы для эндпоинтов Telegram WebApp."""
-
 from pydantic import BaseModel, Field
 
 
