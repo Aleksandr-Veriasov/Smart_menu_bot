@@ -95,8 +95,8 @@ async def save_recipe(
         return
 
     try:
-        category_id, category_name = await category_service.get_id_and_name_by_slug_cached(category_slug)
-        await recipe_service.link_recipe_to_user(int(recipe_id), user.id, category_id)
+        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        await recipe_service.link_recipe_to_user(int(recipe_id), user.id, category.id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)
         await state.clear()
@@ -111,7 +111,7 @@ async def save_recipe(
         callback.message,
         f"✅ Ваш рецепт успешно сохранен!\n\n"
         f"🍽 <b>Название рецепта:</b>\n{title}\n\n"
-        f"🔖 <b>Категория:</b> {category_name}",
+        f"🔖 <b>Категория:</b> {category.name}",
         parse_mode=ParseMode.HTML,
         reply_markup=home_keyboard(),
     )

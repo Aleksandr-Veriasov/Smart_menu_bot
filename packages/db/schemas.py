@@ -92,7 +92,7 @@ class CategoryRead(CategoryBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    slug: str | None = None
+    slug: str
 
 
 # ===================== INGREDIENT =====================

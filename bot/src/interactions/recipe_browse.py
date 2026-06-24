@@ -25,7 +25,7 @@ async def show_random_recipe_from_category(
 ) -> None:
     """Показывает случайный рецепт из выбранной категории пользователя."""
     try:
-        category_id, category_name = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
     except ValueError:
         await message_service.safe_edit(message, "Категория не найдена.", reply_markup=home_keyboard())
         return
@@ -35,7 +35,7 @@ async def show_random_recipe_from_category(
 
     await message_service.delete_tracked_messages(bot, chat_id=chat_id)
 
-    recipe = await recipe_service.get_random_recipe(user_id, category_id)
+    recipe = await recipe_service.get_random_recipe(user_id, category.id)
     if not recipe:
         await message_service.send_and_track(
             bot,
@@ -46,7 +46,7 @@ async def show_random_recipe_from_category(
         return
 
     video_url = getattr(getattr(recipe, "video", None), "video_url", None)
-    text = f"Вот случайный рецепт из категории '{category_name}':\n\n{build_existing_recipe_text(recipe)}"
+    text = f"Вот случайный рецепт из категории '{category.name}':\n\n{build_existing_recipe_text(recipe)}"
     if video_url:
         await message_service.answer_video_and_track(message, video_url)
     await message_service.answer_and_track(

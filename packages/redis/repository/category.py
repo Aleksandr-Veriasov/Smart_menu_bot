@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 class CategoryCacheRepository(BaseRedisRepository):
 
-    async def get_user_categories(self, user_id: int) -> list[dict[str, str]] | None:
-        """Вернёт список словарей [{'name':..., 'slug':...}] из Redis или None, если кэша нет."""
+    async def get_user_categories(self, user_id: int) -> list[dict[str, int | str]] | None:
+        """Вернёт список словарей [{'id':..., 'name':..., 'slug':...}] из Redis или None, если кэша нет."""
         raw = await self.redis.get(self.keys.user_categories(user_id))
         if raw is None:
             return None
@@ -21,7 +21,7 @@ class CategoryCacheRepository(BaseRedisRepository):
             pass
         return None
 
-    async def set_user_categories(self, user_id: int, items: list[dict[str, str]]) -> None:
+    async def set_user_categories(self, user_id: int, items: list[dict[str, int | str]]) -> None:
         """Сохраняет список категорий пользователя в Redis с TTL."""
         payload = json.dumps(items, ensure_ascii=False)
         await self.redis.setex(self.keys.user_categories(user_id), self.ttl.USER_CATEGORIES, payload)

@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 
 from packages.db.database import Database
 from packages.redis import ttl
+from packages.redis.keys import RedisKeys
 from packages.redis.lock_repository import RedisLockRepository
 
 
@@ -12,6 +13,7 @@ class BaseService:
     def __init__(self, db: Database, redis: Redis) -> None:
         self.db = db
         self.redis = redis
+        self.keys = RedisKeys
 
     @asynccontextmanager
     async def _lock(self, key: str) -> AsyncIterator[None]:

@@ -1,6 +1,6 @@
 """Клавиатуры карточек рецептов, списков, шаринга, сохранения и выбора по ссылке."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup, WebAppInfo
@@ -21,6 +21,7 @@ from bot.src.keyboards.callback_data import (
 )
 from bot.src.recipe_flow.modes import RecipeMode
 from packages.common_settings.settings import settings
+from packages.db.schemas import CategoryRead, RecipeShort
 
 
 def add_recipe_keyboard(recipe_id: int) -> InlineKeyboardMarkup:
@@ -76,14 +77,14 @@ def save_recipe_keyboard(pipeline_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def url_candidate_list_keyboard(sid: str, recipe_titles: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+def url_candidate_list_keyboard(sid: str, recipe_titles: list[RecipeShort]) -> InlineKeyboardMarkup:
     """Список рецептов, найденных по одной ссылке."""
     builder = InlineKeyboardBuilder()
-    for recipe_id, title in recipe_titles:
-        text = (title or "").strip() or "Без названия"
+    for recipe in recipe_titles:
+        text = recipe.title.strip() or "Без названия"
         if len(text) > 45:
             text = text[:42] + "..."
-        builder.button(text=f"▪️ {text}", callback_data=UrlCB(action="pick", sid=sid, recipe_id=int(recipe_id)))
+        builder.button(text=f"▪️ {text}", callback_data=UrlCB(action="pick", sid=sid, recipe_id=recipe.id))
     builder.button(text="🏠 На главную", callback_data=NavCB(action="start"))
     builder.adjust(1)
     return builder.as_markup()
@@ -103,18 +104,14 @@ def url_candidate_recipe_keyboard(*, sid: str, recipe_id: int, already_linked: b
 def url_candidate_category_keyboard(
     sid: str,
     recipe_id: int,
-    categories: Sequence[Mapping[str, object]],
+    categories: Sequence[CategoryRead],
 ) -> InlineKeyboardMarkup:
     """Выбор категории для добавления рецепта из списка кандидатов по ссылке."""
     builder = InlineKeyboardBuilder()
     for category in categories:
-        name = str(category.get("name") or "").strip()
-        slug = str(category.get("slug") or "").strip().lower()
-        if not name or not slug:
-            continue
         builder.button(
-            text=name,
-            callback_data=UrlCB(action="addcat", sid=sid, recipe_id=recipe_id, slug=slug),
+            text=category.name,
+            callback_data=UrlCB(action="addcat", sid=sid, recipe_id=recipe_id, slug=category.slug),
         )
     builder.button(text="⬅️ Назад к списку", callback_data=UrlCB(action="list", sid=sid))
     builder.button(text="🏠 На главную", callback_data=NavCB(action="start"))
@@ -134,19 +131,15 @@ def random_recipe_keyboard(category_slug: str) -> InlineKeyboardMarkup:
 
 def _fill_categories(
     builder: InlineKeyboardBuilder,
-    categories: Sequence[Mapping[str, object]],
+    categories: Sequence[CategoryRead],
     callback_for_slug,
 ) -> None:
     """Добавляет кнопки категорий (slug → CallbackData)."""
     for category in categories:
-        name = str(category.get("name") or "").strip()
-        slug = str(category.get("slug") or "").strip().lower()
-        if not name or not slug:
-            continue
-        builder.button(text=name, callback_data=callback_for_slug(slug))
+        builder.button(text=category.name, callback_data=callback_for_slug(category.slug))
 
 
-def categories_menu_keyboard(categories: Sequence[Mapping[str, object]], mode: RecipeMode) -> InlineKeyboardMarkup:
+def categories_menu_keyboard(categories: Sequence[CategoryRead], mode: RecipeMode) -> InlineKeyboardMarkup:
     """Категории «Мои рецепты»/«Случайные»."""
     builder = InlineKeyboardBuilder()
     _fill_categories(builder, categories, lambda slug: CatCB(slug=slug, mode=mode.value))
@@ -155,7 +148,7 @@ def categories_menu_keyboard(categories: Sequence[Mapping[str, object]], mode: R
     return builder.as_markup()
 
 
-def categories_book_keyboard(categories: Sequence[Mapping[str, object]]) -> InlineKeyboardMarkup:
+def categories_book_keyboard(categories: Sequence[CategoryRead]) -> InlineKeyboardMarkup:
     """Категории книги рецептов."""
     builder = InlineKeyboardBuilder()
     _fill_categories(builder, categories, lambda slug: BookCatCB(slug=slug))
@@ -164,7 +157,7 @@ def categories_book_keyboard(categories: Sequence[Mapping[str, object]]) -> Inli
     return builder.as_markup()
 
 
-def categories_save_keyboard(categories: Sequence[Mapping[str, object]], pipeline_id: int) -> InlineKeyboardMarkup:
+def categories_save_keyboard(categories: Sequence[CategoryRead], pipeline_id: int) -> InlineKeyboardMarkup:
     """Выбор категории при сохранении распознанного рецепта."""
     builder = InlineKeyboardBuilder()
     _fill_categories(builder, categories, lambda slug: CatCB(slug=slug, mode="save", pipeline_id=pipeline_id))
@@ -173,7 +166,7 @@ def categories_save_keyboard(categories: Sequence[Mapping[str, object]], pipelin
     return builder.as_markup()
 
 
-def categories_add_keyboard(categories: Sequence[Mapping[str, object]], recipe_id: int) -> InlineKeyboardMarkup:
+def categories_add_keyboard(categories: Sequence[CategoryRead], recipe_id: int) -> InlineKeyboardMarkup:
     """Выбор категории при добавлении существующего рецепта к себе."""
     builder = InlineKeyboardBuilder()
     _fill_categories(builder, categories, lambda slug: AddCatCB(recipe_id=recipe_id, slug=slug))
@@ -183,7 +176,7 @@ def categories_add_keyboard(categories: Sequence[Mapping[str, object]], recipe_i
 
 
 def recipes_list_keyboard(
-    items: list[dict[str, int | str]],
+    items: list[RecipeShort],
     page: int = 0,
     *,
     per_page: int = settings.telegram.recipes_per_page,
@@ -201,8 +194,8 @@ def recipes_list_keyboard(
 
     for recipe in current:
         builder.button(
-            text=f'▪️ {recipe["title"]}',
-            callback_data=ChoiceCB(category=category_slug, mode=suffix, recipe_id=int(recipe["id"])),
+            text=f"▪️ {recipe.title}",
+            callback_data=ChoiceCB(category=category_slug, mode=suffix, recipe_id=recipe.id),
         )
 
     if end < total:

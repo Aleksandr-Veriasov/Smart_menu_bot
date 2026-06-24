@@ -115,7 +115,7 @@ async def recipes_book_from_category(
     category_slug = callback_data.slug
 
     try:
-        category_id, category_name = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
     except ValueError:
         logger.warning("Категория книги рецептов не найдена: slug=%s", category_slug)
         await message_service.safe_edit(
@@ -125,11 +125,11 @@ async def recipes_book_from_category(
         )
         return
 
-    pairs = await recipe_service.get_public_recipes_ids_and_titles(category_id, exclude_user_id=user.id)
+    pairs = await recipe_service.get_book_recipes(category.id, exclude_user_id=user.id)
     if not pairs:
         await message_service.safe_edit(
             callback.message,
-            f"В категории «{category_name}» пока нет рецептов с видео.",
+            f"В категории «{category.name}» пока нет рецептов с видео.",
             reply_markup=home_keyboard(),
         )
         return
@@ -137,7 +137,7 @@ async def recipes_book_from_category(
     recipes_per_page = settings.telegram.recipes_per_page
     recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
     recipes_state = RecipesStateData.for_book(
-        category_name=category_name,
+        category_name=category.name,
         category_slug=category_slug,
         recipes_total_pages=recipes_total_pages,
         search_items=pairs,
@@ -154,7 +154,7 @@ async def recipes_book_from_category(
     )
     await message_service.safe_edit(
         callback.message,
-        f"📚 Рецепты категории «{category_name}»:",
+        f"📚 Рецепты категории «{category.name}»:",
         reply_markup=markup,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
@@ -214,7 +214,7 @@ async def _handle_show_from_category(
 ) -> None:
     """Сценарий показа списка рецептов в категории."""
     try:
-        category_id, category_name = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
     except ValueError:
         logger.warning("Категория пользователя не найдена: slug=%s user_id=%s", category_slug, user_id)
         await message_service.safe_edit(
@@ -222,19 +222,19 @@ async def _handle_show_from_category(
         )
         return
 
-    pairs = await recipe_service.get_all_by_user_and_category(user_id, category_id) if category_id else []
+    pairs = await recipe_service.get_all_by_user_and_category(user_id, category.id)
     if not pairs:
         await message_service.safe_edit(
-            message, f"У вас нет рецептов в категории «{category_name}».", reply_markup=home_keyboard()
+            message, f"У вас нет рецептов в категории «{category.name}».", reply_markup=home_keyboard()
         )
         return
 
     recipes_per_page = settings.telegram.recipes_per_page
     recipes_total_pages = (len(pairs) + recipes_per_page - 1) // recipes_per_page
     recipes_state = RecipesStateData.for_category(
-        category_name=category_name,
+        category_name=category.name,
         category_slug=category_slug,
-        category_id=category_id,
+        category_id=category.id,
         mode=mode,
         recipes_total_pages=recipes_total_pages,
     )
@@ -249,7 +249,7 @@ async def _handle_show_from_category(
     )
     await message_service.safe_edit(
         message,
-        f"Выберите рецепт из категории «{category_name}»:",
+        f"Выберите рецепт из категории «{category.name}»:",
         reply_markup=markup,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,

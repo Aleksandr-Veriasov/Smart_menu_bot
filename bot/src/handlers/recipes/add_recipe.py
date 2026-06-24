@@ -51,7 +51,7 @@ async def add_existing_recipe_choose_category(
     recipe_id, slug = callback_data.recipe_id, callback_data.slug
 
     try:
-        category_id, _ = await category_service.get_id_and_name_by_slug_cached(slug)
+        category = await category_service.get_id_and_name_by_slug_cached(slug)
     except ValueError:
         await message_service.safe_edit(
             callback.message,
@@ -61,7 +61,7 @@ async def add_existing_recipe_choose_category(
         logger.error("Категория с slug '%s' не найдена для пользователя %s", slug, user.id)
         return
 
-    created = await recipe_service.link_recipe_to_user(recipe_id, user.id, category_id)
+    created = await recipe_service.link_recipe_to_user(recipe_id, user.id, category.id)
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."
     await message_service.safe_edit(callback.message, message_text, reply_markup=home_keyboard())
 

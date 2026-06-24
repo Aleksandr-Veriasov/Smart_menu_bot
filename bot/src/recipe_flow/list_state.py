@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from bot.src.recipe_flow.book_slug import build_book_slug
 from bot.src.recipe_flow.modes import RecipeMode
+from packages.db.schemas import RecipeShort
 
 
 @dataclass(slots=True)
@@ -17,7 +18,7 @@ class RecipesStateData:
     mode: str = RecipeMode.SHOW.value
     category_name: str | None = None
     list_title: str | None = None
-    search_items: list[dict[str, int | str]] | None = None
+    search_items: list[RecipeShort] | None = None
     search: dict[str, str] | None = None
 
     @property
@@ -61,7 +62,11 @@ class RecipesStateData:
             mode=str(data.get("mode", RecipeMode.SHOW.value) or RecipeMode.SHOW.value),
             category_name=str(data["category_name"]) if data.get("category_name") is not None else None,
             list_title=str(data["list_title"]) if data.get("list_title") is not None else None,
-            search_items=data.get("search_items") if isinstance(data.get("search_items"), list) else None,
+            search_items=(
+                [RecipeShort.model_validate(x) for x in data["search_items"]]
+                if isinstance(data.get("search_items"), list)
+                else None
+            ),
             search=data.get("search") if isinstance(data.get("search"), dict) else None,
         )
 
@@ -79,7 +84,7 @@ class RecipesStateData:
         if self.list_title is not None:
             data["list_title"] = self.list_title
         if self.search_items is not None:
-            data["search_items"] = self.search_items
+            data["search_items"] = [r.model_dump() for r in self.search_items]
         if self.search is not None:
             data["search"] = self.search
         return data
@@ -111,7 +116,7 @@ class RecipesStateData:
         category_name: str,
         category_slug: str,
         recipes_total_pages: int,
-        search_items: list[dict[str, int | str]],
+        search_items: list[RecipeShort],
     ) -> RecipesStateData:
         """Создаёт state для книги рецептов."""
         return cls(
@@ -132,7 +137,7 @@ class RecipesStateData:
         search_type: str,
         query: str,
         recipes_total_pages: int,
-        search_items: list[dict[str, int | str]],
+        search_items: list[RecipeShort],
     ) -> RecipesStateData:
         """Создаёт state для поисковой выдачи."""
         search_label = "названию" if search_type == "title" else "ингредиенту"

@@ -2,7 +2,6 @@ import logging
 
 from packages.db.repository import RecipeRepository, UserRepository
 from packages.db.schemas import UserCreate
-from packages.redis.keys import RedisKeys
 from packages.redis.repository import RecipeCacheRepository, UserCacheRepository
 from packages.services.base import BaseService
 
@@ -23,7 +22,7 @@ class UserService(BaseService):
         if exists is not None:
             return
 
-        async with self._lock(RedisKeys.user_init_lock(user_id=user_id)):
+        async with self._lock(self.keys.user_init_lock(user_id=user_id)):
             async with self.db.session() as session:
                 repo = UserRepository(session)
                 user = await repo.get_by_id(user_id)

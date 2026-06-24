@@ -3,6 +3,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def to_ingredient_name(x: object) -> str:
+    if isinstance(x, dict):
+        return (x.get("name") or "").strip()
+    return str(x or "").strip()
+
+
 def parse_ingredients(text: str) -> list:
     """
     Разбирает строку с ингредиентами и возвращает список ингредиентов.

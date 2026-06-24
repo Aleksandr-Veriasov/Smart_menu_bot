@@ -40,7 +40,7 @@ class RecipeCacheRepository(BaseRedisRepository):
         self,
         user_id: int,
         category_id: int,
-        items: list[dict[str, int | str]],
+        items: list[dict[str, object]],
     ) -> None:
         """Сохраняет список (id, title) всех рецептов пользователя в Redis с TTL."""
         payload = json.dumps(items, ensure_ascii=False)
