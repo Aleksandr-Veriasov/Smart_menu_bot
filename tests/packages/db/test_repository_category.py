@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from packages.db.models import Category
 from packages.db.repository import (
     CategoryRepository,
     RecipeRepository,
@@ -21,8 +22,7 @@ class TestCategoryRepositoryCreate:
     @pytest.mark.asyncio
     async def test_create_category_basic(self, db_session: AsyncSession) -> None:
         """Создание базовой категории (slug генерируется автоматически)."""
-        category = await CategoryRepository.create(
-            db_session,
+        category = await CategoryRepository(db_session).create(
             CategoryCreate(name="Завтраки"),
         )
 
@@ -32,12 +32,11 @@ class TestCategoryRepositoryCreate:
     @pytest.mark.asyncio
     async def test_create_categories_with_same_name(self, db_session: AsyncSession) -> None:
         """Можно создавать категории с одинаковыми именами."""
-        cat1 = await CategoryRepository.create(
-            db_session,
+        repo = CategoryRepository(db_session)
+        cat1 = await repo.create(
             CategoryCreate(name="Рецепты"),
         )
-        cat2 = await CategoryRepository.create(
-            db_session,
+        cat2 = await repo.create(
             CategoryCreate(name="Рецепты"),
         )
 
@@ -47,12 +46,11 @@ class TestCategoryRepositoryCreate:
     @pytest.mark.asyncio
     async def test_create_multiple_categories(self, db_session: AsyncSession) -> None:
         """Создание нескольких категорий."""
-        cat1 = await CategoryRepository.create(
-            db_session,
+        repo = CategoryRepository(db_session)
+        cat1 = await repo.create(
             CategoryCreate(name="Категория 1"),
         )
-        cat2 = await CategoryRepository.create(
-            db_session,
+        cat2 = await repo.create(
             CategoryCreate(name="Категория 2"),
         )
 
@@ -65,86 +63,71 @@ class TestCategoryRepositoryGet:
     """Тесты для методов получения категорий."""
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_slug_raises_error(self, db_session: AsyncSession) -> None:
-        """Получение по несуществующему slug вызывает ValueError."""
-        with pytest.raises(ValueError, match="Category not found"):
-            await CategoryRepository.get_id_and_name_by_slug(db_session, "nonexistent")
+    async def test_get_by_nonexistent_slug_returns_none(self, db_session: AsyncSession) -> None:
+        """Получение по несуществующему slug возвращает None."""
+        result = await CategoryRepository(db_session).get_by_slug("nonexistent")
+        assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_id_by_nonexistent_slug_raises_error(self, db_session: AsyncSession) -> None:
-        """Получение ID по несуществующему slug вызывает ValueError."""
-        with pytest.raises(ValueError, match="Category not found"):
-            await CategoryRepository.get_id_by_slug(db_session, "nonexistent")
+    async def test_get_by_slug(self, db_session: AsyncSession) -> None:
+        """Получение категории по slug."""
+        obj = Category(name="Салаты", slug="salads")
+        db_session.add(obj)
+        await db_session.flush()
+        await db_session.refresh(obj)
+
+        category = await CategoryRepository(db_session).get_by_slug("salads")
+        assert category is not None
+        assert category.id == obj.id
+        assert category.name == "Салаты"
+        assert category.slug == "salads"
 
     @pytest.mark.asyncio
     async def test_get_all(self, db_session: AsyncSession) -> None:
         """Получение всех категорий."""
+        repo = CategoryRepository(db_session)
         # Создаем несколько категорий
-        cat1 = await CategoryRepository.create(
-            db_session,
+        cat1 = await repo.create(
             CategoryCreate(name="Категория 1", slug="cat-1"),
         )
-        cat2 = await CategoryRepository.create(
-            db_session,
+        cat2 = await repo.create(
             CategoryCreate(name="Категория 2", slug="cat-2"),
         )
 
-        all_categories = await CategoryRepository.get_all(db_session)
+        all_categories = await repo.get_all()
 
         assert len(all_categories) >= 2
-        ids = [c["id"] for c in all_categories]
+        ids = [c.id for c in all_categories]
         assert cat1.id in ids
         assert cat2.id in ids
 
     @pytest.mark.asyncio
-    async def test_get_all_name_and_slug(self, db_session: AsyncSession) -> None:
-        """Получение имен и слагов всех категорий."""
-        await CategoryRepository.create(
-            db_session,
-            CategoryCreate(name="Салаты"),
-        )
-        await CategoryRepository.create(
-            db_session,
-            CategoryCreate(name="Супы"),
-        )
-
-        results = await CategoryRepository.get_all_name_and_slug(db_session)
-
-        assert len(results) >= 2
-        names = [r["name"] for r in results]
-        assert "Салаты" in names
-        assert "Супы" in names
-
-    @pytest.mark.asyncio
-    async def test_get_name_and_slug_by_user_id(self, db_session: AsyncSession) -> None:
+    async def test_get_by_user_id(self, db_session: AsyncSession) -> None:
         """Получение категорий пользователя."""
         # Создаем пользователя
-        user = await UserRepository.create(
-            db_session,
+        user = await UserRepository(db_session).create(
             UserCreate(id=111111, username="user_with_recipes"),
         )
 
         # Создаем категории
-        cat1 = await CategoryRepository.create(
-            db_session,
+        cat_repo = CategoryRepository(db_session)
+        cat1 = await cat_repo.create(
             CategoryCreate(name="Основные"),
         )
-        cat2 = await CategoryRepository.create(
-            db_session,
+        cat2 = await cat_repo.create(
             CategoryCreate(name="Закуски"),
         )
 
         # Создаем рецепты в этих категориях
-        await RecipeRepository.create(
-            db_session,
+        recipe_repo = RecipeRepository(db_session)
+        await recipe_repo.create(
             RecipeCreate(
                 title="Рецепт 1",
                 user_id=user.id,
                 category_id=cat1.id,
             ),
         )
-        await RecipeRepository.create(
-            db_session,
+        await recipe_repo.create(
             RecipeCreate(
                 title="Рецепт 2",
                 user_id=user.id,
@@ -153,22 +136,21 @@ class TestCategoryRepositoryGet:
         )
 
         # Получаем категории пользователя
-        user_categories = await CategoryRepository.get_name_and_slug_by_user_id(db_session, user.id)
+        user_categories = await cat_repo.get_by_user_id(user.id)
 
         assert len(user_categories) == 2
-        names = [c["name"] for c in user_categories]
+        names = [c.name for c in user_categories]
         assert "Основные" in names
         assert "Закуски" in names
 
     @pytest.mark.asyncio
-    async def test_get_name_and_slug_by_user_id_no_recipes(self, db_session: AsyncSession) -> None:
+    async def test_get_by_user_id_no_recipes(self, db_session: AsyncSession) -> None:
         """Получение категорий для пользователя без рецептов."""
-        user = await UserRepository.create(
-            db_session,
+        user = await UserRepository(db_session).create(
             UserCreate(id=222222, username="user_no_recipes"),
         )
 
-        user_categories = await CategoryRepository.get_name_and_slug_by_user_id(db_session, user.id)
+        user_categories = await CategoryRepository(db_session).get_by_user_id(user.id)
 
         assert user_categories == []
 
@@ -179,33 +161,32 @@ class TestCategoryRepositoryIntegration:
     @pytest.mark.asyncio
     async def test_category_with_multiple_users(self, db_session: AsyncSession) -> None:
         """Одна категория может быть связана с несколькими пользователями."""
+        cat_repo = CategoryRepository(db_session)
+        user_repo = UserRepository(db_session)
+        recipe_repo = RecipeRepository(db_session)
+
         # Создаем категорию
-        category = await CategoryRepository.create(
-            db_session,
+        category = await cat_repo.create(
             CategoryCreate(name="Общая"),
         )
 
         # Создаем двух пользователей
-        user1 = await UserRepository.create(
-            db_session,
+        user1 = await user_repo.create(
             UserCreate(id=333333, username="user1"),
         )
-        user2 = await UserRepository.create(
-            db_session,
+        user2 = await user_repo.create(
             UserCreate(id=444444, username="user2"),
         )
 
         # Создаем рецепты обоих пользователей в одной категории
-        await RecipeRepository.create(
-            db_session,
+        await recipe_repo.create(
             RecipeCreate(
                 title="Рецепт пользователя 1",
                 user_id=user1.id,
                 category_id=category.id,
             ),
         )
-        await RecipeRepository.create(
-            db_session,
+        await recipe_repo.create(
             RecipeCreate(
                 title="Рецепт пользователя 2",
                 user_id=user2.id,
@@ -214,28 +195,24 @@ class TestCategoryRepositoryIntegration:
         )
 
         # Проверяем что оба пользователя видят категорию
-        cats_user1 = await CategoryRepository.get_name_and_slug_by_user_id(db_session, user1.id)
-        cats_user2 = await CategoryRepository.get_name_and_slug_by_user_id(db_session, user2.id)
+        cats_user1 = await cat_repo.get_by_user_id(user1.id)
+        cats_user2 = await cat_repo.get_by_user_id(user2.id)
 
         assert len(cats_user1) == 1
         assert len(cats_user2) == 1
-        assert cats_user1[0]["name"] == "Общая"
-        assert cats_user2[0]["name"] == "Общая"
+        assert cats_user1[0].name == "Общая"
+        assert cats_user2[0].name == "Общая"
 
     @pytest.mark.asyncio
     async def test_get_all_returns_proper_structure(self, db_session: AsyncSession) -> None:
         """get_all возвращает словари с id, name, slug."""
-        await CategoryRepository.create(
-            db_session,
+        repo = CategoryRepository(db_session)
+        await repo.create(
             CategoryCreate(name="Проверка структуры"),
         )
 
-        all_cats = await CategoryRepository.get_all(db_session)
+        all_cats = await repo.get_all()
 
-        # Проверяем структуру
         for cat in all_cats:
-            assert "id" in cat
-            assert "name" in cat
-            assert "slug" in cat
-            assert isinstance(cat["id"], int)
-            assert isinstance(cat["name"], str)
+            assert isinstance(cat.id, int)
+            assert isinstance(cat.name, str)

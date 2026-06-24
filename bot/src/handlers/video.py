@@ -1,5 +1,6 @@
 from aiogram import Bot, Router
-from aiogram.types import Message, User
+from aiogram.types import Message
+from redis.asyncio import Redis
 
 from bot.src.bot_ui.messages import MessageService
 from bot.src.bot_ui.pipeline_drafts import PipelineDraftStore
@@ -15,8 +16,8 @@ router = Router(name="video")
 @router.message(VideoLinkFilter())
 async def video_link(
     message: Message,
-    user: User,
     bot: Bot,
+    redis: Redis,
     recipe_service: RecipeService,
     message_service: MessageService,
     pipeline_draft_store: PipelineDraftStore,
@@ -30,8 +31,8 @@ async def video_link(
 
     await start_video_processing(
         message,
-        user,
         bot=bot,
+        redis=redis,
         recipe_service=recipe_service,
         message_service=message_service,
         pipeline_draft_store=pipeline_draft_store,

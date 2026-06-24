@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 class UserService(BaseService):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.user_repo = UserRepository
-        self.recipe_repo = RecipeRepository
         self.user_cache = UserCacheRepository(self.redis)
         self.recipe_cache = RecipeCacheRepository(self.redis)
 
@@ -26,11 +24,12 @@ class UserService(BaseService):
             return
 
         async with self._lock(RedisKeys.user_init_lock(user_id=user_id)):
-            async with self.db.session() as self.session:
-                user = await self.user_repo.get_by_id(self.session, user_id)
+            async with self.db.session() as session:
+                repo = UserRepository(session)
+                user = await repo.get_by_id(user_id)
                 logger.debug("👉 Пользователь %s из БД: %s", user_id, user)
                 if user is None:
-                    user = await self.user_repo.create(self.session, user_data)
+                    user = await repo.create(user_data)
                 await self.user_cache.set_exists(user.id)
 
     async def get_recipe_count(self, user_id: int) -> int:
@@ -38,7 +37,7 @@ class UserService(BaseService):
         recipe_count = await self.recipe_cache.get_recipe_count(user_id)
         logger.debug("👉 Пользователь %s: count=%s", user_id, recipe_count)
         if recipe_count is None:
-            async with self.db.session() as self.session:
-                recipe_count = await self.recipe_repo.get_count_by_user(self.session, user_id)
+            async with self.db.session() as session:
+                recipe_count = await RecipeRepository(session).get_count_by_user(user_id)
                 await self.recipe_cache.set_recipe_count(user_id, recipe_count)
         return recipe_count

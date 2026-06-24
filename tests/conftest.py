@@ -195,9 +195,12 @@ async def db_session(test_db_engine, test_session_factory, test_async_engine) ->
 
     async with test_session_factory() as session:
         yield session
-        # Commit changes from test to DB
-        # (this allows refresh() to work properly without begin() nesting conflicts)
-        await session.commit()
+        # Если тест поймал IntegrityError (через pytest.raises), сессия может быть
+        # в сломанном состоянии — тогда делаем rollback вместо commit.
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
         # CRITICAL: Explicitly close the session to release the asyncpg connection
         # before we try to run truncate in a new connection
         await session.close()

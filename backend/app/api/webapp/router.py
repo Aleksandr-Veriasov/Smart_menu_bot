@@ -76,7 +76,9 @@ async def list_categories(
 
     db = get_backend_db(request)
     async with db.session() as session:
-        rows = await CategoryRepository.get_all(session)
+        categories = await CategoryRepository(session).get_all()
+
+    rows = [{"id": c.id, "name": c.name, "slug": c.slug} for c in categories]
 
     # Обновляем кеш в фоне запроса (best effort).
     try:
@@ -84,7 +86,7 @@ async def list_categories(
     except Exception:
         pass
 
-    return [WebAppCategoryRead(id=int(r["id"]), name=str(r["name"]), slug=str(r["slug"])) for r in rows]
+    return [WebAppCategoryRead(id=c.id, name=c.name, slug=c.slug) for c in categories]
 
 
 @webapp_router.get("/recipes/{recipe_id}", response_model=WebAppRecipeRead)

@@ -222,7 +222,7 @@ async def _handle_show_from_category(
         )
         return
 
-    pairs = await recipe_service.get_all_recipes_ids_and_titles(user_id, category_id) if category_id else []
+    pairs = await recipe_service.get_all_by_user_and_category(user_id, category_id) if category_id else []
     if not pairs:
         await message_service.safe_edit(
             message, f"У вас нет рецептов в категории «{category_name}».", reply_markup=home_keyboard()

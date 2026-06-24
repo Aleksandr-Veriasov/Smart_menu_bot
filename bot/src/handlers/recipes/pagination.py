@@ -42,7 +42,7 @@ async def handler_pagination(
 
     items = recipes_state.search_items
     if not items and recipes_state.category_id > 0:
-        items = await recipe_service.get_all_recipes_ids_and_titles(user.id, recipes_state.category_id)
+        items = await recipe_service.get_all_by_user_and_category(user.id, recipes_state.category_id)
     if not items:
         await message_service.safe_edit(callback.message, "Список рецептов пуст.", reply_markup=home_keyboard())
         return

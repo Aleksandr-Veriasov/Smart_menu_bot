@@ -2,7 +2,8 @@ import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.types import Message, User
+from aiogram.types import Message
+from redis.asyncio import Redis
 
 from bot.src.bot_ui.messages import MessageService
 from bot.src.bot_ui.pipeline_drafts import PipelineDraftStore
@@ -25,9 +26,9 @@ def build_pipeline_id(message: Message) -> int:
 
 async def start_video_processing(
     message: Message,
-    user: User,
     *,
     bot: Bot,
+    redis: Redis,
     recipe_service: RecipeService,
     message_service: MessageService,
     pipeline_draft_store: PipelineDraftStore,
@@ -51,7 +52,7 @@ async def start_video_processing(
             message,
             bot=bot,
             recipe_service=recipe_service,
-            redis=pipeline_draft_store.redis,
+            redis=redis,
             pipeline_id=pipeline_id,
         )
     )

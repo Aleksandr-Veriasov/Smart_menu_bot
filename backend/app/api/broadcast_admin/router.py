@@ -33,7 +33,7 @@ async def list_campaigns(request: Request, limit: int = 50) -> list[BroadcastCam
     _require_admin(request)
     db = get_backend_db(request)
     async with db.session() as session:
-        items = await BroadcastRepository.list_campaigns(session, limit=limit)
+        items = await BroadcastRepository(session).list_campaigns(limit=limit)
         return [BroadcastCampaignRead.model_validate(x) for x in items]
 
 
@@ -42,8 +42,7 @@ async def create_campaign(request: Request, payload: BroadcastCampaignCreate) ->
     _require_admin(request)
     db = get_backend_db(request)
     async with db.session() as session:
-        campaign = await BroadcastRepository.create_campaign(
-            session,
+        campaign = await BroadcastRepository(session).create_campaign(
             name=payload.name,
             status=payload.status,
             audience_type=payload.audience_type,
@@ -67,8 +66,7 @@ async def update_campaign(
     db = get_backend_db(request)
     async with db.session() as session:
         try:
-            campaign = await BroadcastRepository.update_campaign(
-                session,
+            campaign = await BroadcastRepository(session).update_campaign(
                 campaign_id=int(campaign_id),
                 changes=payload.model_dump(exclude_unset=True, exclude_none=True),
             )
@@ -85,7 +83,7 @@ async def queue_campaign(request: Request, campaign_id: int) -> BroadcastCampaig
     db = get_backend_db(request)
     async with db.session() as session:
         try:
-            campaign = await BroadcastRepository.queue_campaign(session, campaign_id=int(campaign_id))
+            campaign = await BroadcastRepository(session).queue_campaign(campaign_id=int(campaign_id))
             return BroadcastCampaignRead.model_validate(campaign)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
@@ -99,7 +97,7 @@ async def pause_campaign(request: Request, campaign_id: int) -> BroadcastCampaig
     db = get_backend_db(request)
     async with db.session() as session:
         try:
-            campaign = await BroadcastRepository.pause_campaign(session, campaign_id=int(campaign_id))
+            campaign = await BroadcastRepository(session).pause_campaign(campaign_id=int(campaign_id))
             return BroadcastCampaignRead.model_validate(campaign)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
@@ -113,8 +111,7 @@ async def resume_campaign(request: Request, campaign_id: int) -> BroadcastCampai
     db = get_backend_db(request)
     async with db.session() as session:
         try:
-            campaign = await BroadcastRepository.resume_campaign(
-                session,
+            campaign = await BroadcastRepository(session).resume_campaign(
                 campaign_id=int(campaign_id),
                 now_utc=_utcnow(),
             )
@@ -131,8 +128,7 @@ async def cancel_campaign(request: Request, campaign_id: int) -> BroadcastCampai
     db = get_backend_db(request)
     async with db.session() as session:
         try:
-            campaign = await BroadcastRepository.cancel_campaign(
-                session,
+            campaign = await BroadcastRepository(session).cancel_campaign(
                 campaign_id=int(campaign_id),
                 now_utc=_utcnow(),
             )
@@ -146,5 +142,5 @@ async def list_messages(request: Request, campaign_id: int, limit: int = 200) ->
     _require_admin(request)
     db = get_backend_db(request)
     async with db.session() as session:
-        items = await BroadcastRepository.list_messages(session, campaign_id=int(campaign_id), limit=limit)
+        items = await BroadcastRepository(session).list_messages(campaign_id=int(campaign_id), limit=limit)
         return [BroadcastMessageRead.model_validate(x) for x in items]

@@ -22,7 +22,7 @@ class RecipeCacheRepository(BaseRedisRepository):
         """Удаляет кэш количества рецептов пользователя."""
         await self.redis.delete(self.keys.recipe_count(user_id=user_id))
 
-    async def get_all_recipes_ids_and_titles(self, user_id: int, category_id: int) -> list[dict[str, int | str]] | None:
+    async def get_all_by_user_and_category(self, user_id: int, category_id: int) -> list[dict[str, int | str]] | None:
         """Вернёт список (id, title) всех рецептов пользователя из Redis или None, если кэша нет."""
         raw = await self.redis.get(self.keys.user_recipes_ids_and_titles(user_id, category_id))
         logger.debug(f"👉 Строка для Redis: {raw}")

@@ -104,7 +104,7 @@ async def clone_recipe_for_user(
     else:
         names = [str(i.name) for i in (original.ingredients or []) if getattr(i, "name", None)]
 
-    new_recipe = await RecipeRepository.create_basic(session, new_title, new_description)
+    new_recipe = await RecipeRepository(session).create_basic(new_title, new_description)
 
     if getattr(original, "video", None) is not None and original.video is not None:
         session.add(
@@ -116,11 +116,11 @@ async def clone_recipe_for_user(
         )
 
     if names:
-        id_by_name = await IngredientRepository.bulk_get_or_create(session, names)
-        await RecipeIngredientRepository.bulk_link(session, int(new_recipe.id), id_by_name.values())
+        id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
+        await RecipeIngredientRepository(session).bulk_link(int(new_recipe.id), id_by_name.values())
 
-    await RecipeUserRepository.link_user(session, int(new_recipe.id), int(user_id), int(new_category_id))
-    await RecipeUserRepository.unlink_user(session, int(original.id), int(user_id))
+    await RecipeUserRepository(session).link_user(int(new_recipe.id), int(user_id), int(new_category_id))
+    await RecipeUserRepository(session).unlink_user(int(original.id), int(user_id))
 
     return int(new_recipe.id), category_changed
 
@@ -185,17 +185,16 @@ async def apply_patch_to_recipe(
         if payload.title is not None and title_will_change:
             title = validate_title(payload.title)
             title_changed = True
-            await RecipeRepository.update_title(session, int(recipe_id), title)
+            await RecipeRepository(session).update_title(int(recipe_id), title)
 
         if payload.description is not None and description_will_change:
-            await RecipeRepository.update(session, int(recipe_id), RecipeUpdate(description=payload.description))
+            await RecipeRepository(session).update(int(recipe_id), RecipeUpdate(description=payload.description))
 
         if payload.category_id is not None:
             requested_category_id = int(payload.category_id)
             category_changed = requested_category_id != old_category_id
             if category_changed:
-                await RecipeRepository.update_category(
-                    session,
+                await RecipeRepository(session).update_category(
                     recipe_id=int(recipe_id),
                     user_id=int(user_id),
                     category_id=requested_category_id,
@@ -206,8 +205,8 @@ async def apply_patch_to_recipe(
             names = parse_ingredient_names(payload.ingredients_text)
             await session.execute(sa.delete(RecipeIngredient).where(RecipeIngredient.recipe_id == int(recipe_id)))
             if names:
-                id_by_name = await IngredientRepository.bulk_get_or_create(session, names)
-                await RecipeIngredientRepository.bulk_link(session, int(recipe_id), id_by_name.values())
+                id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
+                await RecipeIngredientRepository(session).bulk_link(int(recipe_id), id_by_name.values())
 
     _, new_category_id = await load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=int(user_id))
     return (
