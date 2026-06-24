@@ -3,10 +3,14 @@ import logging
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
+
+_BELGRADE_TZ = ZoneInfo("Europe/Belgrade")
 
 
 class DropMetricsUvicornAccessFilter(logging.Filter):
@@ -34,6 +38,10 @@ class DropMetricsUvicornAccessFilter(logging.Filter):
 class CustomFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__(fmt="[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d" " - %(name)s - %(message)s")
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=_BELGRADE_TZ)
+        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
 
 
 class APINotificationHandler(logging.Handler):
