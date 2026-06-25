@@ -7,6 +7,7 @@ from bot.src.bot_ui.url_candidates import UrlCandidateStore
 from bot.src.filters.video import VideoLinkFilter
 from bot.src.interactions.video_processing import start_video_processing
 from bot.src.utils.url import extract_first_url
+from packages.services.pipeline_service import PipelineService
 from packages.services.recipe_service import RecipeService
 
 router = Router(name="video")
@@ -17,6 +18,7 @@ async def video_link(
     message: Message,
     user: User,
     recipe_service: RecipeService,
+    pipeline_service: PipelineService,
     message_service: MessageService,
     pipeline_draft_store: PipelineDraftStore,
     url_candidate_store: UrlCandidateStore,
@@ -31,6 +33,7 @@ async def video_link(
         message,
         user_id=user.id,
         recipe_service=recipe_service,
+        pipeline_service=pipeline_service,
         message_service=message_service,
         pipeline_draft_store=pipeline_draft_store,
         url_candidate_store=url_candidate_store,

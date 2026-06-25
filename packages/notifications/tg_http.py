@@ -5,6 +5,9 @@
 """
 
 import logging
+import random
+import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -85,6 +88,69 @@ class TgBotHttpClient:
         if resp and resp.get("ok"):
             return resp["result"]["message_id"]
         return None
+
+    def send_video(
+        self,
+        chat_id: int | str,
+        video_path: str,
+        *,
+        caption: str = "",
+        width: int | None = None,
+        height: int | None = None,
+        max_retries: int = 4,
+        base_delay: float = 1.5,
+    ) -> str:
+        """Загрузить видео в чат/канал. Возвращает file_id или '' при ошибке."""
+        p = Path(video_path)
+        if not p.is_file():
+            logger.error("Видео не найдено: %s", p)
+            return ""
+
+        data: dict[str, Any] = {
+            "chat_id": str(chat_id),
+            "caption": caption,
+            "supports_streaming": "true",
+        }
+        if width is not None:
+            data["width"] = str(width)
+        if height is not None:
+            data["height"] = str(height)
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                with p.open("rb") as f:
+                    resp = requests.post(
+                        f"{self._base}/sendVideo",
+                        data=data,
+                        files={"video": (p.name, f, "video/mp4")},
+                        timeout=120,
+                    )
+                result: dict[str, Any] = resp.json()
+                if result.get("ok"):
+                    file_id: str = result["result"]["video"]["file_id"]
+                    logger.debug("Видео загружено (attempt=%s): file_id=%s", attempt, file_id)
+                    return file_id
+
+                description = result.get("description", "")
+                # Flood control
+                if resp.status_code == 429:
+                    retry_after = float(result.get("parameters", {}).get("retry_after", base_delay))
+                    logger.warning("RetryAfter %.1fs (attempt %s/%s)", retry_after, attempt, max_retries)
+                    time.sleep(retry_after)
+                    continue
+
+                logger.error("sendVideo error (attempt %s/%s): %s", attempt, max_retries, description)
+                # BadRequest — ретраить бессмысленно
+                if resp.status_code == 400:
+                    return ""
+
+            except Exception:
+                logger.exception("sendVideo network error (attempt %s/%s)", attempt, max_retries)
+
+            if attempt < max_retries:
+                time.sleep(base_delay * (2 ** (attempt - 1)) + random.uniform(0, 0.4))
+
+        return ""
 
     def edit_or_send(
         self,

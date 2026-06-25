@@ -6,6 +6,7 @@ from aiogram.types import TelegramObject
 
 from packages.app_state import AppState
 from packages.services.category_service import CategoryService
+from packages.services.pipeline_service import PipelineService
 from packages.services.recipe_service import RecipeService
 from packages.services.user_service import UserService
 
@@ -39,4 +40,5 @@ class DependencyMiddleware(BaseMiddleware):
         data["recipe_service"] = RecipeService(state.db, redis)
         data["category_service"] = CategoryService(state.db, redis)
         data["user_service"] = UserService(state.db, redis)
+        data["pipeline_service"] = PipelineService(state.db, redis)
         return await handler(event, data)

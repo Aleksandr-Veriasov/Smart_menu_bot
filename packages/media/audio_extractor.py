@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import subprocess
@@ -59,3 +60,7 @@ def extract_audio(video_path: str, output_folder: str) -> str | None:
         return None
     logger.debug(f"Аудио успешно извлечено в {audio_path}")
     return audio_path
+
+
+async def async_extract_audio(video_path: str, output_folder: str) -> str | None:
+    return await asyncio.to_thread(extract_audio, video_path, output_folder)

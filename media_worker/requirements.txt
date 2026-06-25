@@ -9,7 +9,10 @@ alembic==1.16.4
 pydantic==2.13.4
 pydantic-settings==2.14.2
 
-# HTTP (Telegram Bot API calls — без aiogram)
+# Telegram Bot API
+aiogram==3.29.0
+
+# Транзитивная зависимость faster-whisper
 requests==2.33.0
 
 # Redis

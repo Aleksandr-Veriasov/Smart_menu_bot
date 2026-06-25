@@ -8,6 +8,10 @@ from html import escape
 from typing import Any
 
 
+def format_error_text(text: str) -> str:
+    return f"❌ {text}"
+
+
 def format_progress_bar(pct: int, label: str = "") -> str:
     """Текстовый прогресс-бар: '▶️ Прогресс: 40% [████░░░░░░] — label'."""
     pct = max(0, min(100, pct))

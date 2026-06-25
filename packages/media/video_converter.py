@@ -62,6 +62,43 @@ async def async_convert_to_mp4(input_path: str) -> str:
     return await asyncio.to_thread(convert_to_mp4, input_path)
 
 
+async def async_probe_video_dimensions(video_path: str) -> tuple[int | None, int | None]:
+    """Асинхронная версия функции получения размеров видео"""
+    return await asyncio.to_thread(probe_video_dimensions, video_path)
+
+
+def probe_video_dimensions(video_path: str) -> tuple[int | None, int | None]:
+    """Вернуть (width, height) уже сконвертированного файла или (None, None) при ошибке.
+
+    None означает «не передавать параметр в Telegram» — upload пройдёт без подсказки размера.
+    """
+    try:
+        probe = ffmpeg.probe(
+            video_path,
+            v="error",
+            select_streams="v:0",
+            show_entries="stream=width,height",
+        )
+        stream = probe.get("streams", [{}])[0]
+        raw_w, raw_h = stream.get("width"), stream.get("height")
+
+        try:
+            width, height = int(raw_w), int(raw_h)
+        except (TypeError, ValueError):
+            logger.warning("probe_video_dimensions: нечисловые значения %s x %s для %s", raw_w, raw_h, video_path)
+            return None, None
+
+        if width <= 0 or height <= 0:
+            logger.warning("probe_video_dimensions: некорректные размеры %dx%d для %s", width, height, video_path)
+            return None, None
+
+        return width, height
+
+    except ffmpeg.Error as exc:
+        logger.warning("probe_video_dimensions failed for %s: %s", video_path, exc)
+        return None, None
+
+
 def _get_video_resolution(video_path: str) -> tuple[int | None, int | None, float]:
     """Получаем разрешение видео и SAR."""
     logger.debug(f"Получаем разрешение видео: {video_path}")
