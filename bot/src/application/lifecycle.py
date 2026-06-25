@@ -10,10 +10,10 @@ from contextlib import suppress
 from aiogram import Bot
 
 from packages.app_state import AppState
+from packages.background.video_cleanup import cleanup_old_videos
 from packages.common_settings.settings import settings
 from packages.db.backup import run_daily_dump_scheduler
 from packages.logging_config import notify_startup
-from packages.media.video_downloader import cleanup_old_videos
 from packages.redis.redis_conn import close_redis, get_redis
 
 logger = logging.getLogger(__name__)

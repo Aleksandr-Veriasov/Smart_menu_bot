@@ -135,7 +135,7 @@ class DatabaseSettings(BaseAppSettings):
         - для локальных хостов — SSL не используем,
         - для прочих — 'require' как безопасный дефолт.
         """
-        if self.ssl_mode is not None and use_async:
+        if self.ssl_mode is not None:
             return self.ssl_mode
         return SslMode.disable if self._is_local_host else SslMode.require
 

@@ -2,6 +2,7 @@ from .base import BaseRepository, SessionMixin, fetch_all
 from .broadcast import BroadcastRepository
 from .category import CategoryRepository
 from .ingredient import IngredientRepository
+from .pipeline_job import PipelineJobRepository
 from .recipe import RecipeRepository
 from .recipe_ingredient import RecipeIngredientRepository
 from .recipe_user import RecipeUserRepository
@@ -20,4 +21,5 @@ __all__ = [
     "RecipeIngredientRepository",
     "RecipeUserRepository",
     "BroadcastRepository",
+    "PipelineJobRepository",
 ]

@@ -4,7 +4,6 @@ from html import escape as html_escape
 
 import requests
 import sqlalchemy as sa
-from fastapi import HTTPException
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -159,7 +158,7 @@ class WebAppService:
         )
         row = (await session.execute(stmt)).first()
         if row is None:
-            raise HTTPException(status_code=404, detail="Рецепт не найден")
+            raise LookupError("Рецепт не найден")
         return row[0], int(row[1])
 
     async def _count_recipe_users(self, session: AsyncSession, *, recipe_id: int) -> int:
@@ -365,7 +364,7 @@ class WebAppService:
     def _validate_title(raw: str) -> str:
         title = (raw or "").strip()
         if not title:
-            raise HTTPException(status_code=422, detail="Название не может быть пустым")
+            raise ValueError("Название не может быть пустым")
         return title
 
     @staticmethod

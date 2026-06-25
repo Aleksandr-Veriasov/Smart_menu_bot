@@ -4,7 +4,7 @@ src_paths = ["."]
 known_first_party = ["backend", "bot", "downloader", "gateway", "telethon_worker", "packages"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 ignore_missing_imports = true
 disallow_any_generics = false
 disable_error_code = ["import-untyped"]
@@ -17,7 +17,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.black]
 line-length = 120
-target-version = ["py310"]
+target-version = ["py313"]
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -33,7 +33,7 @@ exclude = '''
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py313"
 src = ["bot", "backend", "downloader", "tests", "gateway", "telethon_worker", "packages"]
 fix = true
 

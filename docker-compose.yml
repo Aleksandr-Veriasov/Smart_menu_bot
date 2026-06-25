@@ -117,6 +117,33 @@ services:
       - redis
       - downloader
     
+  media_worker:
+    build:
+      context: .
+      dockerfile: media_worker/Dockerfile
+    container_name: menu_bot_media_worker
+    user: "1001:1001"
+    env_file:
+      - .env
+    environment:
+      MEDIA_WORKER_CONCURRENCY: "1"
+      AUDIO_FOLDER: /app/audio
+      VIDEO_FOLDER: /app/videos
+      DOWNLOADER_BASE_URL: http://downloader:8082
+    volumes:
+      - ./audio:/app/audio
+      - ./videos:/app/videos
+    networks:
+      - app-net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      downloader:
+        condition: service_started
+    restart: unless-stopped
+
   backend:
     build:
       context: .

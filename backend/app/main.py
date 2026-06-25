@@ -1,6 +1,7 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from backend.app.admin.views import setup_sqladmin
 from backend.app.core import (
@@ -41,6 +42,14 @@ def create_app() -> FastAPI:
     setup_middleware(app)
     setup_sqladmin(app, state.db.engine, state.db)
     setup_routes(app)
+
+    @app.exception_handler(LookupError)
+    async def lookup_error_handler(_: Request, exc: LookupError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(ValueError)
+    async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     return app
 
