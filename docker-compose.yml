@@ -63,6 +63,7 @@ services:
   db:
     image: postgres:16-alpine
     container_name: menu_bot_db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -98,7 +99,7 @@ services:
       dockerfile: bot/Dockerfile
     container_name: menu_bot_tgbot
     user: "1001:1001"
-    # restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -122,6 +123,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: menu_bot_backend
+    restart: unless-stopped
     user: "1001:1001"
     env_file: 
       - .env
