@@ -320,9 +320,9 @@ class WebAppService:
         reply_markup = {
             "inline_keyboard": [
                 [{"text": "✏️ Редактировать рецепт", "web_app": {"url": webapp_url}}],
-                [{"text": "🗑 Удалить рецепт", "callback_data": f"delete_recipe_{int(recipe.id)}"}],
-                [{"text": "⏪ Назад", "callback_data": f"next_{page}:{category_slug}:{mode}"}],
-                [{"text": "🏠 На главную", "callback_data": "start"}],
+                [{"text": "🗑 Удалить рецепт", "callback_data": f"recipe:delete:{int(recipe.id)}"}],
+                [{"text": "⏪ Назад", "callback_data": f"page:{page}:{category_slug}:{mode}"}],
+                [{"text": "🏠 На главную", "callback_data": "nav:start"}],
             ]
         }
 
