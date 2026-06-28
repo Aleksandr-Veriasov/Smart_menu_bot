@@ -26,8 +26,9 @@ COPY media_worker/                 /app/media_worker/
 # Скачиваем веса faster-whisper при сборке — при старте контейнера модель уже в кэше
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
 
-# Рабочие папки для временных файлов
-RUN mkdir -p /app/videos /app/audio
+# Рабочие папки для временных файлов + передаём владение user 1001
+RUN mkdir -p /app/videos /app/audio \
+    && chown -R 1001:1001 /app/.cache /app/videos /app/audio
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "-m", "media_worker.main"]
