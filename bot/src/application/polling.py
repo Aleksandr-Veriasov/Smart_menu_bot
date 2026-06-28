@@ -1,5 +1,6 @@
 """Транспорт polling: long-polling-запуск бота."""
 
+import asyncio
 import logging
 from contextlib import suppress
 
@@ -25,3 +26,4 @@ async def run_polling() -> None:
         await runtime_stop(state)
         with suppress(Exception):
             await bot.session.close()
+        await asyncio.sleep(0)

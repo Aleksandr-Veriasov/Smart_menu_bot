@@ -1,5 +1,6 @@
 """Транспорт webhook: FastAPI-приложение, lifespan и приём апдейтов Telegram."""
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await runtime_stop(state)
         with suppress(Exception):
             await bot.session.close()
+        await asyncio.sleep(0)
         app.state.bot = None
         app.state.dp = None
 
