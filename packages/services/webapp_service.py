@@ -59,7 +59,8 @@ class WebAppService:
     async def list_categories(self, user_id: int) -> list[WebAppCategoryRead]:
         """Вернуть список категорий (из кеша Redis, при необходимости с догрузкой из БД)."""
         if self.redis is not None:
-            cached = await CategoryCacheRepository.get_all_name_and_slug(self.redis)
+            cache = CategoryCacheRepository(self.redis)
+            cached = await cache.get_all_name_and_slug()
             if cached and all((isinstance((cid := x.get("id")), int) and cid > 0) for x in cached):
                 out: list[WebAppCategoryRead] = []
                 for x in cached:
@@ -82,7 +83,7 @@ class WebAppService:
         rows = [{"id": c.id, "name": c.name, "slug": c.slug} for c in categories]
         if self.redis is not None:
             try:
-                await CategoryCacheRepository.set_all_name_and_slug(self.redis, rows)
+                await CategoryCacheRepository(self.redis).set_all_name_and_slug(rows)
             except Exception:
                 pass
 
