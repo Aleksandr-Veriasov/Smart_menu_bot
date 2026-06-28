@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 from media_worker.notifications.notifier import MediaWorkerNotifier
 from media_worker.transcription.whisper_model import transcribe_async
 from packages.db.models.pipeline import PipelineJob
+from packages.exceptions import FatalPipelineError
 from packages.media.audio_extractor import async_extract_audio
 from packages.media.safe_remove import safe_remove
 from packages.media.video_converter import async_convert_to_mp4
@@ -159,7 +160,11 @@ async def run(
         if not video_file_id:
             safe_remove(converted_path)
 
-    except Exception as exc:
+    except FatalPipelineError as exc:
+        logger.warning("job_id=%s fatal: %s", job.id, exc)
+        await notifier.send_error(chat_id, msg_id, "Не удалось скачать видео. Попробуйте другую ссылку.")
+        raise
+    except Exception:
         logger.exception("job_id=%s failed", job.id)
-        await notifier.send_error(chat_id, msg_id, str(exc))
+        await notifier.send_error(chat_id, msg_id, "Произошла ошибка при обработке видео. Попробуйте позже.")
         raise
