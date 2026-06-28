@@ -243,15 +243,12 @@ class TestVerifyPassword:
         result = passwords.verify_password("wrong", hashed)
         assert isinstance(result, bool)
 
-    def test_verify_invalid_hash_raises_error(self) -> None:
-        """Невалидный хэш выбрасывает исключение при проверке."""
-        from passlib.exc import UnknownHashError
-
+    def test_verify_invalid_hash_returns_false(self) -> None:
+        """Невалидный хэш возвращает False при проверке."""
         password = "test_password"
         invalid_hash = "not_a_valid_bcrypt_hash"
 
-        with pytest.raises(UnknownHashError):
-            passwords.verify_password(password, invalid_hash)
+        assert passwords.verify_password(password, invalid_hash) is False
 
 
 class TestNeedsRehash:
@@ -282,14 +279,11 @@ class TestNeedsRehash:
 
         assert passwords.needs_rehash(hashed) is False
 
-    def test_needs_rehash_invalid_hash_raises_error(self) -> None:
-        """Невалидный хэш выбрасывает исключение."""
-        from passlib.exc import UnknownHashError
-
+    def test_needs_rehash_invalid_hash_returns_true(self) -> None:
+        """Невалидный хэш сигнализирует о необходимости перехэширования."""
         invalid_hash = "not_a_valid_bcrypt_hash"
 
-        with pytest.raises(UnknownHashError):
-            passwords.needs_rehash(invalid_hash)
+        assert passwords.needs_rehash(invalid_hash) is True
 
     def test_multiple_hashes_none_need_rehash(self) -> None:
         """Несколько хэшей, созданных функцией, не требуют rehash."""

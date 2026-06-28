@@ -1,6 +1,6 @@
 """Тесты для BroadcastRepository."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -147,7 +147,7 @@ class TestBroadcastRepositoryTransitions:
     @pytest.mark.asyncio
     async def test_resume_campaign(self, db_session: AsyncSession) -> None:
         """Возобновление паузированной кампании."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         repo = BroadcastRepository(db_session)
         campaign = await repo.create_campaign(
             name="Кампания для возобновления",
@@ -170,7 +170,7 @@ class TestBroadcastRepositoryTransitions:
     @pytest.mark.asyncio
     async def test_cancel_campaign(self, db_session: AsyncSession) -> None:
         """Отмена запущенной кампании."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         repo = BroadcastRepository(db_session)
         campaign = await repo.create_campaign(
             name="Кампания для отмены",

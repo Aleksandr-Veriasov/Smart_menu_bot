@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -13,6 +14,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+# Гарантируем что корень проекта в sys.path при любом способе запуска pytest
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Configure pytest-asyncio to use auto mode (creates event loop for each test)
 pytest_plugins = ("pytest_asyncio",)
