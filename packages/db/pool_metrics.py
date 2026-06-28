@@ -1,4 +1,5 @@
-from prometheus_client import REGISTRY, GaugeMetricFamily
+from prometheus_client import REGISTRY
+from prometheus_client.metrics_core import GaugeMetricFamily
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 
