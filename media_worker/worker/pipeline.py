@@ -54,10 +54,8 @@ async def run(
             await notifier.edit_progress(chat_id, msg_id, pct, label)
 
     try:
-        # 1. Скачиваем видео
+        # 1. Скачиваем видео (бросает FatalPipelineError если контент недоступен)
         video_path, description = await async_download_video_and_description(job.url)
-        if not video_path:
-            raise RuntimeError("Не удалось скачать видео")
         await _progress(20, "Видео скачано")
 
         # 2. Переименовываем чтобы избежать коллизий между jobs

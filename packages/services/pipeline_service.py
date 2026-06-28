@@ -40,3 +40,8 @@ class PipelineService(BaseService):
         """Вернуть задачу в очередь с backoff или пометить failed после исчерпания попыток."""
         async with self.db.session() as session:
             await PipelineJobRepository(session).nack(job_id, error=error)
+
+    async def fail(self, job_id: int, *, error: str) -> None:
+        """Немедленно пометить задачу как failed без retry (фатальная ошибка)."""
+        async with self.db.session() as session:
+            await PipelineJobRepository(session).fail(job_id, error=error)

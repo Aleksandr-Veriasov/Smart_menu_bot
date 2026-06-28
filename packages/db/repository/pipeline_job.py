@@ -111,6 +111,19 @@ class PipelineJobRepository(BaseRepository[PipelineJob]):
         job.last_error = error[:2000]
         await self.session.flush()
 
+    async def fail(self, job_id: int, *, error: str) -> None:
+        """Немедленно пометить задачу как failed без retry."""
+        await self.session.execute(
+            update(self.model)
+            .where(self.model.id == job_id)
+            .values(
+                status=PipelineJobStatus.failed,
+                locked_until=None,
+                next_retry_at=None,
+                last_error=error[:2000],
+            )
+        )
+
     async def set_progress_message_id(self, job_id: int, message_id: int) -> None:
         """Сохранить message_id прогресс-сообщения для редактирования из media_worker."""
         await self.session.execute(

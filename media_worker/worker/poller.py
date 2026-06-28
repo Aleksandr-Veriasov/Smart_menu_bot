@@ -5,6 +5,7 @@ import os
 from media_worker.notifications.notifier import MediaWorkerNotifier
 from media_worker.worker import pipeline
 from packages.app_state import AppState
+from packages.exceptions import FatalPipelineError
 from packages.services.pipeline_service import PipelineService
 from packages.services.recipe_service import RecipeService
 
@@ -36,6 +37,9 @@ async def process_one(
         )
         await pipeline_service.ack(job_id)
         logger.info("job_id=%s — ack", job_id)
+    except FatalPipelineError as exc:
+        await pipeline_service.fail(job_id, error=str(exc))
+        logger.warning("job_id=%s — fatal, no retry: %s", job_id, exc)
     except Exception as exc:
         await pipeline_service.nack(job_id, error=str(exc))
         logger.warning("job_id=%s — nack: %s", job_id, exc)

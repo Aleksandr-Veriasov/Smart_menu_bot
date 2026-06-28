@@ -22,8 +22,8 @@ def _finalize_path(raw_path: str, prefer_ext: str | None = "mp4") -> str:
     return f"{base}.{prefer_ext}"
 
 
-def _yt_dlp_opts(output_path: str) -> dict:
-    return {
+def _yt_dlp_opts(output_path: str, *, youtube: bool = False) -> dict:
+    opts: dict = {
         "outtmpl": output_path,
         "format": "bv+ba/best/best",
         "merge_output_format": "mp4",
@@ -38,6 +38,10 @@ def _yt_dlp_opts(output_path: str) -> dict:
         "ratelimit": 2_000_000,
         "cachedir": "/app/.cache/yt-dlp",
     }
+    if youtube:
+        # Android/iOS клиенты не требуют авторизации для публичных видео
+        opts["extractor_args"] = {"youtube": {"player_client": ["android", "ios", "web"]}}
+    return opts
 
 
 def _should_retry(err: Exception) -> bool:
@@ -67,6 +71,7 @@ def _should_retry(err: Exception) -> bool:
         "video unavailable",
         "private video",
         "sign in to confirm your age",
+        "sign in to confirm you're not a bot",
         "age-restricted",
     ]
     if any(h in s for h in terminal):
@@ -102,7 +107,7 @@ def _try_download_with_yt_dlp(url: str, platform: str) -> tuple[str, str]:
     ts_ms = int(time.time() * 1000)
     filename_tmpl = f"{platform}_{ts_ms}.%(ext)s"
     output_path = str(VIDEO_FOLDER / filename_tmpl)
-    ydl_opts = _yt_dlp_opts(output_path)
+    ydl_opts = _yt_dlp_opts(output_path, youtube=platform == "youtube_shorts")
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
