@@ -57,7 +57,8 @@ async def runtime_start(bot: Bot, state: AppState, *, allowed_updates: list[str]
         )
         logger.info("🔗 Webhook установлен")
 
-    notify_startup("SmartMenuBot")
+    with suppress(Exception):
+        notify_startup("SmartMenuBot")
 
 
 async def runtime_stop(state: AppState) -> None:

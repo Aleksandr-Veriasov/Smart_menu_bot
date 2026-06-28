@@ -2,6 +2,7 @@ import html
 import logging
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -50,7 +51,14 @@ class APINotificationHandler(logging.Handler):
         self.url = f"https://api.telegram.org/bot{token}/sendMessage"
         self.admin = admin
         self.formatter = CustomFormatter()
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tg-log")
+        self._executor: ThreadPoolExecutor | None = None
+        self._executor_lock = threading.Lock()
+
+    def _get_executor(self) -> ThreadPoolExecutor:
+        with self._executor_lock:
+            if self._executor is None or self._executor._shutdown:
+                self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tg-log")
+            return self._executor
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -67,7 +75,10 @@ class APINotificationHandler(logging.Handler):
 
     def _submit(self, text: str) -> None:
         payload = {"chat_id": self.admin, "text": text, "parse_mode": "HTML"}
-        self._executor.submit(self._send, payload)
+        try:
+            self._get_executor().submit(self._send, payload)
+        except RuntimeError:
+            pass
 
     def _send(self, payload: dict) -> None:
         try:
@@ -76,7 +87,9 @@ class APINotificationHandler(logging.Handler):
             pass
 
     def close(self) -> None:
-        self._executor.shutdown(wait=False)
+        with self._executor_lock:
+            if self._executor is not None:
+                self._executor.shutdown(wait=False)
         super().close()
 
 
