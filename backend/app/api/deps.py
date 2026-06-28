@@ -1,6 +1,5 @@
 from fastapi import Header, HTTPException, Request
 
-from backend.app.api.webapp.tg_webapp_auth import validate_telegram_webapp_init_data
 from backend.app.utils.fastapi_state import (
     get_backend_db,
     get_backend_redis,
@@ -28,6 +27,8 @@ def get_webapp_service(request: Request) -> WebAppService:
 
 
 def get_tg_user_id(x_tg_init_data: str | None = Header(default=None, alias="X-TG-INIT-DATA")) -> int:
+    from backend.app.api.webapp.tg_webapp_auth import validate_telegram_webapp_init_data
+
     init_data = (x_tg_init_data or "").strip()
     if not init_data:
         raise HTTPException(status_code=401, detail="Отсутствует заголовок X-TG-INIT-DATA")
