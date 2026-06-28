@@ -173,7 +173,7 @@ async def _init_due_campaigns(state: AppState, *, limit: int = 20) -> None:
                 continue
 
             if c.outbox_created_at is None:
-                await BroadcastRepository.build_outbox_all_users(session, campaign_id=int(c.id))
+                await BroadcastRepository(session).build_outbox_all_users(campaign_id=int(c.id))
                 c.outbox_created_at = now
 
             # Количество получателей: считаем строки в outbox.

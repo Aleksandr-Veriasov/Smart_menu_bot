@@ -15,8 +15,7 @@ class TestBroadcastRepositoryCampaigns:
     @pytest.mark.asyncio
     async def test_create_campaign_basic(self, db_session: AsyncSession) -> None:
         """Создание базовой кампании."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        campaign = await BroadcastRepository(db_session).create_campaign(
             name="Тестовая кампания",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -38,8 +37,8 @@ class TestBroadcastRepositoryCampaigns:
     @pytest.mark.asyncio
     async def test_get_campaign_or_none_exists(self, db_session: AsyncSession) -> None:
         """Получение существующей кампании."""
-        created = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        created = await repo.create_campaign(
             name="Кампания для получения",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -53,7 +52,7 @@ class TestBroadcastRepositoryCampaigns:
             scheduled_at=None,
         )
 
-        retrieved = await BroadcastRepository.get_campaign_or_none(db_session, created.id)
+        retrieved = await repo.get_campaign_or_none(created.id)
 
         assert retrieved is not None
         assert retrieved.id == created.id
@@ -62,17 +61,17 @@ class TestBroadcastRepositoryCampaigns:
     @pytest.mark.asyncio
     async def test_get_campaign_or_none_not_exists(self, db_session: AsyncSession) -> None:
         """Получение несуществующей кампании возвращает None."""
-        campaign = await BroadcastRepository.get_campaign_or_none(db_session, 999999)
+        campaign = await BroadcastRepository(db_session).get_campaign_or_none(999999)
 
         assert campaign is None
 
     @pytest.mark.asyncio
     async def test_list_campaigns(self, db_session: AsyncSession) -> None:
         """Получение списка кампаний."""
+        repo = BroadcastRepository(db_session)
         # Создаем несколько кампаний
         for i in range(3):
-            await BroadcastRepository.create_campaign(
-                db_session,
+            await repo.create_campaign(
                 name=f"Кампания {i}",
                 status=BroadcastCampaignStatus.draft,
                 audience_type="all_users",
@@ -86,7 +85,7 @@ class TestBroadcastRepositoryCampaigns:
                 scheduled_at=None,
             )
 
-        campaigns = await BroadcastRepository.list_campaigns(db_session, limit=10)
+        campaigns = await repo.list_campaigns(limit=10)
 
         assert len(campaigns) >= 3
 
@@ -97,8 +96,8 @@ class TestBroadcastRepositoryTransitions:
     @pytest.mark.asyncio
     async def test_queue_campaign(self, db_session: AsyncSession) -> None:
         """Перевод кампании в состояние queued."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания в очередь",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -112,7 +111,7 @@ class TestBroadcastRepositoryTransitions:
             scheduled_at=None,
         )
 
-        queued = await BroadcastRepository.queue_campaign(db_session, campaign_id=campaign.id)
+        queued = await repo.queue_campaign(campaign_id=campaign.id)
 
         assert queued.status == BroadcastCampaignStatus.queued
         assert queued.last_error is None
@@ -121,13 +120,13 @@ class TestBroadcastRepositoryTransitions:
     async def test_queue_campaign_nonexistent(self, db_session: AsyncSession) -> None:
         """Перевод несуществующей кампании вызывает ошибку."""
         with pytest.raises(LookupError):
-            await BroadcastRepository.queue_campaign(db_session, campaign_id=999999)
+            await BroadcastRepository(db_session).queue_campaign(campaign_id=999999)
 
     @pytest.mark.asyncio
     async def test_pause_campaign(self, db_session: AsyncSession) -> None:
         """Пауза для запущенной кампании."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания для паузы",
             status=BroadcastCampaignStatus.running,
             audience_type="all_users",
@@ -141,7 +140,7 @@ class TestBroadcastRepositoryTransitions:
             scheduled_at=None,
         )
 
-        paused = await BroadcastRepository.pause_campaign(db_session, campaign_id=campaign.id)
+        paused = await repo.pause_campaign(campaign_id=campaign.id)
 
         assert paused.status == BroadcastCampaignStatus.paused
 
@@ -149,8 +148,8 @@ class TestBroadcastRepositoryTransitions:
     async def test_resume_campaign(self, db_session: AsyncSession) -> None:
         """Возобновление паузированной кампании."""
         now = datetime.utcnow()
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания для возобновления",
             status=BroadcastCampaignStatus.paused,
             audience_type="all_users",
@@ -164,7 +163,7 @@ class TestBroadcastRepositoryTransitions:
             scheduled_at=None,
         )
 
-        resumed = await BroadcastRepository.resume_campaign(db_session, campaign_id=campaign.id, now_utc=now)
+        resumed = await repo.resume_campaign(campaign_id=campaign.id, now_utc=now)
 
         assert resumed.status == BroadcastCampaignStatus.running
 
@@ -172,8 +171,8 @@ class TestBroadcastRepositoryTransitions:
     async def test_cancel_campaign(self, db_session: AsyncSession) -> None:
         """Отмена запущенной кампании."""
         now = datetime.utcnow()
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания для отмены",
             status=BroadcastCampaignStatus.running,
             audience_type="all_users",
@@ -187,7 +186,7 @@ class TestBroadcastRepositoryTransitions:
             scheduled_at=None,
         )
 
-        cancelled = await BroadcastRepository.cancel_campaign(db_session, campaign_id=campaign.id, now_utc=now)
+        cancelled = await repo.cancel_campaign(campaign_id=campaign.id, now_utc=now)
 
         assert cancelled.status == BroadcastCampaignStatus.cancelled
         assert cancelled.finished_at is not None
@@ -199,8 +198,8 @@ class TestBroadcastRepositoryUpdate:
     @pytest.mark.asyncio
     async def test_update_campaign_basic(self, db_session: AsyncSession) -> None:
         """Обновление полей кампании."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Исходная кампания",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -214,8 +213,7 @@ class TestBroadcastRepositoryUpdate:
             scheduled_at=None,
         )
 
-        updated = await BroadcastRepository.update_campaign(
-            db_session,
+        updated = await repo.update_campaign(
             campaign_id=campaign.id,
             changes={"text": "Новый текст", "name": "Новая кампания"},
         )
@@ -226,8 +224,8 @@ class TestBroadcastRepositoryUpdate:
     @pytest.mark.asyncio
     async def test_update_campaign_with_deliveries_raises_error(self, db_session: AsyncSession) -> None:
         """Обновление кампании с отправками вызывает ошибку."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания с отправками",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -245,8 +243,7 @@ class TestBroadcastRepositoryUpdate:
         await db_session.flush()
 
         with pytest.raises(ValueError, match="already has deliveries"):
-            await BroadcastRepository.update_campaign(
-                db_session,
+            await repo.update_campaign(
                 campaign_id=campaign.id,
                 changes={"text": "Новый текст"},
             )
@@ -258,8 +255,8 @@ class TestBroadcastRepositoryMessages:
     @pytest.mark.asyncio
     async def test_list_messages(self, db_session: AsyncSession) -> None:
         """Получение сообщений кампании."""
-        campaign = await BroadcastRepository.create_campaign(
-            db_session,
+        repo = BroadcastRepository(db_session)
+        campaign = await repo.create_campaign(
             name="Кампания с сообщениями",
             status=BroadcastCampaignStatus.draft,
             audience_type="all_users",
@@ -273,7 +270,7 @@ class TestBroadcastRepositoryMessages:
             scheduled_at=None,
         )
 
-        messages = await BroadcastRepository.list_messages(db_session, campaign_id=campaign.id, limit=20)
+        messages = await repo.list_messages(campaign_id=campaign.id, limit=20)
 
         # Может быть пусто или с сообщениями
         assert isinstance(messages, list)

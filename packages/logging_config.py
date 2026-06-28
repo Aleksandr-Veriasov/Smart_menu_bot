@@ -2,10 +2,15 @@ import html
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
+
+_BELGRADE_TZ = ZoneInfo("Europe/Belgrade")
 
 
 class DropMetricsUvicornAccessFilter(logging.Filter):
@@ -34,6 +39,10 @@ class CustomFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__(fmt="[%(asctime)s] %(levelname)s - %(filename)s:%(lineno)d" " - %(name)s - %(message)s")
 
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=_BELGRADE_TZ)
+        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
 
 class APINotificationHandler(logging.Handler):
     def __init__(self, token: str, admin: int) -> None:
@@ -41,23 +50,34 @@ class APINotificationHandler(logging.Handler):
         self.url = f"https://api.telegram.org/bot{token}/sendMessage"
         self.admin = admin
         self.formatter = CustomFormatter()
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tg-log")
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            # Форматируем и экранируем HTML
             log_entry = self.format(record)
             log_entry = log_entry.replace("[", "\n[").replace("]", "]\n").replace("__ -", "__ -\n")
             safe = html.escape(log_entry)
-            payload = {
-                "chat_id": self.admin,
-                "text": f"<code>{safe}</code>",
-                "parse_mode": "HTML",
-            }
-            # обязательно таймаут, чтобы не подвесить логирование
+            self._submit(f"<code>{safe}</code>")
+        except Exception:
+            self.handleError(record)
+
+    def notify_startup(self, app_name: str = "Bot") -> None:
+        safe_name = html.escape(app_name)
+        self._submit(f"✅ <b>{safe_name}</b> запущен")
+
+    def _submit(self, text: str) -> None:
+        payload = {"chat_id": self.admin, "text": text, "parse_mode": "HTML"}
+        self._executor.submit(self._send, payload)
+
+    def _send(self, payload: dict) -> None:
+        try:
             requests.post(self.url, json=payload, timeout=5)
         except Exception:
-            # Не роняем приложение, если отправка в телегу упала
-            self.handleError(record)
+            pass
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False)
+        super().close()
 
 
 NOISY_LOGGERS = {
@@ -73,6 +93,13 @@ NOISY_LOGGERS = {
     "uvicorn.error": logging.INFO,  # при желании: DEBUG
     "uvicorn.access": logging.INFO,  # access-лог обычно шумный
 }
+
+
+def notify_startup(app_name: str = "Bot") -> None:
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, APINotificationHandler):
+            handler.notify_startup(app_name)
+            return
 
 
 def setup_logging() -> None:
@@ -126,7 +153,11 @@ def setup_logging() -> None:
     telegram_token = None
     if telegram is not None:
         telegram_admin = getattr(telegram, "admin_id", None)
-        telegram_token = getattr(telegram, "bot_token", None)
+        raw_token = getattr(telegram, "bot_token", None)
+        if raw_token is not None and hasattr(raw_token, "get_secret_value"):
+            telegram_token = raw_token.get_secret_value()
+        else:
+            telegram_token = raw_token
     if telegram_admin is None:
         telegram_admin = os.getenv("TELEGRAM_ADMIN_ID")
     if telegram_token is None:

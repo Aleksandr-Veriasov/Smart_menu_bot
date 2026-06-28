@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import cast
 
 from openai.types.chat import ChatCompletionMessageParam
@@ -27,6 +28,7 @@ class _DeepSeekChatAdapter(ChatClient):
         )
 
 
+@lru_cache(maxsize=1)
 def get_default_extractor() -> LLMRecipeExtractor:
     client = DeepSeekClient()
     adapter = _DeepSeekChatAdapter(client)

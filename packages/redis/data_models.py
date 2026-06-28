@@ -4,6 +4,14 @@ from dataclasses import dataclass
 
 
 @dataclass(slots=True)
+class UserMessageIds:
+    """Отслеживаемые message_id бота для конкретного чата пользователя."""
+
+    chat_id: int
+    message_ids: list[int]
+
+
+@dataclass(slots=True)
 class PipelineDraft:
     """Нормализованный черновик рецепта для video pipeline."""
 

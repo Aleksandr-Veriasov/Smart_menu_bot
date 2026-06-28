@@ -1,0 +1,38 @@
+# DB
+sqlalchemy==2.0.43
+asyncpg==0.31.0
+psycopg==3.2.13
+psycopg-binary==3.2.13
+alembic==1.16.4
+
+# Settings
+pydantic==2.13.4
+pydantic-settings==2.14.2
+
+# Telegram Bot API
+aiogram==3.29.0
+
+# Транзитивная зависимость faster-whisper
+requests==2.33.0
+
+# Redis
+redis==6.4.0
+
+# Video download & processing
+yt-dlp
+ffmpeg-python==0.2.0
+
+# Speech recognition (faster-whisper: CTranslate2, без torch)
+faster-whisper==1.1.1
+
+# AI (DeepSeek через OpenAI-совместимый клиент)
+openai==1.65.1
+
+# Auth (packages/security/passwords.py тянется через packages/db/models/user.py)
+passlib[bcrypt]==1.7.4
+
+# Observability
+sentry-sdk==2.29.1
+
+# Misc
+greenlet==3.2.4

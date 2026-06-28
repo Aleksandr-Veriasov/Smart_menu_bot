@@ -22,8 +22,8 @@ class TestRecipeRepositoryCreateBasic:
     @pytest.mark.asyncio
     async def test_create_basic_recipe(self, db_session: AsyncSession) -> None:
         """Создание базового рецепта с названием и описанием."""
-        recipe = await RecipeRepository.create_basic(
-            db_session, title="Паста Болоньезе", description="Классический итальянский соус"
+        recipe = await RecipeRepository(db_session).create_basic(
+            title="Паста Болоньезе", description="Классический итальянский соус"
         )
 
         assert recipe.id is not None
@@ -33,7 +33,7 @@ class TestRecipeRepositoryCreateBasic:
     @pytest.mark.asyncio
     async def test_create_basic_without_description(self, db_session: AsyncSession) -> None:
         """Создание рецепта без описания."""
-        recipe = await RecipeRepository.create_basic(db_session, title="Омлет", description=None)
+        recipe = await RecipeRepository(db_session).create_basic(title="Омлет", description=None)
 
         assert recipe.id is not None
         assert recipe.title == "Омлет"
@@ -42,7 +42,7 @@ class TestRecipeRepositoryCreateBasic:
     @pytest.mark.asyncio
     async def test_create_basic_empty_title(self, db_session: AsyncSession) -> None:
         """Создание рецепта с пустым названием."""
-        recipe = await RecipeRepository.create_basic(db_session, title="", description="Описание без названия")
+        recipe = await RecipeRepository(db_session).create_basic(title="", description="Описание без названия")
 
         assert recipe.id is not None
         assert recipe.title == ""
@@ -55,10 +55,10 @@ class TestRecipeRepositoryCreate:
     async def test_create_recipe_with_user_and_category(self, db_session: AsyncSession) -> None:
         """Создание рецепта с привязкой к пользователю и категории."""
         # Создаем пользователя
-        user = await UserRepository.create(db_session, UserCreate(id=123456, username="testuser"))
+        user = await UserRepository(db_session).create(UserCreate(id=123456, username="testuser"))
 
         # Создаем категорию
-        category = await CategoryRepository.create(db_session, CategoryCreate(name="Завтраки", slug="breakfasts"))
+        category = await CategoryRepository(db_session).create(CategoryCreate(name="Завтраки", slug="breakfasts"))
 
         # Создаем рецепт
         recipe_create = RecipeCreate(
@@ -67,7 +67,7 @@ class TestRecipeRepositoryCreate:
             user_id=user.id,
             category_id=category.id,
         )
-        recipe = await RecipeRepository.create(db_session, recipe_create)
+        recipe = await RecipeRepository(db_session).create(recipe_create)
 
         assert recipe.id is not None
         assert recipe.title == "Омлет с беконом"
@@ -91,11 +91,12 @@ class TestRecipeRepositoryUpdate:
     @pytest.mark.asyncio
     async def test_update_recipe_title(self, db_session: AsyncSession) -> None:
         """Обновление названия рецепта."""
+        repo = RecipeRepository(db_session)
         # Создаем рецепт
-        recipe = await RecipeRepository.create_basic(db_session, title="Старое название", description="Описание")
+        recipe = await repo.create_basic(title="Старое название", description="Описание")
 
         # Обновляем
-        updated = await RecipeRepository.update(db_session, recipe.id, RecipeUpdate(title="Новое название"))
+        updated = await repo.update(recipe.id, RecipeUpdate(title="Новое название"))
 
         assert updated.title == "Новое название"
         assert updated.description == "Описание"  # не изменилось
@@ -103,9 +104,10 @@ class TestRecipeRepositoryUpdate:
     @pytest.mark.asyncio
     async def test_update_recipe_description(self, db_session: AsyncSession) -> None:
         """Обновление описания рецепта."""
-        recipe = await RecipeRepository.create_basic(db_session, title="Рецепт", description="Старое описание")
+        repo = RecipeRepository(db_session)
+        recipe = await repo.create_basic(title="Рецепт", description="Старое описание")
 
-        updated = await RecipeRepository.update(db_session, recipe.id, RecipeUpdate(description="Новое описание"))
+        updated = await repo.update(recipe.id, RecipeUpdate(description="Новое описание"))
 
         assert updated.description == "Новое описание"
         assert updated.title == "Рецепт"
@@ -114,7 +116,7 @@ class TestRecipeRepositoryUpdate:
     async def test_update_nonexistent_recipe_raises_error(self, db_session: AsyncSession) -> None:
         """Обновление несуществующего рецепта вызывает ValueError."""
         with pytest.raises(ValueError, match="Recipe not found"):
-            await RecipeRepository.update(db_session, 999999, RecipeUpdate(title="Новое название"))
+            await RecipeRepository(db_session).update(999999, RecipeUpdate(title="Новое название"))
 
 
 class TestRecipeRepositoryGet:
@@ -123,27 +125,27 @@ class TestRecipeRepositoryGet:
     @pytest.mark.asyncio
     async def test_get_name_by_id(self, db_session: AsyncSession) -> None:
         """Получение названия рецепта по ID."""
-        recipe = await RecipeRepository.create_basic(
-            db_session, title="Паста Карбонара", description="Итальянское блюдо"
-        )
+        repo = RecipeRepository(db_session)
+        recipe = await repo.create_basic(title="Паста Карбонара", description="Итальянское блюдо")
 
-        name = await RecipeRepository.get_name_by_id(db_session, recipe.id)
+        name = await repo.get_name_by_id(recipe.id)
 
         assert name == "Паста Карбонара"
 
     @pytest.mark.asyncio
     async def test_get_name_by_nonexistent_id(self, db_session: AsyncSession) -> None:
         """Получение названия несуществующего рецепта возвращает None."""
-        name = await RecipeRepository.get_name_by_id(db_session, 999999)
+        name = await RecipeRepository(db_session).get_name_by_id(999999)
 
         assert name is None
 
     @pytest.mark.asyncio
     async def test_get_by_id(self, db_session: AsyncSession) -> None:
         """Получение рецепта по ID."""
-        recipe = await RecipeRepository.create_basic(db_session, title="Салат Цезарь", description="С курицей")
+        repo = RecipeRepository(db_session)
+        recipe = await repo.create_basic(title="Салат Цезарь", description="С курицей")
 
-        retrieved = await RecipeRepository.get_by_id(db_session, recipe.id)
+        retrieved = await repo.get_by_id(recipe.id)
 
         assert retrieved is not None
         assert retrieved.id == recipe.id
@@ -152,20 +154,20 @@ class TestRecipeRepositoryGet:
     @pytest.mark.asyncio
     async def test_get_nonexistent_recipe_returns_none(self, db_session: AsyncSession) -> None:
         """Получение несуществующего рецепта возвращает None."""
-        result = await RecipeRepository.get_by_id(db_session, 999999)
+        result = await RecipeRepository(db_session).get_by_id(999999)
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_get_count_by_user(self, db_session: AsyncSession) -> None:
         """Получение количества рецептов пользователя."""
-        user = await UserRepository.create(db_session, UserCreate(id=345678, username="user3"))
-        category = await CategoryRepository.create(db_session, CategoryCreate(name="Обеды", slug="lunches"))
+        user = await UserRepository(db_session).create(UserCreate(id=345678, username="user3"))
+        category = await CategoryRepository(db_session).create(CategoryCreate(name="Обеды", slug="lunches"))
 
         # Создаем несколько рецептов
+        repo = RecipeRepository(db_session)
         for i in range(3):
-            await RecipeRepository.create(
-                db_session,
+            await repo.create(
                 RecipeCreate(
                     title=f"Рецепт {i}",
                     user_id=user.id,
@@ -173,16 +175,16 @@ class TestRecipeRepositoryGet:
                 ),
             )
 
-        count = await RecipeRepository.get_count_by_user(db_session, user.id)
+        count = await repo.get_count_by_user(user.id)
 
         assert count == 3
 
     @pytest.mark.asyncio
     async def test_get_count_by_user_no_recipes(self, db_session: AsyncSession) -> None:
         """Получение количества рецептов для пользователя без рецептов."""
-        user = await UserRepository.create(db_session, UserCreate(id=456789, username="user4"))
+        user = await UserRepository(db_session).create(UserCreate(id=456789, username="user4"))
 
-        count = await RecipeRepository.get_count_by_user(db_session, user.id)
+        count = await RecipeRepository(db_session).get_count_by_user(user.id)
 
         assert count == 0
 
@@ -193,22 +195,21 @@ class TestRecipeRepositoryDelete:
     @pytest.mark.asyncio
     async def test_delete_recipe(self, db_session: AsyncSession) -> None:
         """Удаление рецепта."""
-        recipe = await RecipeRepository.create_basic(
-            db_session, title="Рецепт для удаления", description="Будет удален"
-        )
+        repo = RecipeRepository(db_session)
+        recipe = await repo.create_basic(title="Рецепт для удаления", description="Будет удален")
 
-        await RecipeRepository.delete(db_session, recipe.id)
+        await repo.delete(recipe.id)
         await db_session.flush()
 
         # Проверяем что рецепт удален
-        retrieved = await RecipeRepository.get_by_id(db_session, recipe.id)
+        retrieved = await repo.get_by_id(recipe.id)
         assert retrieved is None
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_recipe_raises_error(self, db_session: AsyncSession) -> None:
         """Удаление несуществующего рецепта вызывает ValueError."""
         with pytest.raises(ValueError, match="Recipe not found"):
-            await RecipeRepository.delete(db_session, 999999)
+            await RecipeRepository(db_session).delete(999999)
 
 
 class TestRecipeRepositoryIntegration:
@@ -217,12 +218,13 @@ class TestRecipeRepositoryIntegration:
     @pytest.mark.asyncio
     async def test_full_recipe_lifecycle(self, db_session: AsyncSession) -> None:
         """Полный цикл жизни рецепта: создание, получение, обновление."""
-        user = await UserRepository.create(db_session, UserCreate(id=567890, username="user5"))
-        category = await CategoryRepository.create(db_session, CategoryCreate(name="Ужины", slug="dinners"))
+        user = await UserRepository(db_session).create(UserCreate(id=567890, username="user5"))
+        category = await CategoryRepository(db_session).create(CategoryCreate(name="Ужины", slug="dinners"))
+
+        repo = RecipeRepository(db_session)
 
         # Создание
-        recipe = await RecipeRepository.create(
-            db_session,
+        recipe = await repo.create(
             RecipeCreate(
                 title="Первоначальное название",
                 description="Первоначальное описание",
@@ -233,18 +235,18 @@ class TestRecipeRepositoryIntegration:
         assert recipe.id is not None
 
         # Получение
-        retrieved = await RecipeRepository.get_by_id(db_session, recipe.id)
+        retrieved = await repo.get_by_id(recipe.id)
         assert retrieved is not None
         assert retrieved.title == "Первоначальное название"
 
         # Обновление
-        updated = await RecipeRepository.update(
-            db_session, recipe.id, RecipeUpdate(title="Обновленное название", description="Обновленное описание")
+        updated = await repo.update(
+            recipe.id, RecipeUpdate(title="Обновленное название", description="Обновленное описание")
         )
         assert updated.title == "Обновленное название"
 
         # Финальная проверка
-        final = await RecipeRepository.get_by_id(db_session, recipe.id)
+        final = await repo.get_by_id(recipe.id)
         assert final is not None
         assert final.title == "Обновленное название"
         assert final.description == "Обновленное описание"

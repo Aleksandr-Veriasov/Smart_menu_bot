@@ -1,5 +1,5 @@
+import asyncio
 from dataclasses import dataclass
-from typing import Any
 
 from redis.asyncio import Redis
 
@@ -16,9 +16,9 @@ class AppState:
     """
 
     db: Database
-    cleanup_task: Any | None = None  # сюда можно класть фоновые таски/хэндлы
-    backup_task: Any | None = None
-    broadcast_task: Any | None = None
+    cleanup_task: asyncio.Task[None] | None = None  # хэндлы фоновых задач
+    backup_task: asyncio.Task[None] | None = None
+    broadcast_task: asyncio.Task[None] | None = None
     redis: Redis | None = None
 
 
