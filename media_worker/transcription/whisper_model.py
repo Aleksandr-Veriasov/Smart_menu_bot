@@ -6,6 +6,8 @@
 """
 
 import asyncio
+import ctypes
+import gc
 import logging
 import threading
 import time
@@ -42,6 +44,12 @@ def _unload() -> None:
         if _model is not None:
             logger.info("Выгружаем Whisper модель (TTL истёк)")
             _model = None
+            gc.collect()
+            # Вернуть свободные страницы ОС — иначе glibc держит их в пуле
+            try:
+                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
+            except Exception:
+                pass
 
 
 def transcribe(audio_path: str) -> str:
