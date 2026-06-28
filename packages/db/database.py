@@ -1,6 +1,7 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import URL
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from packages.common_settings.settings import settings
 
@@ -36,6 +38,7 @@ class Database:
         pool_size: int | None = None,
         max_overflow: int | None = None,
         pool_timeout: int | None = None,
+        null_pool: bool = False,
     ) -> None:
         if engine is not None:
             self.engine: AsyncEngine = engine
@@ -57,7 +60,6 @@ class Database:
                     "Получен sync-драйвер для асинхронного Database. " "Соберите async URL (postgresql+asyncpg)."
                 )
 
-            # разумные дефолты, если не заданы аргументами
             if echo is None:
                 echo = settings.debug
             if pool_pre_ping is None:
@@ -65,17 +67,19 @@ class Database:
             if pool_recycle is None:
                 pool_recycle = settings.db.pool_recycle
 
-            engine_kwargs: dict[str, object] = {
-                "echo": echo,
-                "pool_pre_ping": pool_pre_ping,
-                "pool_recycle": pool_recycle,
-            }
-            if pool_size is not None:
-                engine_kwargs["pool_size"] = pool_size
-            if max_overflow is not None:
-                engine_kwargs["max_overflow"] = max_overflow
-            if pool_timeout is not None:
-                engine_kwargs["pool_timeout"] = pool_timeout
+            engine_kwargs: dict[str, Any] = {"echo": echo}
+            if null_pool:
+                # без пула: соединение создаётся на каждый запрос и сразу закрывается
+                engine_kwargs["poolclass"] = NullPool
+            else:
+                engine_kwargs["pool_pre_ping"] = pool_pre_ping
+                engine_kwargs["pool_recycle"] = pool_recycle
+                if pool_size is not None:
+                    engine_kwargs["pool_size"] = pool_size
+                if max_overflow is not None:
+                    engine_kwargs["max_overflow"] = max_overflow
+                if pool_timeout is not None:
+                    engine_kwargs["pool_timeout"] = pool_timeout
 
             self.engine = create_async_engine(url, **engine_kwargs)
 

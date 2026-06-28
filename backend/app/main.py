@@ -27,6 +27,8 @@ def create_app() -> FastAPI:
             echo=settings.debug,
             pool_recycle=settings.db.pool_recycle,
             pool_pre_ping=settings.db.pool_pre_ping,
+            pool_size=3,
+            max_overflow=3,
         ),
         cleanup_task=None,
     )

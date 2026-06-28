@@ -130,6 +130,7 @@ services:
       AUDIO_FOLDER: /app/audio
       VIDEO_FOLDER: /app/videos
       DOWNLOADER_BASE_URL: http://downloader:8082
+      REDIS_SINGLE_CONN: "1"
     volumes:
       - ./audio:/app/audio
       - ./videos:/app/videos

@@ -10,6 +10,7 @@ from backend.app.utils.fastapi_state import propagate_state_to_mounted_apps
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
 from packages.db.migrate_and_seed import ensure_admin
+from packages.db.pool_metrics import register_pool_metrics
 from packages.redis.redis_conn import close_redis, get_redis
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ def build_lifespan(state: AppState):
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.app_state = state
         propagate_state_to_mounted_apps(app, state=state)
+
+        register_pool_metrics(state.db.engine, service="backend")
 
         state.redis = await get_redis()
         ping = await state.redis.ping()

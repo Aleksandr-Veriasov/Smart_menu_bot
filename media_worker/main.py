@@ -27,7 +27,7 @@ async def main() -> None:
     setup_logging()
     logger.info("media_worker starting…")
 
-    db = Database(settings.db.sqlalchemy_url(use_async=True))
+    db = Database(settings.db.sqlalchemy_url(use_async=True), null_pool=True)
     logger.info("✅ Database connected")
 
     redis = await get_redis()

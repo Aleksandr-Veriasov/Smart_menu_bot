@@ -12,6 +12,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from bot.src.application.factory import build_bot, build_dispatcher, build_state
 from bot.src.application.lifecycle import runtime_start, runtime_stop
 from packages.common_settings.settings import settings
+from packages.db.pool_metrics import register_pool_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     bot = build_bot()
     dp = await build_dispatcher(state)
 
+    register_pool_metrics(state.db.engine, service="bot")
     await runtime_start(bot, state, allowed_updates=dp.resolve_used_update_types())
 
     # сохраним в app.state, чтобы роуты имели доступ

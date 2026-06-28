@@ -14,7 +14,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _MODEL_NAME = "base"
-_IDLE_TTL_SECONDS = 300  # 5 минут без запросов → выгрузить
+_IDLE_TTL_SECONDS = 120  # 2 минуты без запросов → выгрузить
 
 _lock = threading.Lock()
 _model: Any = None
