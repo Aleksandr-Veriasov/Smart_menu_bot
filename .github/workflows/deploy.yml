@@ -96,11 +96,6 @@ jobs:
     name: Deploy to Hetzner
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-
       - name: Add SSH key
         run: |
           mkdir -p ~/.ssh
@@ -108,31 +103,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 91.99.6.156 >> ~/.ssh/known_hosts
 
-      - name: Sync files to server
+      - name: Deploy via git pull
         run: |
-          rsync -az --delete \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude '.env' \
-            --exclude 'telethon_session' \
-            ./ root@91.99.6.156:/root/smart_menu_bot_prod/
-
-      - name: Run deploy script on server
-        run: |
-          ssh -o StrictHostKeyChecking=yes -T root@91.99.6.156 <<'EOF'
+          ssh -o StrictHostKeyChecking=yes root@91.99.6.156 << EOF
             set -e
             cd /root/smart_menu_bot_prod
+            echo "⬇️ Pulling latest code..."
+            git -c url."https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/".insteadOf="https://github.com/" pull origin main
             echo "🚀 Starting deployment..."
             ./refresh.sh
             echo "✅ Deployment complete!"
           EOF
-
-      - name: Notify deployment status
-        if: always()
-        run: |
-          if [ $? -eq 0 ]; then
-            echo "✅ Deployment successful"
-          else
-            echo "❌ Deployment failed"
-            exit 1
-          fi
