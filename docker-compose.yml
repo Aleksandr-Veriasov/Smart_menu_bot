@@ -64,6 +64,10 @@ services:
     image: postgres:16-alpine
     container_name: menu_bot_db
     restart: unless-stopped
+    command: >
+      postgres
+      -c log_min_duration_statement=500
+      -c log_checkpoints=on
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
