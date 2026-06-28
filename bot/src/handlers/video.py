@@ -4,13 +4,15 @@ from aiogram.types import Message, User
 from bot.src.bot_ui.messages import MessageService
 from bot.src.bot_ui.pipeline_drafts import PipelineDraftStore
 from bot.src.bot_ui.url_candidates import UrlCandidateStore
-from bot.src.filters.video import VideoLinkFilter
+from bot.src.filters.video import UnsupportedLinkFilter, VideoLinkFilter
 from bot.src.interactions.video_processing import start_video_processing
 from bot.src.utils.url import extract_first_url
 from packages.services.pipeline_service import PipelineService
 from packages.services.recipe_service import RecipeService
 
 router = Router(name="video")
+
+_SUPPORTED_PLATFORMS = "Instagram, TikTok, Pinterest"
 
 
 @router.message(VideoLinkFilter())
@@ -38,4 +40,13 @@ async def video_link(
         pipeline_draft_store=pipeline_draft_store,
         url_candidate_store=url_candidate_store,
         url=url,
+    )
+
+
+@router.message(UnsupportedLinkFilter())
+async def unsupported_link(message: Message, message_service: MessageService) -> None:
+    """Отвечает на ссылки с неподдерживаемых платформ."""
+    await message_service.answer_and_track(
+        message,
+        f"Эта ссылка не поддерживается.\n\nРаботаю с: {_SUPPORTED_PLATFORMS}.",
     )
