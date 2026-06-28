@@ -16,11 +16,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _MODEL_NAME = "base"
-_IDLE_TTL_SECONDS = 120  # 2 минуты без запросов → выгрузить
+_IDLE_TTL_SECONDS = 5 * 60  # 5 минуты без запросов → выгрузить
 
 _lock = threading.Lock()
 _model: Any = None
 _last_used_at: float = 0.0
+_active_calls: int = 0
 
 
 def _load() -> Any:
@@ -41,7 +42,7 @@ def _load() -> Any:
 def _unload() -> None:
     global _model
     with _lock:
-        if _model is not None:
+        if _model is not None and _active_calls == 0:
             logger.info("Выгружаем Whisper модель (TTL истёк)")
             _model = None
             gc.collect()
@@ -50,11 +51,16 @@ def _unload() -> None:
                 ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
             except Exception:
                 pass
+        elif _active_calls > 0:
+            logger.debug("Выгрузка отложена: модель используется (%d вызовов)", _active_calls)
 
 
 def transcribe(audio_path: str) -> str:
     """Синхронная транскрибация. Вызывать через asyncio.to_thread()."""
+    global _active_calls, _last_used_at
     model = _load()
+    with _lock:
+        _active_calls += 1
     try:
         segments, _ = model.transcribe(audio_path)
         text = " ".join(seg.text for seg in segments).strip()
@@ -65,7 +71,7 @@ def transcribe(audio_path: str) -> str:
         return ""
     finally:
         with _lock:
-            global _last_used_at
+            _active_calls -= 1
             _last_used_at = time.monotonic()
 
 
