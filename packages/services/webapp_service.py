@@ -374,7 +374,7 @@ class WebAppService:
         payload: WebAppRecipePatch,
     ) -> None:
         """Сохраняет ингредиенты из payload. Structured-список имеет приоритет над text."""
-        from packages.db.repository.recipe_ingredient import IngredientLink
+        from packages.schemas.recipe import IngredientLink
 
         if payload.ingredients is not None:
             items: list[IngredientItemWrite] = payload.ingredients

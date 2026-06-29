@@ -1,11 +1,15 @@
-"""Утилиты отправки broadcast-сообщений через Bot API.
+"""Утилиты отправки broadcast-сообщений через Bot API."""
 
-Не содержит I/O — только чистые функции классификации ошибок и расчёта backoff.
-Это позволяет тестировать их без HTTP-моков и БД.
-"""
-
+import asyncio
+import json
 import random
 from enum import Enum
+from typing import TYPE_CHECKING, Any
+
+import requests
+
+if TYPE_CHECKING:
+    from packages.db.models.broadcast import BroadcastCampaign
 
 _BACKOFF_BASE_SEC = 30.0
 _BACKOFF_MAX_SEC = 3600.0
@@ -69,3 +73,55 @@ def backoff_seconds(attempt: int) -> float:
     """
     base = min(_BACKOFF_BASE_SEC * (2 ** (attempt - 1)), _BACKOFF_MAX_SEC)
     return base + random.uniform(0, _BACKOFF_JITTER_SEC)
+
+
+def _parse_json_dict(raw: str | None) -> dict[str, Any] | None:
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+async def tg_call(method: str, payload: dict[str, Any], *, bot_token: str, timeout: float) -> dict[str, Any]:
+    """Выполнить POST-запрос к Telegram Bot API и вернуть JSON-ответ."""
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+
+    def _call() -> dict[str, Any]:
+        r = requests.post(url, json=payload, timeout=timeout)
+        try:
+            data = r.json()
+        except Exception:
+            data = {"ok": False, "error_code": r.status_code, "description": r.text[:300]}
+        return data if isinstance(data, dict) else {"ok": False, "description": "Ответ не в формате JSON"}
+
+    return await asyncio.to_thread(_call)
+
+
+async def send_campaign_message(
+    campaign: "BroadcastCampaign", *, chat_id: int, bot_token: str, timeout: float
+) -> dict[str, Any]:
+    """Отправить кампанию в чат: sendPhoto если есть фото, иначе sendMessage."""
+    reply_markup = _parse_json_dict(campaign.reply_markup_json)
+    if campaign.photo_file_id or campaign.photo_url:
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "photo": campaign.photo_file_id or campaign.photo_url,
+            "caption": campaign.text,
+            "parse_mode": campaign.parse_mode,
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        return await tg_call("sendPhoto", payload, bot_token=bot_token, timeout=timeout)
+
+    payload = {
+        "chat_id": chat_id,
+        "text": campaign.text,
+        "parse_mode": campaign.parse_mode,
+        "disable_web_page_preview": bool(campaign.disable_web_page_preview),
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    return await tg_call("sendMessage", payload, bot_token=bot_token, timeout=timeout)

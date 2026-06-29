@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from backend.app.admin.views import (
+from backend.app.handlers.admin.views import (
     auth,
     broadcast,
     categories,

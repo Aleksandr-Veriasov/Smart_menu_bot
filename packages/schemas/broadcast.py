@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from packages.db.models import BroadcastAudienceType, BroadcastCampaignStatus
+from packages.enums import BroadcastAudienceType, BroadcastCampaignStatus
 
 
 def _coerce_utc(dt: datetime) -> datetime:

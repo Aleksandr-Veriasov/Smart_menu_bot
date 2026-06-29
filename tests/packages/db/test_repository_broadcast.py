@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from packages.db.models import BroadcastCampaignStatus
 from packages.db.repository import BroadcastRepository
+from packages.enums import BroadcastCampaignStatus
 
 
 class TestBroadcastRepositoryCampaigns:

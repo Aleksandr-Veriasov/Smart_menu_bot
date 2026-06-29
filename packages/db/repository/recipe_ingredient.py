@@ -2,29 +2,15 @@ from collections.abc import Iterable
 from decimal import Decimal
 
 import sqlalchemy as sa
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from packages.db.models import RecipeIngredient
+from packages.schemas.recipe import IngredientLink
 
 from .base import BaseRepository
-
-
-class IngredientLink:
-    """Данные для создания/обновления связи рецепт-ингредиент."""
-
-    __slots__ = ("ingredient_id", "quantity", "unit")
-
-    def __init__(
-        self,
-        ingredient_id: int,
-        quantity: Decimal | None = None,
-        unit: str | None = None,
-    ) -> None:
-        self.ingredient_id = ingredient_id
-        self.quantity = quantity
-        self.unit = unit
 
 
 class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
@@ -89,6 +75,39 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_link(
+        self, recipe_id: int, ingredient_id: int, *, with_ingredient: bool = False
+    ) -> RecipeIngredient | None:
+        """Найти связь рецепт-ингредиент; опционально с joinedload ингредиента."""
+        stmt = sa.select(self.model).where(
+            self.model.recipe_id == recipe_id,
+            self.model.ingredient_id == ingredient_id,
+        )
+        if with_ingredient:
+            stmt = stmt.options(joinedload(self.model.ingredient))
+        return await self.session.scalar(stmt)
+
+    async def update_link(
+        self, recipe_id: int, ingredient_id: int, *, quantity: Decimal | None, unit: str | None
+    ) -> RecipeIngredient | None:
+        """Обновить qty/unit связи рецепт-ингредиент. Вернуть None если связь не найдена."""
+        link = await self.get_link(recipe_id, ingredient_id)
+        if link is None:
+            return None
+        link.quantity = quantity
+        link.unit = unit
+        await self.session.flush()
+        return link
+
+    async def delete_link(self, recipe_id: int, ingredient_id: int) -> None:
+        """Удалить связь рецепт-ингредиент."""
+        await self.session.execute(
+            sa.delete(self.model).where(
+                self.model.recipe_id == recipe_id,
+                self.model.ingredient_id == ingredient_id,
+            )
+        )
+
     async def bulk_link_ids(
         self,
         recipe_id: int,
@@ -100,3 +119,11 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
         """
         links = [IngredientLink(ingredient_id=int(i)) for i in ingredient_ids if i]
         await self.bulk_link(recipe_id, links)
+
+    async def count_pending_backfill(self) -> int:
+        """Количество рецептов с хотя бы одним ингредиентом без quantity."""
+        return (
+            await self.session.execute(
+                select(func.count(func.distinct(self.model.recipe_id))).where(self.model.quantity.is_(None))
+            )
+        ).scalar_one()

@@ -46,7 +46,28 @@
           {{ c.created_at.strftime("%d.%m.%Y") if c.created_at else "—" }}
         </td>
         <td class="px-4 py-3 text-right">
-          <div class="flex items-center justify-end gap-2">
+          <div class="flex items-center justify-end gap-2 flex-wrap">
+            {% if c.status.value in ["draft", "paused"] %}
+            <form method="post" action="/admin/broadcast/{{ c.id }}/queue">
+              <button type="submit" class="text-xs text-green-600 hover:text-green-800 hover:underline">В очередь</button>
+            </form>
+            {% endif %}
+            {% if c.status.value == "running" %}
+            <form method="post" action="/admin/broadcast/{{ c.id }}/pause">
+              <button type="submit" class="text-xs text-yellow-600 hover:text-yellow-800 hover:underline">Пауза</button>
+            </form>
+            {% endif %}
+            {% if c.status.value == "paused" %}
+            <form method="post" action="/admin/broadcast/{{ c.id }}/resume">
+              <button type="submit" class="text-xs text-blue-600 hover:text-blue-800 hover:underline">Продолжить</button>
+            </form>
+            {% endif %}
+            {% if c.status.value in ["queued", "running", "paused"] %}
+            <form method="post" action="/admin/broadcast/{{ c.id }}/cancel"
+                  onsubmit="return confirm('Отменить кампанию?')">
+              <button type="submit" class="text-xs text-orange-500 hover:text-orange-700 hover:underline">Отменить</button>
+            </form>
+            {% endif %}
             <a href="/admin/broadcast/{{ c.id }}/messages"
                class="text-xs text-gray-500 hover:text-gray-700 hover:underline">Сообщения</a>
             <a href="/admin/broadcast/{{ c.id }}/edit"

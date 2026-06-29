@@ -186,3 +186,66 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
+
+    # ── Admin panel ───────────────────────────────────────────────────────────
+
+    async def list_page(self, *, offset: int, limit: int, q: str) -> tuple[list[Recipe], int]:
+        """Вернуть страницу рецептов и общее количество для admin-панели."""
+        base = select(self.model)
+        if q:
+            base = base.where(self.model.title.ilike(f"%{q}%"))
+        total = (await self.session.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+        stmt = (
+            base.options(
+                joinedload(self.model.ingredients),
+                joinedload(self.model.linked_users),
+                joinedload(self.model.video),
+            )
+            .order_by(desc(self.model.id))
+            .offset(offset)
+            .limit(limit)
+        )
+        recipes = (await self.session.execute(stmt)).unique().scalars().all()
+        return list(recipes), int(total)
+
+    async def get_for_admin(self, recipe_id: int) -> Recipe | None:
+        """Загрузить рецепт со всеми связями для admin-панели."""
+        stmt = (
+            select(self.model)
+            .where(self.model.id == recipe_id)
+            .options(
+                joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient),
+                joinedload(self.model.linked_users),
+                joinedload(self.model.video),
+                joinedload(self.model.recipe_users).joinedload(RecipeUser.category),
+            )
+        )
+        return (await self.session.execute(stmt)).unique().scalar_one_or_none()
+
+    async def get_needing_qty_backfill(self, limit: int | None) -> list[Recipe]:
+        """Рецепты с хотя бы одним ингредиентом без quantity, с загруженными связями."""
+        subq = (
+            select(RecipeIngredient.recipe_id).where(RecipeIngredient.quantity.is_(None)).distinct().scalar_subquery()
+        )
+        stmt = (
+            select(self.model)
+            .where(self.model.id.in_(subq))
+            .options(joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient))
+            .order_by(self.model.id)
+        )
+        if limit:
+            stmt = stmt.limit(limit)
+        return list((await self.session.execute(stmt)).unique().scalars().all())
+
+    async def get_needing_qty_backfill_one(self, recipe_id: int) -> Recipe | None:
+        """Загрузить один рецепт с ingredient_links для бэкфилла."""
+        stmt = (
+            select(self.model)
+            .where(self.model.id == recipe_id)
+            .options(joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient))
+        )
+        return (await self.session.execute(stmt)).unique().scalar_one_or_none()
+
+    async def update_meta(self, recipe_id: int, *, title: str, description: str | None) -> Recipe | None:
+        """Обновить название и описание рецепта. Вернуть обновлённый объект."""
+        return await self.update_fields(recipe_id, {"title": title, "description": description})

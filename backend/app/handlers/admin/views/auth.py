@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from backend.app.admin.auth import authenticate
-from backend.app.admin.templates import templates
-from backend.app.utils.fastapi_state import get_backend_db
+from backend.app.core.deps import get_backend_db, get_backend_redis
+from backend.app.core.templates import templates
+from packages.services import AdminService
 
 router = APIRouter()
 
@@ -19,8 +19,7 @@ async def login_submit(
     username: str = Form(...),
     password: str = Form(...),
 ) -> RedirectResponse | HTMLResponse:
-    db = get_backend_db(request)
-    ok = await authenticate(username, password, db)
+    ok = await AdminService(get_backend_db(request), get_backend_redis(request)).authenticate(username, password)
     if ok:
         request.session["admin_login"] = username
         return RedirectResponse(url="/admin/", status_code=303)

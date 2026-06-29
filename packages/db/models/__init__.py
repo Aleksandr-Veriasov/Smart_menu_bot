@@ -1,15 +1,14 @@
 # Импортируем все модули явно — это обязательно для SQLAlchemy:
 # Base.metadata должна видеть все таблицы до создания движка/миграций.
 from packages.db.models import broadcast, pipeline, recipe, user  # noqa: F401
-
-from .base import Base
-from .broadcast import (
+from packages.enums import (
     BroadcastAudienceType,
-    BroadcastCampaign,
     BroadcastCampaignStatus,
-    BroadcastMessage,
     BroadcastMessageStatus,
 )
+
+from .base import Base
+from .broadcast import BroadcastCampaign, BroadcastMessage
 from .pipeline import PipelineJob, PipelineJobStatus
 from .recipe import Category, Ingredient, Recipe, RecipeIngredient, RecipeUser, Video
 from .user import Admin, User

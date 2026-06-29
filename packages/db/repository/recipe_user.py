@@ -60,3 +60,8 @@ class RecipeUserRepository(BaseRepository[RecipeUser]):
         statement = select(self.model.category_id).where(self.model.recipe_id == recipe_id).limit(1)
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
+
+    async def get_linked_user_ids(self, recipe_id: int) -> set[int]:
+        """Вернуть множество user_id, привязанных к рецепту."""
+        result = await self.session.execute(select(self.model.user_id).where(self.model.recipe_id == recipe_id))
+        return set(result.scalars().all())

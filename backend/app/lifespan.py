@@ -5,8 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.app.broadcast.worker import run_broadcast_worker
-from backend.app.utils.fastapi_state import propagate_state_to_mounted_apps
+from backend.app.tasks.broadcast import run_broadcast_worker
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
 from packages.db.migrate_and_seed import ensure_admin
@@ -20,7 +19,6 @@ def build_lifespan(state: AppState):
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.app_state = state
-        propagate_state_to_mounted_apps(app, state=state)
 
         register_pool_metrics(state.db.engine, service="backend")
 

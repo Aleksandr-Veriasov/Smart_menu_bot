@@ -61,14 +61,28 @@
 
   {# ── Результат ── #}
   {% if result %}
-  <div class="bg-white border {% if result.success %}border-green-200{% else %}border-red-200{% endif %} rounded-xl">
-    <div class="px-5 py-3 border-b {% if result.success %}border-green-100 bg-green-50{% else %}border-red-100 bg-red-50{% endif %} rounded-t-xl flex items-center gap-2">
-      <span class="text-sm font-medium {% if result.success %}text-green-800{% else %}text-red-800{% endif %}">
-        {% if result.success %}✓ Успешно{% else %}✗ Ошибка{% endif %}
+  {% set success = result.failed == 0 %}
+  <div class="bg-white border {% if success %}border-green-200{% else %}border-amber-200{% endif %} rounded-xl">
+    <div class="px-5 py-3 border-b {% if success %}border-green-100 bg-green-50{% else %}border-amber-100 bg-amber-50{% endif %} rounded-t-xl flex items-center gap-2">
+      <span class="text-sm font-medium {% if success %}text-green-800{% else %}text-amber-800{% endif %}">
+        {% if success %}✓ Готово{% else %}⚠ Завершено с ошибками{% endif %}
         {% if result.dry_run %}<span class="font-normal opacity-70"> — dry-run</span>{% endif %}
       </span>
     </div>
-    <pre class="px-5 py-4 text-xs text-gray-700 overflow-auto max-h-96 leading-relaxed whitespace-pre-wrap break-all font-mono">{{ result.output }}</pre>
+    <div class="px-5 py-4 grid grid-cols-3 gap-4 text-center">
+      <div>
+        <div class="text-2xl font-semibold text-gray-800">{{ result.total }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">всего рецептов</div>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold text-green-700">{{ result.enriched }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">обогащено</div>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold {% if result.failed > 0 %}text-red-600{% else %}text-gray-400{% endif %}">{{ result.failed }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">ошибок</div>
+      </div>
+    </div>
   </div>
   {% endif %}
 

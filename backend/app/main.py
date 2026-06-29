@@ -1,21 +1,15 @@
 import logging
 
 from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
 
-from backend.app.admin.router import router as admin_router
 from backend.app.core import (
+    setup_exception_handlers,
     setup_middleware,
     setup_observability,
     setup_routes,
     setup_static,
 )
-from backend.app.exception_handlers import (
-    http_exception_handler,
-    internal_error_handler,
-    lookup_error_handler,
-    value_error_handler,
-)
+from backend.app.handlers.admin.router import router as admin_router
 from backend.app.lifespan import build_lifespan
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
@@ -51,10 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     setup_routes(app)
 
-    app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(LookupError, lookup_error_handler)
-    app.add_exception_handler(ValueError, value_error_handler)
-    app.add_exception_handler(Exception, internal_error_handler)
+    setup_exception_handlers(app)
 
     return app
 

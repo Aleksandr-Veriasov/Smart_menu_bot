@@ -14,8 +14,8 @@ from packages.db.repository import (
     RecipeRepository,
     UserRepository,
 )
-from packages.db.repository.recipe_ingredient import IngredientLink
 from packages.db.schemas import CategoryCreate, RecipeCreate, UserCreate
+from packages.schemas.recipe import IngredientLink
 
 
 @pytest.fixture

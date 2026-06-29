@@ -1,5 +1,6 @@
 import logging
 
+from packages.db.models.recipe import Category
 from packages.db.repository import CategoryRepository
 from packages.db.schemas import CategoryRead
 from packages.redis.repository import CategoryCacheRepository
@@ -50,3 +51,41 @@ class CategoryService(BaseService):
                 await self.category_cache.set_all_name_and_slug([r.model_dump() for r in result])
                 logger.debug(f"👉 Все категории из БД: {result}")
         return result
+
+    # ── Admin panel ───────────────────────────────────────────────────────────
+
+    async def get_or_raise(self, cat_id: int) -> Category:
+        """Вернуть категорию или бросить LookupError."""
+        async with self.db.session() as session:
+            cat = await self.category_repo(session).get_by_id(cat_id)
+        if cat is None:
+            raise LookupError(f"Категория #{cat_id} не найдена")
+        return cat
+
+    async def create(self, *, name: str, slug: str | None) -> None:
+        """Создать категорию и инвалидировать кэш."""
+        async with self.db.session() as session:
+            cat = Category(name=name, slug=slug)
+            session.add(cat)
+            await session.flush()
+        await self.category_cache.invalidate_all_name_and_slug()
+
+    async def update(self, cat_id: int, *, name: str, slug: str | None) -> None:
+        """Обновить поля категории и инвалидировать кэш."""
+        async with self.db.session() as session:
+            cat = await self.category_repo(session).get_by_id(cat_id)
+            if cat is None:
+                raise LookupError(f"Категория #{cat_id} не найдена")
+            cat.name = name
+            cat.slug = slug
+            await session.flush()
+        await self.category_cache.invalidate_all_name_and_slug()
+
+    async def delete(self, cat_id: int) -> None:
+        """Удалить категорию и инвалидировать кэш (если найдена)."""
+        async with self.db.session() as session:
+            cat = await self.category_repo(session).get_by_id(cat_id)
+            if cat:
+                await session.delete(cat)
+                await session.flush()
+        await self.category_cache.invalidate_all_name_and_slug()
