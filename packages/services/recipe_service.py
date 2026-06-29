@@ -193,21 +193,48 @@ class RecipeService(BaseService):
         video_url: str | None = None,
         original_url: str | None = None,
     ) -> int:
-        """Сохраняет черновик рецепта без привязки к пользователю и категории."""
+        """Сохраняет черновик рецепта без привязки к пользователю и категории.
+
+        ingredients может быть:
+        - list[IngredientItem] — новый путь, сохраняет quantity/unit
+        - str — легаси текстовый формат с маркерами '- '
+        - Iterable[str/dict] — легаси список имён
+        """
+        from packages.db.repository.recipe_ingredient import IngredientLink
+        from packages.recipes_core.deepseek_parsers import IngredientItem
         from packages.recipes_core.ingredients_parser import (
             parse_ingredients,
             to_ingredient_name,
         )
 
         ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
+        is_structured = ingredients_raw and isinstance(ingredients_raw[0], IngredientItem)
+
         async with self.db.session() as session:
             recipe = await self.recipe_repo(session).create_basic(
                 title=title,
                 description=description or "Не указано",
             )
-            names = [n for n in (to_ingredient_name(x) for x in ingredients_raw) if n]
-            id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
-            await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), id_by_name.values())
+
+            if is_structured:
+                items: list[IngredientItem] = ingredients_raw
+                names = [item.name for item in items if item.name]
+                id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
+                links = [
+                    IngredientLink(
+                        ingredient_id=id_by_name[item.name],
+                        quantity=item.quantity,
+                        unit=item.unit,
+                    )
+                    for item in items
+                    if item.name and item.name in id_by_name
+                ]
+                await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), links)
+            else:
+                names = [n for n in (to_ingredient_name(x) for x in ingredients_raw) if n]
+                id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
+                await self.recipe_ingredient_repo(session).bulk_link_ids(int(recipe.id), id_by_name.values())
+
             if video_url:
                 await self.video_repo(session).create(video_url, int(recipe.id), original_url=original_url)
             return int(recipe.id)

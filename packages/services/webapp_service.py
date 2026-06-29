@@ -29,6 +29,8 @@ from packages.redis.repository import (
     WebAppRecipeDraftCacheRepository,
 )
 from packages.schemas.webapp import (
+    IngredientItemRead,
+    IngredientItemWrite,
     WebAppCategoryRead,
     WebAppRecipeDraft,
     WebAppRecipePatch,
@@ -182,7 +184,9 @@ class WebAppService:
         title_will_change = payload.title is not None and self._validate_title(payload.title) != (recipe.title or "")
         description_will_change = payload.description is not None and payload.description != recipe.description
         ingredients_will_change = False
-        if payload.ingredients_text is not None:
+        if payload.ingredients is not None:
+            ingredients_will_change = True  # структурированный список всегда перезаписываем
+        elif payload.ingredients_text is not None:
             ingredients_will_change = self._parse_ingredients(payload.ingredients_text) != [
                 str(i.name) for i in (recipe.ingredients or []) if getattr(i, "name", None)
             ]
@@ -214,11 +218,8 @@ class WebAppService:
                     category_id = requested
 
             if payload.ingredients_text is not None and ingredients_will_change:
-                names = self._parse_ingredients(payload.ingredients_text)
                 await session.execute(sa.delete(RecipeIngredient).where(RecipeIngredient.recipe_id == int(recipe_id)))
-                if names:
-                    id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
-                    await RecipeIngredientRepository(session).bulk_link(int(recipe_id), id_by_name.values())
+                await self._save_ingredients(session, int(recipe_id), payload)
 
         _, new_category_id = await self._load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=user_id)
         return PatchResult(
@@ -244,12 +245,6 @@ class WebAppService:
         new_category_id = int(payload.category_id) if payload.category_id is not None else int(category_id)
         category_changed = new_category_id != int(category_id)
 
-        names = (
-            self._parse_ingredients(payload.ingredients_text)
-            if payload.ingredients_text is not None
-            else [str(i.name) for i in (original.ingredients or []) if getattr(i, "name", None)]
-        )
-
         new_recipe = await RecipeRepository(session).create_basic(new_title, new_description)
 
         if getattr(original, "video", None) is not None:
@@ -261,9 +256,13 @@ class WebAppService:
                 )
             )
 
-        if names:
-            id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
-            await RecipeIngredientRepository(session).bulk_link(int(new_recipe.id), id_by_name.values())
+        if payload.ingredients_text is not None or payload.ingredients is not None:
+            await self._save_ingredients(session, int(new_recipe.id), payload)
+        else:
+            names = [str(i.name) for i in (original.ingredients or []) if getattr(i, "name", None)]
+            if names:
+                id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
+                await RecipeIngredientRepository(session).bulk_link_ids(int(new_recipe.id), id_by_name.values())
 
         await RecipeUserRepository(session).link_user(int(new_recipe.id), int(user_id), int(new_category_id))
         await RecipeUserRepository(session).unlink_user(int(original.id), int(user_id))
@@ -369,6 +368,38 @@ class WebAppService:
         return title
 
     @staticmethod
+    async def _save_ingredients(
+        session: AsyncSession,
+        recipe_id: int,
+        payload: WebAppRecipePatch,
+    ) -> None:
+        """Сохраняет ингредиенты из payload. Structured-список имеет приоритет над text."""
+        from packages.db.repository.recipe_ingredient import IngredientLink
+
+        if payload.ingredients is not None:
+            items: list[IngredientItemWrite] = payload.ingredients
+            names = [item.name for item in items if item.name]
+            if not names:
+                return
+            id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
+            links = [
+                IngredientLink(
+                    ingredient_id=id_by_name[item.name],
+                    quantity=item.quantity,
+                    unit=item.unit,
+                )
+                for item in items
+                if item.name and item.name in id_by_name
+            ]
+            await RecipeIngredientRepository(session).bulk_link(recipe_id, links)
+        elif payload.ingredients_text is not None:
+            names = WebAppService._parse_ingredients(payload.ingredients_text)
+            if not names:
+                return
+            id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
+            await RecipeIngredientRepository(session).bulk_link_ids(recipe_id, id_by_name.values())
+
+    @staticmethod
     def _parse_ingredients(text: str) -> list[str]:
         raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
         parts: list[str] = []
@@ -381,10 +412,20 @@ class WebAppService:
     @staticmethod
     def _to_read(recipe: Recipe, *, category_id: int) -> WebAppRecipeRead:
         ingredients = [str(i.name) for i in (recipe.ingredients or []) if getattr(i, "name", None)]
+        ingredient_details = [
+            IngredientItemRead(
+                name=str(link.ingredient.name),
+                quantity=link.quantity,
+                unit=link.unit,
+            )
+            for link in getattr(recipe, "ingredient_links", [])
+            if getattr(link, "ingredient", None) and link.ingredient.name
+        ]
         return WebAppRecipeRead(
             id=int(recipe.id),
             title=str(recipe.title),
             description=recipe.description,
             category_id=int(category_id),
             ingredients=ingredients,
+            ingredient_details=ingredient_details,
         )

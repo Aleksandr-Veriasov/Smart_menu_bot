@@ -137,6 +137,7 @@
 
     tg.ready();
     tg.expand();
+    try { tg.requestFullscreen?.(); } catch {}
     applyThemeParams(tg.themeParams);
 
     try {

@@ -100,7 +100,10 @@ class TestRecipeIngredientRepositoryBulk:
         ing3 = await ing_repo.create("Перец")
 
         # Массовое связывание (не должно вызывать ошибок)
-        await RecipeIngredientRepository(db_session).bulk_link(recipe.id, [ing1.id, ing2.id, ing3.id])
+        from packages.db.repository.recipe_ingredient import IngredientLink
+
+        links = [IngredientLink(ingredient_id=i) for i in [ing1.id, ing2.id, ing3.id]]
+        await RecipeIngredientRepository(db_session).bulk_link(recipe.id, links)
 
     @pytest.mark.asyncio
     async def test_bulk_link_empty_list(self, db_session: AsyncSession) -> None:
@@ -141,8 +144,9 @@ class TestRecipeIngredientRepositoryBulk:
         ingredient = await IngredientRepository(db_session).create("Уксус")
 
         ri_repo = RecipeIngredientRepository(db_session)
-        # Передаем один ID несколько раз
-        await ri_repo.bulk_link(recipe.id, [ingredient.id, ingredient.id, ingredient.id])
+        from packages.db.repository.recipe_ingredient import IngredientLink
+
+        await ri_repo.bulk_link(recipe.id, [IngredientLink(ingredient_id=ingredient.id)] * 3)
 
         # Пытаемся создать еще одну - должно быть ошибка
         with pytest.raises(ValueError):
@@ -167,8 +171,12 @@ class TestRecipeIngredientRepositoryBulk:
         ingredient = await IngredientRepository(db_session).create("Сахар")
 
         ri_repo = RecipeIngredientRepository(db_session)
-        # Передаем None значения вместе с валидными
-        await ri_repo.bulk_link(recipe.id, [ingredient.id, None, 0])  # type: ignore[list-item]
+        from packages.db.repository.recipe_ingredient import IngredientLink
+
+        # None/0 ingredient_id должны игнорироваться
+        await ri_repo.bulk_link(
+            recipe.id, [IngredientLink(ingredient_id=ingredient.id), IngredientLink(ingredient_id=0)]
+        )
 
         # Должна быть создана связь только для валидного ID
         with pytest.raises(ValueError):
@@ -204,7 +212,9 @@ class TestRecipeIngredientRepositoryIntegration:
             ingredients.append(ing.id)
 
         # Связываем все ингредиенты с рецептом
-        await ri_repo.bulk_link(recipe.id, ingredients)
+        from packages.db.repository.recipe_ingredient import IngredientLink
+
+        await ri_repo.bulk_link(recipe.id, [IngredientLink(ingredient_id=i) for i in ingredients])
 
         # Проверяем что связи созданы, пытаясь создать дублирующуюся
         for ing_id in ingredients:
