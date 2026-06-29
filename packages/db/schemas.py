@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -184,6 +185,8 @@ class RecipeRead(RecipeBase):
 class RecipeIngredientCreate(BaseModel):
     recipe_id: int
     ingredient_id: int
+    quantity: Decimal | None = None
+    unit: str | None = None
 
 
 class RecipeIngredientRead(BaseModel):
@@ -192,3 +195,5 @@ class RecipeIngredientRead(BaseModel):
     id: int
     recipe_id: int
     ingredient_id: int
+    quantity: Decimal | None = None
+    unit: str | None = None

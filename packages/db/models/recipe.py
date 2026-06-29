@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -6,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -102,7 +104,8 @@ class RecipeIngredient(Base):
         ForeignKey("ingredients.id", ondelete="CASCADE"),
         nullable=False,
     )
-    # TODO добавить поле количества и единицы измерения
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 
 class RecipeUser(Base):
