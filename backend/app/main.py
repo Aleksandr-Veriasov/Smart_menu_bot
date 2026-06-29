@@ -1,7 +1,7 @@
 import logging
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
+from fastapi.exceptions import HTTPException
 
 from backend.app.admin.router import router as admin_router
 from backend.app.core import (
@@ -9,6 +9,12 @@ from backend.app.core import (
     setup_observability,
     setup_routes,
     setup_static,
+)
+from backend.app.exception_handlers import (
+    http_exception_handler,
+    internal_error_handler,
+    lookup_error_handler,
+    value_error_handler,
 )
 from backend.app.lifespan import build_lifespan
 from packages.app_state import AppState
@@ -45,13 +51,10 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     setup_routes(app)
 
-    @app.exception_handler(LookupError)
-    async def lookup_error_handler(_: Request, exc: LookupError) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"detail": str(exc)})
-
-    @app.exception_handler(ValueError)
-    async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
-        return JSONResponse(status_code=422, content={"detail": str(exc)})
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(LookupError, lookup_error_handler)
+    app.add_exception_handler(ValueError, value_error_handler)
+    app.add_exception_handler(Exception, internal_error_handler)
 
     return app
 

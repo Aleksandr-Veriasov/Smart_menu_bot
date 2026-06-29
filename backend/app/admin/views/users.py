@@ -1,6 +1,7 @@
 """admin: список и детали пользователей."""
 
 from fastapi import APIRouter, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
@@ -64,7 +65,7 @@ async def user_detail(request: Request, user_id: int) -> HTMLResponse | Redirect
         user = result.unique().scalar_one_or_none()
 
     if user is None:
-        return RedirectResponse(url="/admin/users", status_code=303)
+        raise HTTPException(status_code=404, detail=f"Пользователь #{user_id} не найден")
 
     return templates.TemplateResponse(
         request,

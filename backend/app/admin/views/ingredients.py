@@ -1,6 +1,7 @@
 """admin: список, создание, редактирование и удаление ингредиентов."""
 
 from fastapi import APIRouter, Form, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
@@ -113,7 +114,7 @@ async def ingredient_edit_form(request: Request, ing_id: int) -> HTMLResponse | 
         ing = await session.get(Ingredient, ing_id)
 
     if ing is None:
-        return RedirectResponse(url="/admin/ingredients", status_code=303)
+        raise HTTPException(status_code=404, detail=f"Ингредиент #{ing_id} не найден")
 
     return templates.TemplateResponse(
         request,
@@ -154,7 +155,7 @@ async def ingredient_update(
     async with db.session() as session:
         ing = await session.get(Ingredient, ing_id)
         if ing is None:
-            return RedirectResponse(url="/admin/ingredients", status_code=303)
+            raise HTTPException(status_code=404, detail=f"Ингредиент #{ing_id} не найден")
         existing = await session.scalar(select(Ingredient).where(Ingredient.name == name, Ingredient.id != ing_id))
         if existing:
             return templates.TemplateResponse(

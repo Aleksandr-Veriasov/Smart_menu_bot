@@ -3,6 +3,7 @@
 from datetime import UTC
 
 from fastapi import APIRouter, Form, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
@@ -134,7 +135,7 @@ async def campaign_edit_form(request: Request, campaign_id: int) -> HTMLResponse
         campaign = await session.get(BroadcastCampaign, campaign_id)
 
     if campaign is None:
-        return RedirectResponse(url="/admin/broadcast", status_code=303)
+        raise HTTPException(status_code=404, detail=f"Кампания #{campaign_id} не найдена")
 
     return templates.TemplateResponse(
         request,
@@ -193,7 +194,7 @@ async def campaign_update(
     async with db.session() as session:
         campaign = await session.get(BroadcastCampaign, campaign_id)
         if campaign is None:
-            return RedirectResponse(url="/admin/broadcast", status_code=303)
+            raise HTTPException(status_code=404, detail=f"Кампания #{campaign_id} не найдена")
         campaign.name = name
         campaign.status = BroadcastCampaignStatus(status)
         campaign.audience_type = BroadcastAudienceType(audience_type)
@@ -239,7 +240,7 @@ async def campaign_messages(
     async with db.session() as session:
         campaign = await session.get(BroadcastCampaign, campaign_id)
         if campaign is None:
-            return RedirectResponse(url="/admin/broadcast", status_code=303)
+            raise HTTPException(status_code=404, detail=f"Кампания #{campaign_id} не найдена")
 
         base = select(BroadcastMessage).where(BroadcastMessage.campaign_id == campaign_id)
         if status_filter:

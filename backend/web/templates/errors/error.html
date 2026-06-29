@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-gray-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ status_code }} — SmartMenuBot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full flex items-center justify-center">
+  <div class="text-center px-6">
+    <p class="text-8xl font-extrabold text-indigo-600">{{ status_code }}</p>
+    <h1 class="mt-4 text-2xl font-bold text-gray-900">{{ title }}</h1>
+    <p class="mt-2 text-gray-500 max-w-sm mx-auto">{{ detail }}</p>
+    <a href="/admin/" class="mt-8 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+      На главную
+    </a>
+  </div>
+</body>
+</html>

@@ -3,6 +3,7 @@
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Form, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import joinedload
@@ -94,7 +95,7 @@ async def recipe_detail(request: Request, recipe_id: int) -> HTMLResponse | Redi
         recipe = await _load_recipe(session, recipe_id)
 
     if recipe is None:
-        return RedirectResponse(url="/admin/recipes", status_code=303)
+        raise HTTPException(status_code=404, detail=f"Рецепт #{recipe_id} не найден")
 
     return templates.TemplateResponse(
         request,

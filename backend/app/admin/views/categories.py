@@ -1,6 +1,7 @@
 """admin: CRUD категорий с инвалидацией Redis-кэша."""
 
 from fastapi import APIRouter, Form, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
@@ -103,7 +104,7 @@ async def category_edit_form(request: Request, cat_id: int) -> HTMLResponse | Re
         cat = await session.get(Category, cat_id)
 
     if cat is None:
-        return RedirectResponse(url="/admin/categories", status_code=303)
+        raise HTTPException(status_code=404, detail=f"Категория #{cat_id} не найдена")
 
     return templates.TemplateResponse(
         request,
@@ -146,7 +147,7 @@ async def category_update(
     async with db.session() as session:
         cat = await session.get(Category, cat_id)
         if cat is None:
-            return RedirectResponse(url="/admin/categories", status_code=303)
+            raise HTTPException(status_code=404, detail=f"Категория #{cat_id} не найдена")
         cat.name = name
         cat.slug = slug_val
 
