@@ -8,3 +8,4 @@ USER_RECIPES_IDS_AND_TITLES = 10 * 60  # 10 минут
 PIPELINE_DRAFT = 24 * 60 * 60  # 24 часа
 RECIPE_ACTION = 30 * 60  # 30 минут
 WEBAPP_RECIPE_DRAFT = 10 * 60  # 10 минут
+LAST_RECIPE_MESSAGES = 48 * 60 * 60  # 48 часов — лимит удаления сообщений в Telegram

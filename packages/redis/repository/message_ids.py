@@ -35,13 +35,13 @@ class UserMessageIdsCacheRepository(BaseRedisRepository):
             ids = []
         ids.extend([int(i) for i in message_ids if isinstance(i, int)])
         payload = json.dumps({"chat_id": int(chat_id), "message_ids": ids}, ensure_ascii=False)
-        await self.redis.set(self.keys.user_last_recipe_messages(user_id), payload)
+        await self.redis.setex(self.keys.user_last_recipe_messages(user_id), self.ttl.LAST_RECIPE_MESSAGES, payload)
 
     async def set_user_message_ids(self, user_id: int, chat_id: int, message_ids: list[int]) -> None:
         """Перезаписывает message_ids пользователя."""
         ids = [int(i) for i in message_ids if isinstance(i, int)]
         payload = json.dumps({"chat_id": int(chat_id), "message_ids": ids}, ensure_ascii=False)
-        await self.redis.set(self.keys.user_last_recipe_messages(user_id), payload)
+        await self.redis.setex(self.keys.user_last_recipe_messages(user_id), self.ttl.LAST_RECIPE_MESSAGES, payload)
 
     async def clear_user_message_ids(self, user_id: int) -> None:
         """Удаляет message_ids пользователя."""
