@@ -21,14 +21,6 @@ class RedisKeys:
         return f"{cls.PREFIX}:user:{int(user_id)}:categories"
 
     @classmethod
-    def category_by_slug(cls, slug: str) -> str:
-        return f"{cls.PREFIX}:category:by_slug:{slug}"
-
-    @classmethod
-    def slug_init_lock(cls, slug: int | str) -> str:
-        return f"{cls.PREFIX}:lock:slug_init:{slug}"
-
-    @classmethod
     def all_category(cls) -> str:
         return f"{cls.PREFIX}:categories:all"
 

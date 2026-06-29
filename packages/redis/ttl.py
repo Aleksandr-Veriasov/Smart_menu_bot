@@ -1,8 +1,9 @@
-USER_EXISTS = 7 * 24 * 60 * 60  # 7 дней
+USER_EXISTS = 24 * 60 * 60  # 24 часа
 RECIPE_COUNT_SHORT = 15  # 15 секунд
 RECIPE_COUNT_LONG = 24 * 60 * 60  # 24 часа
 LOCK = 10  # 10 секунд
 USER_CATEGORIES = 24 * 60 * 60  # 24 часа
+CATEGORY = 24 * 60 * 60  # 24 часа
 USER_RECIPES_IDS_AND_TITLES = 10 * 60  # 10 минут
 PIPELINE_DRAFT = 24 * 60 * 60  # 24 часа
 RECIPE_ACTION = 30 * 60  # 30 минут

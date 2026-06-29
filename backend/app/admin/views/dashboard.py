@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from backend.app.admin.deps import check_auth, current_login
+from backend.app.admin.deps import check_auth, current_login, get_db, get_redis
 from backend.app.admin.templates import templates
+from packages.services.admin_service import AdminService
 
 router = APIRouter()
 
@@ -11,4 +12,9 @@ router = APIRouter()
 async def dashboard(request: Request) -> HTMLResponse | RedirectResponse:
     if redirect := check_auth(request):
         return redirect
-    return templates.TemplateResponse(request, "dashboard.html", {"admin_login": current_login(request)})
+    stats = await AdminService(get_db(request), get_redis(request)).get_stats()
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {"admin_login": current_login(request), "stats": stats},
+    )

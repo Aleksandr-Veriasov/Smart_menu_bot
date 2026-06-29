@@ -29,22 +29,12 @@ class CategoryService(BaseService):
         return result
 
     async def get_id_and_name_by_slug_cached(self, slug: str) -> CategoryRead:
-        """Категория по slug с кешированием в Redis."""
-        cached = await self.category_cache.get_id_name_by_slug(slug)
-        logger.debug(f"👉 Категория {slug}: id,name из кэша: {cached}")
-        if cached:
-            cat_id, name = cached
-            return CategoryRead(id=cat_id, name=name, slug=slug)
-
-        async with self._lock(self.keys.slug_init_lock(slug)):
-            async with self.db.session() as session:
-                category = await self.category_repo(session).get_by_slug(slug)
-                logger.debug(f"👉 Категория {slug}: из БД: {category}")
-                if category is None:
-                    raise ValueError(f'Категория со slug="{slug}" не найдена')
-
-                await self.category_cache.set_id_name_by_slug(slug, category.id, category.name)
-                return CategoryRead.model_validate(category)
+        """Категория по slug — ищет в общем кэше всех категорий."""
+        all_categories = await self.get_all_category()
+        for cat in all_categories:
+            if cat.slug == slug:
+                return cat
+        raise ValueError(f'Категория со slug="{slug}" не найдена')
 
     async def get_all_category(self) -> list[CategoryRead]:
         """Все категории с кешированием в Redis."""
