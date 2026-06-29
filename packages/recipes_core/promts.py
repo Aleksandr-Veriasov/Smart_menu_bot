@@ -2,6 +2,7 @@
 
 SYSTEM_PROMPT_RU — легаси текстовый формат.
 SYSTEM_PROMPT_STRUCTURED — новый формат, возвращает полный JSON с количествами ингредиентов.
+SYSTEM_PROMPT_BACKFILL — для бэкфилл-скрипта: принимает список ингредиентов, возвращает JSON-массив qty/unit.
 """
 
 SYSTEM_PROMPT_RU = (
@@ -36,4 +37,15 @@ SYSTEM_PROMPT_STRUCTURED = (
     "Если единица не входит в список — используй ближайшую из списка. "
     "Если количество не указано — используй null. "
     "Если рецепт включает соус или заправку — включи их ингредиенты в общий список."
+)
+
+SYSTEM_PROMPT_BACKFILL = (
+    "You are a recipe ingredient parser. "
+    "Given a recipe title, description and ingredient name list, "
+    "return ONLY a JSON array, no markdown, no explanation:\n\n"
+    '[{"name":"<name>","quantity":<number|null>,"unit":"<unit|null>"}]\n\n'
+    f"Allowed units: {_UNITS_LIST}. "
+    "Use null for unknown quantity or unit. "
+    "Preserve the original order of ingredients. "
+    "Output Russian unit values from the allowed list only."
 )
