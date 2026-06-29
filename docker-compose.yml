@@ -97,31 +97,6 @@ services:
       retries: 20
     restart: unless-stopped
 
-  bot:
-    build:
-      context: .
-      dockerfile: bot/Dockerfile
-    container_name: menu_bot_tgbot
-    user: "1001:1001"
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      ALLOWED_HOSTS: '["smartbot.infrasprint1veriasov.ru","infrasprint1veriasov.ru","localhost","127.0.0.1"]'
-      DOWNLOADER_BASE_URL: http://downloader:8082
-    volumes:
-      - ./data:/app/data
-      - ./audio:/app/audio
-      - ./videos:/app/videos
-      - db_dumps:/app/db_dumps
-      - bot_cache:/app/.cache
-    networks: 
-      - app-net
-    depends_on:
-      - db
-      - redis
-      - downloader
-    
   media_worker:
     build:
       context: .
@@ -149,6 +124,32 @@ services:
       downloader:
         condition: service_started
     restart: unless-stopped
+
+  bot:
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    container_name: menu_bot_tgbot
+    user: "1001:1001"
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ALLOWED_HOSTS: '["smartbot.infrasprint1veriasov.ru","infrasprint1veriasov.ru","localhost","127.0.0.1"]'
+      DOWNLOADER_BASE_URL: http://downloader:8082
+    volumes:
+      - ./data:/app/data
+      - ./audio:/app/audio
+      - ./videos:/app/videos
+      - db_dumps:/app/db_dumps
+      - bot_cache:/app/.cache
+    networks: 
+      - app-net
+    depends_on:
+      - db
+      - redis
+      - downloader
+      - media_worker
 
   backend:
     build:

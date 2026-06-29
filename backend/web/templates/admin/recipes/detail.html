@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }}{% endblock %}
+{% block page_title %}
+  <a href="/admin/recipes" class="text-gray-400 hover:text-gray-600 font-normal">Рецепты</a>
+  <span class="text-gray-300 mx-1">/</span>
+  <span id="page-title-name">{{ recipe.title }}</span>
+{% endblock %}
+
+{% block header_actions %}
+<button
+  onclick="if(confirm('Удалить рецепт «{{ recipe.title }}»? Это действие нельзя отменить.')) { fetch('/admin/recipes/{{ recipe.id }}', {method:'DELETE'}).then(()=>window.location='/admin/recipes') }"
+  class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors">
+  Удалить рецепт
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-5">
+
+  {# ── Основная инфо (статическая) ── #}
+  <div class="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+    <div class="px-5 py-3 flex items-center justify-between">
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Основное</span>
+      <span class="text-xs text-gray-400"># {{ recipe.id }}</span>
+    </div>
+    {% macro row(label, value) %}
+    <div class="px-5 py-2.5 grid grid-cols-3 gap-2">
+      <span class="text-sm text-gray-500">{{ label }}</span>
+      <span class="col-span-2 text-sm text-gray-800">{{ value or "—" }}</span>
+    </div>
+    {% endmacro %}
+    {{ row("Создан", recipe.created_at.strftime("%d.%m.%Y %H:%M") if recipe.created_at else None) }}
+    {{ row("Последнее использование", recipe.last_used_at.strftime("%d.%m.%Y %H:%M") if recipe.last_used_at else None) }}
+    {% if recipe.video %}
+    <div class="px-5 py-2.5 grid grid-cols-3 gap-2">
+      <span class="text-sm text-gray-500">Видео</span>
+      <span class="col-span-2 text-sm">
+        <a href="{{ recipe.video.original_url or recipe.video.video_url }}" target="_blank"
+           class="text-indigo-600 hover:underline break-all">
+          {{ recipe.video.original_url or recipe.video.video_url }}
+        </a>
+      </span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Название + описание (HTMX inline-edit) ── #}
+  <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    {% include "recipes/partials/meta_view.html" %}
+  </div>
+
+  {# ── Ингредиенты (HTMX inline-редактор) ── #}
+  <div class="bg-white border border-gray-200 rounded-xl">
+    <div class="px-5 py-3 border-b border-gray-100">
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+        Ингредиенты ({{ recipe.ingredient_links | length }})
+      </span>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+        <tr>
+          <th class="px-4 py-2 text-left w-1/2">Название</th>
+          <th class="px-4 py-2 text-left">Кол-во / Ед.</th>
+          <th class="px-4 py-2 w-28"></th>
+        </tr>
+      </thead>
+      <tbody id="ingredients-tbody" class="divide-y divide-gray-50">
+        {% for link in recipe.ingredient_links %}
+          {% with ing_name=link.ingredient.name, editing=false %}
+            {% include "recipes/partials/ingredient_row.html" %}
+          {% endwith %}
+        {% endfor %}
+        <tr id="add-row">
+          <td colspan="3" class="px-4 py-3">
+            <form hx-post="/admin/recipes/{{ recipe.id }}/ingredients/add"
+                  hx-target="#ingredients-tbody"
+                  hx-swap="beforeend"
+                  hx-on::after-request="this.reset()"
+                  class="flex items-center gap-2">
+              <input name="name" type="text" required placeholder="Название ингредиента"
+                     class="flex-1 border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+              <input name="quantity" type="number" step="any" placeholder="кол-во"
+                     class="w-24 border border-dashed border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+              <select name="unit"
+                      class="border border-dashed border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+                <option value="">— ед. —</option>
+                {% for u in allowed_units %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit"
+                      class="bg-gray-100 hover:bg-indigo-600 hover:text-white text-gray-600 text-xs px-3 py-1.5 rounded transition-colors">
+                + Добавить
+              </button>
+            </form>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Пользователи ── #}
+  <div class="bg-white border border-gray-200 rounded-xl">
+    <div class="px-5 py-3 border-b border-gray-100">
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Пользователи</span>
+    </div>
+    <div class="px-5 py-3 space-y-3">
+
+      {# Список привязанных #}
+      <div id="linked-users" class="flex flex-wrap gap-2 min-h-6">
+        {% for u in recipe.linked_users %}
+        <div id="user-chip-{{ u.id }}" class="flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1">
+          <a href="/admin/users/{{ u.id }}"
+             class="text-xs text-gray-700 hover:text-indigo-700 transition-colors">
+            {{ u.username or u.id }}
+          </a>
+          <button hx-delete="/admin/recipes/{{ recipe.id }}/users/{{ u.id }}"
+                  hx-target="#user-chip-{{ u.id }}"
+                  hx-swap="outerHTML swap:0.1s"
+                  hx-confirm="Отвязать пользователя {{ u.username or u.id }}?"
+                  class="text-gray-400 hover:text-red-500 text-xs leading-none ml-0.5 transition-colors">
+            ×
+          </button>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# Поиск для привязки #}
+      <div class="border-t border-gray-100 pt-3">
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="Поиск по username…"
+                 hx-get="/admin/recipes/{{ recipe.id }}/users/search"
+                 hx-trigger="input changed delay:300ms"
+                 hx-target="#user-search-results"
+                 name="q"
+                 class="w-56 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div id="user-search-results" class="mt-1 max-h-48 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Категории ── #}
+  {% set categories = recipe.recipe_users | map(attribute='category') | select | unique | list %}
+  {% if categories %}
+  <div class="bg-white border border-gray-200 rounded-xl">
+    <div class="px-5 py-3 border-b border-gray-100">
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Категории</span>
+    </div>
+    <div class="px-5 py-3 flex flex-wrap gap-2">
+      {% for cat in categories %}
+      <span class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{{ cat.name }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Категории{% endblock %}
+{% block page_title %}Категории <span class="text-gray-400 font-normal text-sm">({{ categories | length }})</span>{% endblock %}
+
+{% block header_actions %}
+<a href="/admin/categories/new"
+   class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+  + Добавить
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-xs tracking-wide">
+      <tr>
+        <th class="px-4 py-3 text-left w-12">ID</th>
+        <th class="px-4 py-3 text-left">Название</th>
+        <th class="px-4 py-3 text-left">Slug</th>
+        <th class="px-4 py-3 text-center w-28">Рецептов</th>
+        <th class="px-4 py-3 w-28"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for cat in categories %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-3 text-gray-400">{{ cat.id }}</td>
+        <td class="px-4 py-3 font-medium text-gray-800">{{ cat.name }}</td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ cat.slug or "—" }}</td>
+        <td class="px-4 py-3 text-center text-gray-600">
+          {% set recipe_ids = cat.recipe_users | map(attribute='recipe_id') | unique | list %}
+          {{ recipe_ids | length }}
+        </td>
+        <td class="px-4 py-3 text-right">
+          <div class="flex items-center justify-end gap-2">
+            <a href="/admin/categories/{{ cat.id }}/edit"
+               class="text-xs text-indigo-600 hover:underline">Изменить</a>
+            <form method="post" action="/admin/categories/{{ cat.id }}/delete"
+                  onsubmit="return confirm('Удалить категорию «{{ cat.name }}»?')">
+              <button type="submit"
+                      class="text-xs text-red-500 hover:text-red-700 hover:underline">Удалить</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-gray-400">Нет категорий</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

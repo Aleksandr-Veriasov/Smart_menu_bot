@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await runtime_stop(state)
         with suppress(Exception):
             await bot.session.close()
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.25)
         app.state.bot = None
         app.state.dp = None
 
