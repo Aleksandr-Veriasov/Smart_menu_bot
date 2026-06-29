@@ -1,3 +1,9 @@
+"""Use-case слой для извлечения рецепта из текста через LLM.
+
+LLMRecipeExtractor принимает любой ChatClient (Protocol), что позволяет подменять
+провайдера в тестах без реальных API-вызовов.
+"""
+
 import asyncio
 import logging
 from functools import partial
@@ -13,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class ChatClient(Protocol):
+    """Протокол синхронного LLM-клиента. Реализуется адаптером конкретного провайдера."""
+
     def chat(
         self,
         messages: list[dict],
@@ -31,6 +39,7 @@ class LLMRecipeExtractor:
         self.chat = chat_client
 
     def extract_sync(self, *, description: str, recognized_text: str) -> RecipeExtraction:
+        """Синхронный вызов LLM. Блокирует поток — используй extract() в async-контексте."""
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT_RU},
             {"role": "user", "content": f"Description: {description}"},
@@ -42,6 +51,7 @@ class LLMRecipeExtractor:
         return parse_llm_answer(raw)
 
     async def extract(self, *, description: str, recognized_text: str) -> RecipeExtraction:
+        """Асинхронная обёртка над extract_sync() через run_in_executor."""
         loop = asyncio.get_running_loop()
         fn = partial(
             self.extract_sync,
