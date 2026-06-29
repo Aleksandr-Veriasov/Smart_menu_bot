@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from functools import lru_cache
 
@@ -60,7 +59,7 @@ def get_app() -> FastAPI:
             )
             return DownloadOut(file_path=file_path, description=description)
 
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             logger.warning(f"Таймаут ожидания ответа от SaveAsBot: url={payload.url}")
             raise HTTPException(status_code=504, detail="Timeout waiting SaveAsBot video") from exc
         except Exception as e:

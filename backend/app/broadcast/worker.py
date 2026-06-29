@@ -3,7 +3,7 @@ import json
 import logging
 import random
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     """Вернуть текущее время в UTC (с timezone)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _campaign_due_predicate() -> Any:

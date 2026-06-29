@@ -1,0 +1,68 @@
+{# Партиал: одна строка ингредиента. editing=True — форма, False — отображение. #}
+{# Используется как HTMX-ответ и внутри detail.html через include. #}
+
+{% if editing %}
+{# ── Режим редактирования ── #}
+<tr id="ing-row-{{ link.ingredient_id }}">
+  <td class="px-4 py-2 text-gray-800 text-sm">{{ ing_name }}</td>
+  <td class="px-4 py-2">
+    <form hx-post="/admin_v2/recipes/{{ recipe_id }}/ingredients/{{ link.ingredient_id }}/update"
+          hx-target="#ing-row-{{ link.ingredient_id }}"
+          hx-swap="outerHTML"
+          class="flex items-center gap-2">
+      <input name="quantity" type="number" step="any"
+             value="{{ link.quantity if link.quantity is not none else '' }}"
+             placeholder="кол-во"
+             class="w-24 border border-indigo-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select name="unit"
+              class="border border-indigo-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <option value="">—</option>
+        {% for u in allowed_units %}
+        <option value="{{ u }}" {% if link.unit == u %}selected{% endif %}>{{ u }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition-colors">
+        ✓
+      </button>
+      <button type="button"
+              hx-get="/admin_v2/recipes/{{ recipe_id }}/ingredients/{{ link.ingredient_id }}/edit-row"
+              hx-target="#ing-row-{{ link.ingredient_id }}"
+              hx-swap="outerHTML"
+              hx-vals='{"editing": "false"}'
+              class="text-gray-400 hover:text-gray-600 text-xs px-2 py-1.5">
+        Отмена
+      </button>
+    </form>
+  </td>
+  <td></td>
+</tr>
+
+{% else %}
+{# ── Режим отображения ── #}
+<tr id="ing-row-{{ link.ingredient_id }}" class="hover:bg-gray-50 transition-colors group">
+  <td class="px-4 py-2 text-gray-800 text-sm">{{ ing_name }}</td>
+  <td class="px-4 py-2 text-sm text-gray-600">
+    {% if link.quantity is not none %}{{ link.quantity }}{% endif %}
+    {% if link.unit %} {{ link.unit }}{% endif %}
+    {% if link.quantity is none and not link.unit %}<span class="text-gray-300">—</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-right">
+    <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button hx-get="/admin_v2/recipes/{{ recipe_id }}/ingredients/{{ link.ingredient_id }}/edit-row"
+              hx-target="#ing-row-{{ link.ingredient_id }}"
+              hx-swap="outerHTML"
+              class="text-xs text-indigo-600 hover:underline">
+        Изменить
+      </button>
+      <button hx-delete="/admin_v2/recipes/{{ recipe_id }}/ingredients/{{ link.ingredient_id }}"
+              hx-target="#ing-row-{{ link.ingredient_id }}"
+              hx-swap="outerHTML swap:0.2s"
+              hx-confirm="Удалить ингредиент «{{ ing_name }}»?"
+              class="text-xs text-red-500 hover:text-red-700 hover:underline">
+        ✕
+      </button>
+    </div>
+  </td>
+</tr>
+{% endif %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Redis ключи{% endblock %}
+{% block page_title %}Redis ключи <span class="text-gray-400 font-normal text-sm">(всего {{ total_keys }})</span>{% endblock %}
+
+{% block content %}
+
+{# ── Модальное окно для значения ── #}
+<div id="value-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+     onclick="if(event.target===this) this.classList.add('hidden')">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-gray-800 text-sm" id="modal-key-title">Значение</h2>
+      <button onclick="document.getElementById('value-modal').classList.add('hidden')"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <pre id="modal-value" class="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap break-all"></pre>
+  </div>
+</div>
+
+{# ── Таблица ── #}
+<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-xs tracking-wide">
+      <tr>
+        <th class="px-4 py-3 text-left">Ключ</th>
+        <th class="px-4 py-3 text-left w-24">TTL</th>
+        <th class="px-4 py-3 w-28"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for row in rows %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-2 font-mono text-xs text-gray-700 break-all">{{ row.key }}</td>
+        <td class="px-4 py-2 text-xs text-gray-500">{{ row.ttl }}</td>
+        <td class="px-4 py-2 text-right">
+          <div class="flex items-center justify-end gap-2">
+            <button onclick="showValue('{{ row.key | e }}')"
+                    class="text-xs text-indigo-600 hover:underline">Значение</button>
+            <form method="post" action="/admin_v2/redis-keys/delete"
+                  onsubmit="return confirm('Удалить ключ «{{ row.key }}»?')">
+              <input type="hidden" name="key" value="{{ row.key }}">
+              <input type="hidden" name="page" value="{{ page }}">
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700 hover:underline">Удалить</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">Ключей нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Пагинация ── #}
+<div class="mt-4 flex items-center gap-2 text-sm">
+  {% if prev_page %}<a href="?page={{ prev_page }}" class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">← Назад</a>{% endif %}
+  <span class="text-gray-500">Страница {{ page }}, показано {{ rows | length }}</span>
+  {% if next_page %}<a href="?page={{ next_page }}" class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">Вперёд →</a>{% endif %}
+</div>
+
+<script>
+async function showValue(key) {
+  const modal = document.getElementById('value-modal');
+  const pre = document.getElementById('modal-value');
+  const title = document.getElementById('modal-key-title');
+  title.textContent = key;
+  pre.textContent = 'Загрузка…';
+  modal.classList.remove('hidden');
+  try {
+    const r = await fetch('/admin_v2/redis-keys/value?key=' + encodeURIComponent(key));
+    const data = await r.json();
+    pre.textContent = data.missing ? '(ключ не найден)' : data.value;
+  } catch(e) {
+    pre.textContent = 'Ошибка: ' + e;
+  }
+}
+</script>
+{% endblock %}

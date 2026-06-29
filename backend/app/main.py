@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from backend.app.admin.views import setup_sqladmin
+from backend.app.admin_v2.router import router as admin_v2_router
 from backend.app.core import (
     setup_middleware,
     setup_observability,
@@ -42,7 +42,7 @@ def create_app() -> FastAPI:
     setup_observability(app)
     setup_static(app)
     setup_middleware(app)
-    setup_sqladmin(app, state.db.engine, state.db)
+    app.include_router(admin_v2_router)
     setup_routes(app)
 
     @app.exception_handler(LookupError)

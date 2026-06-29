@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from packages.db.repository import BroadcastRepository
 from packages.schemas.broadcast import (
@@ -65,7 +65,7 @@ class BroadcastService(BaseService):
         async with self.db.session() as session:
             campaign = await self.repo(session).resume_campaign(
                 campaign_id=campaign_id,
-                now_utc=datetime.now(timezone.utc),
+                now_utc=datetime.now(UTC),
             )
             return BroadcastCampaignRead.model_validate(campaign)
 
@@ -74,7 +74,7 @@ class BroadcastService(BaseService):
         async with self.db.session() as session:
             campaign = await self.repo(session).cancel_campaign(
                 campaign_id=campaign_id,
-                now_utc=datetime.now(timezone.utc),
+                now_utc=datetime.now(UTC),
             )
             return BroadcastCampaignRead.model_validate(campaign)
 

@@ -1,0 +1,21 @@
+{# Партиал: результаты поиска пользователей для привязки к рецепту. #}
+{% for user in users %}
+<div class="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-lg">
+  <span class="text-sm text-gray-700">
+    {{ user.username or "—" }}
+    <span class="text-xs text-gray-400 ml-1">#{{ user.id }}</span>
+  </span>
+  {% if user.id in linked_ids %}
+  <span class="text-xs text-gray-400">привязан</span>
+  {% else %}
+  <button hx-post="/admin_v2/recipes/{{ recipe_id }}/users/{{ user.id }}/attach"
+          hx-target="#linked-users"
+          hx-swap="beforeend"
+          class="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-1 rounded transition-colors">
+    + Привязать
+  </button>
+  {% endif %}
+</div>
+{% else %}
+<p class="text-sm text-gray-400 px-3 py-2">Ничего не найдено</p>
+{% endfor %}
