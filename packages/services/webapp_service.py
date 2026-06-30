@@ -121,6 +121,7 @@ class WebAppService(BaseService):
         async with self.db.session() as session:
             result = await self._apply_patch(session, recipe_id=recipe_id, user_id=user_id, payload=payload)
             recipe, category_id = await self._load_recipe_for_user(session, recipe_id=result.recipe_id, user_id=user_id)
+            read = WebAppRecipeRead.from_recipe(recipe, category_id=category_id)
 
         await self._invalidate_caches(
             user_id=user_id,
@@ -132,7 +133,7 @@ class WebAppService(BaseService):
             draft_recipe_id_to_clear=path_recipe_id,
         )
         await self._update_telegram_message(user_id=user_id, recipe=recipe)
-        return WebAppRecipeRead.from_recipe(recipe, category_id=category_id)
+        return read
 
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #

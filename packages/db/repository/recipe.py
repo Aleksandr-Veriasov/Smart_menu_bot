@@ -90,7 +90,11 @@ class RecipeRepository(BaseRepository[Recipe]):
             select(self.model, RecipeUser.category_id)
             .join(RecipeUser, RecipeUser.recipe_id == self.model.id)
             .where(self.model.id == int(recipe_id), RecipeUser.user_id == int(user_id))
-            .options(joinedload(self.model.ingredients), joinedload(self.model.video))
+            .options(
+                joinedload(self.model.ingredients),
+                self._ingredient_links_option(),
+                joinedload(self.model.video),
+            )
         )
         row = (await self.session.execute(stmt)).first()
         if row is None:
