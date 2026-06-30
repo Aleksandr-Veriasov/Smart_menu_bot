@@ -1,6 +1,5 @@
 """Тесты для RecipeUserRepository."""
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.repository import (
@@ -19,7 +18,6 @@ from packages.db.schemas import (
 class TestRecipeUserRepositoryLink:
     """Тесты для RecipeUserRepository.link_user()."""
 
-    @pytest.mark.asyncio
     async def test_link_user_basic(self, db_session: AsyncSession) -> None:
         """Связывание пользователя с рецептом."""
         user = await UserRepository(db_session).create(UserCreate(id=12121212, username="recipe_user_user"))
@@ -33,7 +31,6 @@ class TestRecipeUserRepositoryLink:
 
         assert await ru_repo.is_linked(recipe.id, user.id) is True
 
-    @pytest.mark.asyncio
     async def test_link_user_duplicate_ignored(self, db_session: AsyncSession) -> None:
         """Дублирующаяся связь игнорируется."""
         user = await UserRepository(db_session).create(UserCreate(id=13131313, username="recipe_user_user2"))
@@ -52,7 +49,6 @@ class TestRecipeUserRepositoryLink:
 class TestRecipeUserRepositoryUpsert:
     """Тесты для RecipeUserRepository.upsert_user_link()."""
 
-    @pytest.mark.asyncio
     async def test_upsert_update_existing(self, db_session: AsyncSession) -> None:
         """Обновление существующей связи через upsert."""
         user = await UserRepository(db_session).create(UserCreate(id=15151515, username="recipe_user_user4"))
@@ -70,7 +66,6 @@ class TestRecipeUserRepositoryUpsert:
 class TestRecipeUserRepositoryUnlink:
     """Тесты для RecipeUserRepository.unlink_user()."""
 
-    @pytest.mark.asyncio
     async def test_unlink_user(self, db_session: AsyncSession) -> None:
         """Удаление связи пользователя с рецептом."""
         user = await UserRepository(db_session).create(UserCreate(id=16161616, username="recipe_user_user5"))
@@ -92,7 +87,6 @@ class TestRecipeUserRepositoryUnlink:
 class TestRecipeUserRepositoryCheck:
     """Тесты для RecipeUserRepository.is_linked()."""
 
-    @pytest.mark.asyncio
     async def test_is_linked_true(self, db_session: AsyncSession) -> None:
         """Проверка существующей связи."""
         user = await UserRepository(db_session).create(UserCreate(id=17171717, username="recipe_user_user6"))
@@ -106,7 +100,6 @@ class TestRecipeUserRepositoryCheck:
 
         assert await ru_repo.is_linked(recipe.id, user.id) is True
 
-    @pytest.mark.asyncio
     async def test_is_linked_false(self, db_session: AsyncSession) -> None:
         """Проверка несуществующей связи."""
         user_repo = UserRepository(db_session)
@@ -123,7 +116,6 @@ class TestRecipeUserRepositoryCheck:
 class TestRecipeUserRepositoryGetCategory:
     """Тесты для RecipeUserRepository.get_any_category_id()."""
 
-    @pytest.mark.asyncio
     async def test_get_any_category_id(self, db_session: AsyncSession) -> None:
         """Получение любой категории рецепта."""
         user = await UserRepository(db_session).create(UserCreate(id=19191919, username="recipe_user_user8"))
@@ -137,7 +129,6 @@ class TestRecipeUserRepositoryGetCategory:
 
         assert await ru_repo.get_any_category_id(recipe.id) == category.id
 
-    @pytest.mark.asyncio
     async def test_get_any_category_id_no_links(self, db_session: AsyncSession) -> None:
         """Получение категории для рецепта без связей возвращает None."""
         recipe = await RecipeRepository(db_session).create_basic(title="Рецепт 9", description="Без связей")
@@ -148,7 +139,6 @@ class TestRecipeUserRepositoryGetCategory:
 class TestRecipeUserRepositoryIntegration:
     """Интеграционные тесты для RecipeUserRepository."""
 
-    @pytest.mark.asyncio
     async def test_recipe_user_lifecycle(self, db_session: AsyncSession) -> None:
         """Полный цикл жизни связи рецепт-пользователь."""
         user = await UserRepository(db_session).create(UserCreate(id=21212121, username="recipe_user_user10"))

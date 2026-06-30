@@ -30,8 +30,6 @@ class TestRedisKeysFormat:
             RedisKeys.recipe_count(1),
             RedisKeys.user_init_lock(1),
             RedisKeys.user_categories(1),
-            RedisKeys.category_by_slug("test"),
-            RedisKeys.slug_init_lock("test"),
             RedisKeys.all_category(),
             RedisKeys.catergory_lock(),
             RedisKeys.user_recipes_ids_and_titles(1, 2),
@@ -106,21 +104,6 @@ class TestRedisKeysUserKeys:
 
 class TestRedisKeysCategoryKeys:
     """Тесты для ключей категорий."""
-
-    def test_category_by_slug(self) -> None:
-        """category_by_slug() с названием slug."""
-        key = RedisKeys.category_by_slug("desserts")
-        assert "category:by_slug:desserts" in key
-
-    def test_category_by_slug_with_special_chars(self) -> None:
-        """category_by_slug() с спецсимволами."""
-        key = RedisKeys.category_by_slug("main_course-2024")
-        assert "category:by_slug:main_course-2024" in key
-
-    def test_slug_init_lock(self) -> None:
-        """slug_init_lock()."""
-        key = RedisKeys.slug_init_lock("pasta")
-        assert "lock:slug_init:pasta" in key
 
     def test_all_category(self) -> None:
         """all_category()."""
@@ -221,13 +204,6 @@ class TestRedisKeysUniqueness:
 
         assert key1 != key2
 
-    def test_different_categories_produce_different_keys(self) -> None:
-        """Разные категории → разные ключи."""
-        key1 = RedisKeys.category_by_slug("pasta")
-        key2 = RedisKeys.category_by_slug("desserts")
-
-        assert key1 != key2
-
     def test_same_parameters_produce_same_key(self) -> None:
         """Одинаковые параметры → одинаковый ключ."""
         key1 = RedisKeys.user_recipes_ids_and_titles(10, 20)
@@ -256,12 +232,6 @@ class TestRedisKeysEdgeCases:
         """User ID = 0."""
         key = RedisKeys.user_exists(0)
         assert "user:0" in key
-
-    def test_slug_with_underscores_and_dashes(self) -> None:
-        """Slug с подчеркиваниями и дефисами."""
-        slug = "main_course-special-2024"
-        key = RedisKeys.category_by_slug(slug)
-        assert slug in key
 
     def test_action_with_underscores(self) -> None:
         """Action с подчеркиванием."""

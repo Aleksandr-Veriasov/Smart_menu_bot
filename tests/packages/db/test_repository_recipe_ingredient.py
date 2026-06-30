@@ -20,7 +20,6 @@ from packages.db.schemas import (
 class TestRecipeIngredientRepositoryCreate:
     """Тесты для RecipeIngredientRepository.create()."""
 
-    @pytest.mark.asyncio
     async def test_create_recipe_ingredient(self, db_session: AsyncSession) -> None:
         """Создание связи рецепт-ингредиент."""
         # Подготовка данных
@@ -46,7 +45,6 @@ class TestRecipeIngredientRepositoryCreate:
         assert recipe_ingredient.recipe_id == recipe.id
         assert recipe_ingredient.ingredient_id == ingredient.id
 
-    @pytest.mark.asyncio
     async def test_create_duplicate_raises_error(self, db_session: AsyncSession) -> None:
         """Создание дублирующейся связи вызывает ValueError."""
         user = await UserRepository(db_session).create(
@@ -76,7 +74,6 @@ class TestRecipeIngredientRepositoryCreate:
 class TestRecipeIngredientRepositoryBulk:
     """Тесты для RecipeIngredientRepository.bulk_link()."""
 
-    @pytest.mark.asyncio
     async def test_bulk_link_ingredients(self, db_session: AsyncSession) -> None:
         """Массовое связывание ингредиентов с рецептом."""
         user = await UserRepository(db_session).create(
@@ -105,7 +102,6 @@ class TestRecipeIngredientRepositoryBulk:
         links = [IngredientLink(ingredient_id=i) for i in [ing1.id, ing2.id, ing3.id]]
         await RecipeIngredientRepository(db_session).bulk_link(recipe.id, links)
 
-    @pytest.mark.asyncio
     async def test_bulk_link_empty_list(self, db_session: AsyncSession) -> None:
         """Массовое связывание с пустым списком."""
         user = await UserRepository(db_session).create(
@@ -125,7 +121,6 @@ class TestRecipeIngredientRepositoryBulk:
         # Должно работать без ошибок
         await RecipeIngredientRepository(db_session).bulk_link(recipe.id, [])
 
-    @pytest.mark.asyncio
     async def test_bulk_link_ignores_duplicates(self, db_session: AsyncSession) -> None:
         """Дубликаты в bulk_link игнорируются."""
         user = await UserRepository(db_session).create(
@@ -152,7 +147,6 @@ class TestRecipeIngredientRepositoryBulk:
         with pytest.raises(ValueError):
             await ri_repo.create(recipe.id, ingredient.id)
 
-    @pytest.mark.asyncio
     async def test_bulk_link_with_none_values(self, db_session: AsyncSession) -> None:
         """bulk_link игнорирует None и нулевые значения."""
         user = await UserRepository(db_session).create(
@@ -186,7 +180,6 @@ class TestRecipeIngredientRepositoryBulk:
 class TestRecipeIngredientRepositoryIntegration:
     """Интеграционные тесты для RecipeIngredientRepository."""
 
-    @pytest.mark.asyncio
     async def test_recipe_with_multiple_ingredients(self, db_session: AsyncSession) -> None:
         """Рецепт может быть связан с несколькими ингредиентами."""
         user = await UserRepository(db_session).create(
@@ -221,7 +214,6 @@ class TestRecipeIngredientRepositoryIntegration:
             with pytest.raises(ValueError):
                 await ri_repo.create(recipe.id, ing_id)
 
-    @pytest.mark.asyncio
     async def test_one_ingredient_multiple_recipes(self, db_session: AsyncSession) -> None:
         """Один ингредиент может быть связан с несколькими рецептами."""
         user = await UserRepository(db_session).create(

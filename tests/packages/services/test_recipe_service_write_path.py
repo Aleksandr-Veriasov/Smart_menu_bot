@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +32,6 @@ async def _get_links(session: AsyncSession, recipe_id: int) -> list[RecipeIngred
 
 class TestSaveRecipeDraftStructured:
 
-    @pytest.mark.asyncio
     async def test_structured_saves_qty_and_unit(self, db_session: AsyncSession):
         """list[IngredientItem] → quantity и unit сохраняются в junction-таблице."""
         service = make_service(db_session)
@@ -55,7 +53,6 @@ class TestSaveRecipeDraftStructured:
         assert by_name["молоко"].quantity == Decimal("0.5")
         assert by_name["молоко"].unit == "л"
 
-    @pytest.mark.asyncio
     async def test_structured_null_qty_unit(self, db_session: AsyncSession):
         """IngredientItem без qty/unit → NULL в БД (не ошибка)."""
         service = make_service(db_session)
@@ -72,7 +69,6 @@ class TestSaveRecipeDraftStructured:
         assert links[0].quantity is None
         assert links[0].unit is None
 
-    @pytest.mark.asyncio
     async def test_structured_creates_ingredients_on_the_fly(self, db_session: AsyncSession):
         """Ингредиенты создаются через bulk_get_or_create если их нет в БД."""
         service = make_service(db_session)
@@ -91,7 +87,6 @@ class TestSaveRecipeDraftStructured:
         assert ing is not None
         assert ing.name == "новый_ингр_xyz"
 
-    @pytest.mark.asyncio
     async def test_structured_empty_list(self, db_session: AsyncSession):
         """Пустой список IngredientItem → рецепт создаётся, связей нет."""
         service = make_service(db_session)
@@ -110,7 +105,6 @@ class TestSaveRecipeDraftStructured:
 
 class TestSaveRecipeDraftLegacy:
 
-    @pytest.mark.asyncio
     async def test_legacy_string_saves_names_only(self, db_session: AsyncSession):
         """Строка с маркерами '- ' → ингредиенты сохраняются, qty/unit = NULL."""
         service = make_service(db_session)
@@ -127,7 +121,6 @@ class TestSaveRecipeDraftLegacy:
             assert link.quantity is None
             assert link.unit is None
 
-    @pytest.mark.asyncio
     async def test_legacy_list_of_strings(self, db_session: AsyncSession):
         """list[str] → ингредиенты сохраняются, qty/unit = NULL."""
         service = make_service(db_session)
@@ -141,7 +134,6 @@ class TestSaveRecipeDraftLegacy:
         links = await _get_links(db_session, recipe_id)
         assert len(links) == 3
 
-    @pytest.mark.asyncio
     async def test_legacy_empty_string(self, db_session: AsyncSession):
         """Пустая строка → рецепт создаётся, связей нет."""
         service = make_service(db_session)
@@ -158,7 +150,6 @@ class TestSaveRecipeDraftLegacy:
 
 class TestSaveRecipeDraftRegression:
 
-    @pytest.mark.asyncio
     async def test_structured_does_not_fall_back_to_legacy(self, db_session: AsyncSession):
         """list[IngredientItem] → не использует legacy-путь, qty сохраняется."""
         service = make_service(db_session)
@@ -175,7 +166,6 @@ class TestSaveRecipeDraftRegression:
         assert links[0].quantity == Decimal("50")
         assert links[0].unit == "мл"
 
-    @pytest.mark.asyncio
     async def test_legacy_does_not_save_qty(self, db_session: AsyncSession):
         """Легаси-путь никогда не сохраняет qty — это регрессионная проверка."""
         service = make_service(db_session)

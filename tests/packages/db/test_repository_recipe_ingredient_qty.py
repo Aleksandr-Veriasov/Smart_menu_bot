@@ -32,7 +32,6 @@ async def recipe_with_ingredient(db_session: AsyncSession):
 
 class TestBulkLinkWithQty:
 
-    @pytest.mark.asyncio
     async def test_saves_quantity_and_unit(self, db_session: AsyncSession, recipe_with_ingredient):
         """bulk_link сохраняет quantity и unit в junction-таблице."""
         recipe, ingredient = recipe_with_ingredient
@@ -50,7 +49,6 @@ class TestBulkLinkWithQty:
         assert row.quantity == Decimal("200")
         assert row.unit == "г"
 
-    @pytest.mark.asyncio
     async def test_null_quantity_and_unit(self, db_session: AsyncSession, recipe_with_ingredient):
         """bulk_link без qty/unit сохраняет NULL."""
         recipe, ingredient = recipe_with_ingredient
@@ -68,7 +66,6 @@ class TestBulkLinkWithQty:
         assert row.quantity is None
         assert row.unit is None
 
-    @pytest.mark.asyncio
     async def test_conflict_updates_qty_unit(self, db_session: AsyncSession, recipe_with_ingredient):
         """При повторном bulk_link quantity и unit обновляются (on_conflict_do_update)."""
         recipe, ingredient = recipe_with_ingredient
@@ -90,7 +87,6 @@ class TestBulkLinkWithQty:
         assert row.quantity == Decimal("250")
         assert row.unit == "мл"
 
-    @pytest.mark.asyncio
     async def test_empty_list_no_error(self, db_session: AsyncSession, recipe_with_ingredient):
         """Пустой список — ничего не происходит, ошибки нет."""
         recipe, _ = recipe_with_ingredient
@@ -103,7 +99,6 @@ class TestBulkLinkWithQty:
         )
         assert rows == []
 
-    @pytest.mark.asyncio
     async def test_zero_ingredient_id_skipped(self, db_session: AsyncSession, recipe_with_ingredient):
         """IngredientLink с ingredient_id=0 игнорируется."""
         recipe, ingredient = recipe_with_ingredient
@@ -125,7 +120,6 @@ class TestBulkLinkWithQty:
         assert len(rows) == 1
         assert rows[0].ingredient_id == ingredient.id
 
-    @pytest.mark.asyncio
     async def test_duplicates_last_wins(self, db_session: AsyncSession, recipe_with_ingredient):
         """Дублирующиеся ingredient_id в одном вызове — побеждает последний."""
         recipe, ingredient = recipe_with_ingredient
@@ -147,7 +141,6 @@ class TestBulkLinkWithQty:
         assert row.quantity == Decimal("999")
         assert row.unit == "кг"
 
-    @pytest.mark.asyncio
     async def test_multiple_ingredients(self, db_session: AsyncSession, recipe_with_ingredient):
         """Несколько ингредиентов с разными qty/unit сохраняются корректно."""
         recipe, _ = recipe_with_ingredient

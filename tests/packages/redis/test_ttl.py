@@ -22,11 +22,11 @@ class TestTTLValues:
             assert isinstance(value, int)
             assert value > 0
 
-    def test_user_exists_is_7_days(self) -> None:
-        """USER_EXISTS = 7 дней в секундах."""
-        expected = 7 * 24 * 60 * 60
+    def test_user_exists_is_24_hours(self) -> None:
+        """USER_EXISTS = 24 часа в секундах."""
+        expected = 24 * 60 * 60
         assert ttl.USER_EXISTS == expected
-        assert ttl.USER_EXISTS == 604800
+        assert ttl.USER_EXISTS == 86400
 
     def test_recipe_count_short_is_15_seconds(self) -> None:
         """RECIPE_COUNT_SHORT = 15 секунд."""
@@ -157,13 +157,13 @@ class TestTTLCategories:
             assert value == 24 * 60 * 60
 
     def test_extra_long_ttl_values(self) -> None:
-        """Очень длинные TTL (7 дней)."""
+        """Длинные TTL (24 часа)."""
         extra_long_ttl = [
-            ttl.USER_EXISTS,  # 7 дней
+            ttl.USER_EXISTS,  # 24 часа
         ]
 
         for value in extra_long_ttl:
-            assert value > 24 * 60 * 60
+            assert value == 24 * 60 * 60
 
 
 class TestTTLReasonableness:
