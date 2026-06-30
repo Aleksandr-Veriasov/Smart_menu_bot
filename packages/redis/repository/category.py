@@ -30,7 +30,7 @@ class CategoryCacheRepository(BaseRedisRepository):
         """Удаляет кэш категорий пользователя."""
         await self.redis.delete(self.keys.user_categories(user_id))
 
-    async def get_all_name_and_slug(self) -> list[dict[str, int | str]] | None:
+    async def get_all_categories(self) -> list[dict[str, int | str]] | None:
         """Вернёт список словарей всех категорий из Redis или None, если кэша нет."""
         raw = await self.redis.get(self.keys.all_category())
         if raw is None:
@@ -45,13 +45,13 @@ class CategoryCacheRepository(BaseRedisRepository):
             return None
         return None
 
-    async def set_all_name_and_slug(self, items: list[dict[str, int | str]]) -> None:
+    async def set_all_categories(self, items: list[dict[str, int | str]]) -> None:
         """Сохраняет список всех категорий в Redis с TTL."""
         payload = json.dumps(items, ensure_ascii=False)
         await self.redis.setex(self.keys.all_category(), self.ttl.CATEGORY, payload)
         logger.debug(f"✅ Запись {self.keys.all_category()} сохранена в кэш")
 
-    async def invalidate_all_name_and_slug(self) -> None:
+    async def invalidate_all_categories(self) -> None:
         """Удаляет кэш всех категорий."""
         await self.redis.delete(self.keys.all_category())
         logger.debug(f"❌ Запись {self.keys.all_category()} удалена из кэша")

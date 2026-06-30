@@ -1,6 +1,12 @@
-from decimal import Decimal
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from packages.db.models import Recipe
 
 
 class IngredientItemRead(BaseModel):
@@ -29,6 +35,27 @@ class WebAppRecipeRead(BaseModel):
     ingredients: list[str] = Field(default_factory=list)  # легаси, имена для старого фронта
     ingredient_details: list[IngredientItemRead] = Field(default_factory=list)  # новый фронт (C5)
 
+    @classmethod
+    def from_recipe(cls, recipe: Recipe, *, category_id: int) -> WebAppRecipeRead:
+        ingredients = [str(i.name) for i in (recipe.ingredients or []) if getattr(i, "name", None)]
+        ingredient_details = [
+            IngredientItemRead(
+                name=str(link.ingredient.name),
+                quantity=link.quantity,
+                unit=link.unit,
+            )
+            for link in getattr(recipe, "ingredient_links", [])
+            if getattr(link, "ingredient", None) and link.ingredient.name
+        ]
+        return cls(
+            id=int(recipe.id),
+            title=str(recipe.title),
+            description=recipe.description,
+            category_id=int(category_id),
+            ingredients=ingredients,
+            ingredient_details=ingredient_details,
+        )
+
 
 class WebAppRecipePatch(BaseModel):
     """PATCH-пейлоад из Telegram WebApp. Все поля опциональные."""
@@ -38,6 +65,13 @@ class WebAppRecipePatch(BaseModel):
     category_id: int | None = None
     ingredients_text: str | None = None  # легаси: текстовый список имён
     ingredients: list[IngredientItemWrite] | None = None  # новый фронт (C5): структурированный список
+
+    @field_validator("title")
+    @classmethod
+    def title_not_empty(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("Название не может быть пустым")
+        return v.strip() if v is not None else v
 
 
 class WebAppRecipeDraft(BaseModel):

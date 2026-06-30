@@ -3,8 +3,8 @@ from typing import Any
 
 from packages.db.models.broadcast import BroadcastCampaign
 from packages.db.repository import BroadcastRepository
+from packages.integrations.telegram_api import backoff_seconds, send_campaign_message
 from packages.services.base import BaseService
-from packages.services.broadcast_sender import backoff_seconds, send_campaign_message
 
 
 class BroadcastWorkerService(BaseService):

@@ -65,3 +65,10 @@ class RecipeUserRepository(BaseRepository[RecipeUser]):
         """Вернуть множество user_id, привязанных к рецепту."""
         result = await self.session.execute(select(self.model.user_id).where(self.model.recipe_id == recipe_id))
         return set(result.scalars().all())
+
+    async def count_by_recipe(self, recipe_id: int) -> int:
+        """Вернуть количество пользователей, привязанных к рецепту."""
+        result = await self.session.execute(
+            select(func.count(self.model.id)).where(self.model.recipe_id == int(recipe_id))
+        )
+        return int(result.scalar_one() or 0)

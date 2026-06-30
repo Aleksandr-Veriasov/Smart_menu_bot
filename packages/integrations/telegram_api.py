@@ -1,12 +1,13 @@
-"""Утилиты отправки broadcast-сообщений через Bot API."""
+"""Утилиты для работы с Telegram Bot API."""
 
 import asyncio
 import json
 import random
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 import requests
+
+from packages.enums import BroadcastFailureKind as FailureKind
 
 if TYPE_CHECKING:
     from packages.db.models.broadcast import BroadcastCampaign
@@ -28,11 +29,6 @@ _PERMANENT_PHRASES = frozenset(
         "not enough rights",
     }
 )
-
-
-class FailureKind(str, Enum):
-    permanent = "permanent"  # не ретраить — пользователь недоступен
-    retry = "retry"  # временная ошибка, повторить позже
 
 
 def classify_failure(response: dict) -> tuple[FailureKind, float | None]:

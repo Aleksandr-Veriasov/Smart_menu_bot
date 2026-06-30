@@ -14,6 +14,12 @@ from packages.enums import (
 
 from .base import SessionMixin
 
+_ACTIVE_MESSAGE_STATUSES = [
+    BroadcastMessageStatus.pending,
+    BroadcastMessageStatus.retry,
+    BroadcastMessageStatus.sending,
+]
+
 
 class BroadcastRepository(SessionMixin):
     """Репозиторий для управления рассылочными кампаниями и их сообщениями."""
@@ -89,6 +95,12 @@ class BroadcastRepository(SessionMixin):
         res = await self.session.execute(select(BroadcastCampaign).where(BroadcastCampaign.id == int(campaign_id)))
         return res.scalar_one_or_none()
 
+    async def _get_campaign_or_raise(self, campaign_id: int) -> BroadcastCampaign:
+        campaign = await self.get_campaign_or_none(campaign_id)
+        if campaign is None:
+            raise LookupError(f"Campaign #{campaign_id} not found")
+        return campaign
+
     async def update_campaign(
         self,
         *,
@@ -96,9 +108,7 @@ class BroadcastRepository(SessionMixin):
         changes: dict[str, Any],
     ) -> BroadcastCampaign:
         """Обновить черновик кампании. Запрещено после начала доставки или завершения."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError("Campaign not found")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         if int(campaign.sent_count or 0) > 0 or int(campaign.failed_count or 0) > 0:
             raise ValueError("Campaign already has deliveries; create a new campaign instead")
         if campaign.status == BroadcastCampaignStatus.completed:
@@ -109,9 +119,7 @@ class BroadcastRepository(SessionMixin):
 
     async def queue_campaign(self, *, campaign_id: int) -> BroadcastCampaign:
         """Перевести кампанию в статус queued из draft/paused/failed."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError("Campaign not found")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         if campaign.status not in (
             BroadcastCampaignStatus.draft,
             BroadcastCampaignStatus.paused,
@@ -125,9 +133,7 @@ class BroadcastRepository(SessionMixin):
 
     async def pause_campaign(self, *, campaign_id: int) -> BroadcastCampaign:
         """Поставить кампанию на паузу. Только из статуса running."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError("Campaign not found")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         if campaign.status != BroadcastCampaignStatus.running:
             raise ValueError(f"Cannot pause from status={campaign.status.value}")
         campaign.status = BroadcastCampaignStatus.paused
@@ -135,9 +141,7 @@ class BroadcastRepository(SessionMixin):
 
     async def resume_campaign(self, *, campaign_id: int, now_utc) -> BroadcastCampaign:
         """Возобновить приостановленную кампанию."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError("Campaign not found")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         if campaign.status != BroadcastCampaignStatus.paused:
             raise ValueError(f"Cannot resume from status={campaign.status.value}")
         campaign.status = BroadcastCampaignStatus.running
@@ -147,9 +151,7 @@ class BroadcastRepository(SessionMixin):
 
     async def cancel_campaign(self, *, campaign_id: int, now_utc) -> BroadcastCampaign:
         """Отменить кампанию. Идемпотентно для уже завершённых/отменённых."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError("Campaign not found")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         if campaign.status in (BroadcastCampaignStatus.completed, BroadcastCampaignStatus.cancelled):
             return campaign
         campaign.status = BroadcastCampaignStatus.cancelled
@@ -171,7 +173,7 @@ class BroadcastRepository(SessionMixin):
 
     async def list_campaigns_page(self, *, offset: int, limit: int) -> tuple[list[BroadcastCampaign], int]:
         """Вернуть страницу кампаний и их общее количество."""
-        total = (await self.session.execute(select(func.count(BroadcastCampaign.id)))).scalar_one()
+        total = await self.count()
         res = await self.session.execute(
             select(BroadcastCampaign).order_by(desc(BroadcastCampaign.id)).offset(offset).limit(limit)
         )
@@ -193,9 +195,7 @@ class BroadcastRepository(SessionMixin):
         disable_web_page_preview: bool,
     ) -> BroadcastCampaign:
         """Обновить поля кампании без ограничений (для admin-панели)."""
-        campaign = await self.get_campaign_or_none(campaign_id)
-        if campaign is None:
-            raise LookupError(f"Кампания #{campaign_id} не найдена")
+        campaign = await self._get_campaign_or_raise(campaign_id)
         campaign.name = name
         campaign.status = status
         campaign.audience_type = audience_type
@@ -284,13 +284,7 @@ class BroadcastRepository(SessionMixin):
             select(BroadcastMessage)
             .where(
                 BroadcastMessage.campaign_id == int(campaign_id),
-                BroadcastMessage.status.in_(
-                    [
-                        BroadcastMessageStatus.pending,
-                        BroadcastMessageStatus.retry,
-                        BroadcastMessageStatus.sending,
-                    ]
-                ),
+                BroadcastMessage.status.in_(_ACTIVE_MESSAGE_STATUSES),
                 (BroadcastMessage.locked_until.is_(None)) | (BroadcastMessage.locked_until <= now),
                 (BroadcastMessage.next_retry_at.is_(None)) | (BroadcastMessage.next_retry_at <= now),
             )
@@ -368,13 +362,7 @@ class BroadcastRepository(SessionMixin):
             pending = await self.session.execute(
                 select(func.count(BroadcastMessage.id)).where(
                     BroadcastMessage.campaign_id == cid,
-                    BroadcastMessage.status.in_(
-                        [
-                            BroadcastMessageStatus.pending,
-                            BroadcastMessageStatus.retry,
-                            BroadcastMessageStatus.sending,
-                        ]
-                    ),
+                    BroadcastMessage.status.in_(_ACTIVE_MESSAGE_STATUSES),
                 )
             )
             if int(pending.scalar() or 0) == 0:

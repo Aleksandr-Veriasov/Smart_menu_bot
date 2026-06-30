@@ -31,3 +31,10 @@ def parse_ingredients(text: str) -> list:
 
     logger.debug(f"Парсинг завершен. Найдено ингредиентов: {len(ingredients)}")
     return ingredients
+
+
+def parse_ingredients_lines(text: str) -> list[str]:
+    """Разбирает произвольный текст в список имён ингредиентов (по строкам, без дублей)."""
+    raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    parts = [line.strip() for line in raw.split("\n") if line.strip()]
+    return list(dict.fromkeys(parts))

@@ -21,3 +21,8 @@ class BroadcastMessageStatus(StrEnum):
     sent = "sent"
     retry = "retry"
     failed = "failed"
+
+
+class BroadcastFailureKind(StrEnum):
+    permanent = "permanent"
+    retry = "retry"

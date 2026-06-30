@@ -1,8 +1,7 @@
 import logging
 
-from packages.db.models.recipe import Category
 from packages.db.repository import CategoryRepository
-from packages.db.schemas import CategoryRead
+from packages.db.schemas import CategoryCreate, CategoryRead
 from packages.redis.repository import CategoryCacheRepository
 from packages.services.base import BaseService
 
@@ -15,7 +14,7 @@ class CategoryService(BaseService):
         self.category_cache = CategoryCacheRepository(self.redis)
         self.category_repo = CategoryRepository
 
-    async def get_user_categories_cached(self, user_id: int) -> list[CategoryRead]:
+    async def get_user_categories(self, user_id: int) -> list[CategoryRead]:
         """Категории пользователя с кешированием в Redis."""
         cached = await self.category_cache.get_user_categories(user_id)
         logger.debug(f"👉 Пользователь {user_id}: категории из кэша: {cached}")
@@ -25,11 +24,11 @@ class CategoryService(BaseService):
         async with self._lock(self.keys.user_init_lock(user_id=user_id)):
             async with self.db.session() as session:
                 categories = await self.category_repo(session).get_by_user_id(user_id)
-                result = [CategoryRead.model_validate(c) for c in categories]
-                await self.category_cache.set_user_categories(user_id, [r.model_dump() for r in result])
+            result = [CategoryRead.model_validate(c) for c in categories]
+            await self.category_cache.set_user_categories(user_id, [r.model_dump() for r in result])
         return result
 
-    async def get_id_and_name_by_slug_cached(self, slug: str) -> CategoryRead:
+    async def get_by_slug(self, slug: str) -> CategoryRead:
         """Категория по slug — ищет в общем кэше всех категорий."""
         all_categories = await self.get_all_category()
         for cat in all_categories:
@@ -39,7 +38,7 @@ class CategoryService(BaseService):
 
     async def get_all_category(self) -> list[CategoryRead]:
         """Все категории с кешированием в Redis."""
-        cached = await self.category_cache.get_all_name_and_slug()
+        cached = await self.category_cache.get_all_categories()
         logger.debug(f"👉 Все категории из кэша: {cached}")
         if cached:
             return [CategoryRead.model_validate(d) for d in cached]
@@ -47,45 +46,36 @@ class CategoryService(BaseService):
         async with self._lock(self.keys.catergory_lock()):
             async with self.db.session() as session:
                 categories = await self.category_repo(session).get_all()
-                result = [CategoryRead.model_validate(c) for c in categories]
-                await self.category_cache.set_all_name_and_slug([r.model_dump() for r in result])
-                logger.debug(f"👉 Все категории из БД: {result}")
+            result = [CategoryRead.model_validate(c) for c in categories]
+            await self.category_cache.set_all_categories([r.model_dump() for r in result])
+            logger.debug(f"👉 Все категории из БД: {result}")
         return result
 
     # ── Admin panel ───────────────────────────────────────────────────────────
 
-    async def get_or_raise(self, cat_id: int) -> Category:
+    async def get_or_raise(self, cat_id: int) -> CategoryRead:
         """Вернуть категорию или бросить LookupError."""
-        async with self.db.session() as session:
-            cat = await self.category_repo(session).get_by_id(cat_id)
-        if cat is None:
-            raise LookupError(f"Категория #{cat_id} не найдена")
-        return cat
+        for cat in await self.get_all_category():
+            if cat.id == cat_id:
+                return cat
+        raise LookupError(f"Категория #{cat_id} не найдена")
 
     async def create(self, *, name: str, slug: str | None) -> None:
         """Создать категорию и инвалидировать кэш."""
         async with self.db.session() as session:
-            cat = Category(name=name, slug=slug)
-            session.add(cat)
-            await session.flush()
-        await self.category_cache.invalidate_all_name_and_slug()
+            await self.category_repo(session).create(CategoryCreate(name=name, slug=slug))
+        await self.category_cache.invalidate_all_categories()
 
     async def update(self, cat_id: int, *, name: str, slug: str | None) -> None:
         """Обновить поля категории и инвалидировать кэш."""
+        await self.get_or_raise(cat_id)
         async with self.db.session() as session:
-            cat = await self.category_repo(session).get_by_id(cat_id)
-            if cat is None:
-                raise LookupError(f"Категория #{cat_id} не найдена")
-            cat.name = name
-            cat.slug = slug
-            await session.flush()
-        await self.category_cache.invalidate_all_name_and_slug()
+            await self.category_repo(session).update_fields(cat_id, {"name": name, "slug": slug})
+        await self.category_cache.invalidate_all_categories()
 
     async def delete(self, cat_id: int) -> None:
-        """Удалить категорию и инвалидировать кэш (если найдена)."""
+        """Удалить категорию и инвалидировать кэш."""
+        await self.get_or_raise(cat_id)
         async with self.db.session() as session:
-            cat = await self.category_repo(session).get_by_id(cat_id)
-            if cat:
-                await session.delete(cat)
-                await session.flush()
-        await self.category_cache.invalidate_all_name_and_slug()
+            await self.category_repo(session).delete(cat_id)
+        await self.category_cache.invalidate_all_categories()

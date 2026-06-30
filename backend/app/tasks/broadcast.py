@@ -5,9 +5,10 @@ import time
 
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
+from packages.enums import BroadcastFailureKind as FailureKind
+from packages.integrations.telegram_api import classify_failure
 from packages.redis.keys import RedisKeys
 from packages.redis.lock_repository import RedisLockRepository
-from packages.services.broadcast_sender import FailureKind, classify_failure
 from packages.services.broadcast_worker_service import BroadcastWorkerService
 
 logger = logging.getLogger(__name__)

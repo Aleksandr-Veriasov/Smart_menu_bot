@@ -60,10 +60,10 @@ class RecipeService(BaseService):
         async with self._lock(self.keys.user_init_lock(user_id=user_id)):
             async with self.db.session() as session:
                 recipes = await self.recipe_repo(session).get_all_by_user_and_category(user_id, category_id)
-                result = [RecipeShort.model_validate(r) for r in recipes]
-                await self.recipe_cache.set_all_recipes_ids_and_titles(
-                    user_id, category_id, [r.model_dump() for r in result]
-                )
+            result = [RecipeShort.model_validate(r) for r in recipes]
+            await self.recipe_cache.set_all_recipes_ids_and_titles(
+                user_id, category_id, [r.model_dump() for r in result]
+            )
         logger.debug(f"👉 Пользователь: {user_id} категория: {category_id} " f"название рецептов и id из БД: {result}")
         return result
 
@@ -184,8 +184,6 @@ class RecipeService(BaseService):
             await self.recipe_user_repo(session).unlink_user(recipe_id, user_id)
         if category_id is not None:
             await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
-            # Обновляем кэш рецептов
-            await self.get_all_by_user_and_category(user_id=user_id, category_id=category_id)
 
     async def get_random_recipe(self, user_id: int, category_id: int) -> Recipe | None:
         """Возвращает случайный рецепт пользователя из категории."""
@@ -258,8 +256,6 @@ class RecipeService(BaseService):
             await repo.update_title(recipe_id, new_title)
         if category_id is not None:
             await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
-            # Обновляем кэш рецептов
-            await self.get_all_by_user_and_category(user_id=user_id, category_id=category_id)
 
     # ── Admin panel ───────────────────────────────────────────────────────────
 

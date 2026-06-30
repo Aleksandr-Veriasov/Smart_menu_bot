@@ -51,7 +51,7 @@ async def add_existing_recipe_choose_category(
     recipe_id, slug = callback_data.recipe_id, callback_data.slug
 
     try:
-        category = await category_service.get_id_and_name_by_slug_cached(slug)
+        category = await category_service.get_by_slug(slug)
     except ValueError:
         await message_service.safe_edit(
             callback.message,

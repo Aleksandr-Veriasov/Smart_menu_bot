@@ -27,12 +27,11 @@ class UserService(BaseService):
 
         async with self._lock(self.keys.user_init_lock(user_id=user_id)):
             async with self.db.session() as session:
-                repo = self.user_repo(session)
-                user = await repo.get_by_id(user_id)
+                user = await self.user_repo(session).get_by_id(user_id)
                 logger.debug("👉 Пользователь %s из БД: %s", user_id, user)
                 if user is None:
-                    user = await repo.create(user_data)
-                await self.user_cache.set_exists(user.id)
+                    user = await self.user_repo(session).create(user_data)
+            await self.user_cache.set_exists(user.id)
 
     async def get_recipe_count(self, user_id: int) -> int:
         """Возвращает количество рецептов пользователя с кэшированием в Redis."""
@@ -41,7 +40,7 @@ class UserService(BaseService):
         if recipe_count is None:
             async with self.db.session() as session:
                 recipe_count = await RecipeRepository(session).get_count_by_user(user_id)
-                await self.recipe_cache.set_recipe_count(user_id, recipe_count)
+            await self.recipe_cache.set_recipe_count(user_id, recipe_count)
         return recipe_count
 
     async def list_page(self, page: int, page_size: int, q: str = "") -> tuple[list[User], int]:

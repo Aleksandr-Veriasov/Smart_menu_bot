@@ -84,6 +84,19 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         return await fetch_all(self.session, statement)
 
+    async def get_with_category_for_user(self, recipe_id: int, user_id: int) -> tuple[Recipe, int] | None:
+        """Загрузить рецепт пользователя с ингредиентами и видео. Возвращает (recipe, category_id) или None."""
+        stmt = (
+            select(self.model, RecipeUser.category_id)
+            .join(RecipeUser, RecipeUser.recipe_id == self.model.id)
+            .where(self.model.id == int(recipe_id), RecipeUser.user_id == int(user_id))
+            .options(joinedload(self.model.ingredients), joinedload(self.model.video))
+        )
+        row = (await self.session.execute(stmt)).first()
+        if row is None:
+            return None
+        return row[0], int(row[1])
+
     async def get_recipe_with_connections(self, recipe_id: int) -> Recipe | None:
         """Загрузить рецепт вместе с ингредиентами и видео."""
         statement = (
@@ -222,6 +235,9 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         return (await self.session.execute(stmt)).unique().scalar_one_or_none()
 
+    def _ingredient_links_option(self):
+        return joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient)
+
     async def get_needing_qty_backfill(self, limit: int | None) -> list[Recipe]:
         """Рецепты с хотя бы одним ингредиентом без quantity, с загруженными связями."""
         subq = (
@@ -230,7 +246,7 @@ class RecipeRepository(BaseRepository[Recipe]):
         stmt = (
             select(self.model)
             .where(self.model.id.in_(subq))
-            .options(joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient))
+            .options(self._ingredient_links_option())
             .order_by(self.model.id)
         )
         if limit:
@@ -239,11 +255,7 @@ class RecipeRepository(BaseRepository[Recipe]):
 
     async def get_needing_qty_backfill_one(self, recipe_id: int) -> Recipe | None:
         """Загрузить один рецепт с ingredient_links для бэкфилла."""
-        stmt = (
-            select(self.model)
-            .where(self.model.id == recipe_id)
-            .options(joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient))
-        )
+        stmt = select(self.model).where(self.model.id == recipe_id).options(self._ingredient_links_option())
         return (await self.session.execute(stmt)).unique().scalar_one_or_none()
 
     async def update_meta(self, recipe_id: int, *, title: str, description: str | None) -> Recipe | None:

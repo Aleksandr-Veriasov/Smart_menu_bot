@@ -208,7 +208,7 @@ async def add_candidate_recipe_choose_category(
     await callback.answer()
     sid, recipe_id, slug = callback_data.sid, callback_data.recipe_id, callback_data.slug
 
-    category = await category_service.get_id_and_name_by_slug_cached(slug)
+    category = await category_service.get_by_slug(slug)
 
     created = await recipe_service.link_recipe_to_user(recipe_id, user.id, category.id)
     message_text = "✅ Рецепт успешно сохранён." if created else "ℹ️ Рецепт уже есть у вас, обновили категорию."

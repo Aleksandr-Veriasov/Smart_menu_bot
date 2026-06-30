@@ -9,8 +9,10 @@ from sqlalchemy.orm import joinedload
 
 from packages.db.models import RecipeIngredient
 from packages.schemas.recipe import IngredientLink
+from packages.schemas.webapp import IngredientItemWrite
 
 from .base import BaseRepository
+from .ingredient import IngredientRepository
 
 
 class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
@@ -107,6 +109,30 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
                 self.model.ingredient_id == ingredient_id,
             )
         )
+
+    async def save_from_names(self, recipe_id: int, names: list[str]) -> None:
+        """Создать/найти ингредиенты по именам и привязать к рецепту."""
+        if not names:
+            return
+        id_by_name = await IngredientRepository(self.session).bulk_get_or_create(names)
+        await self.bulk_link_ids(recipe_id, id_by_name.values())
+
+    async def save_from_structured(self, recipe_id: int, items: list[IngredientItemWrite]) -> None:
+        """Создать/найти ингредиенты из структурированного списка (name, quantity, unit) и привязать к рецепту."""
+        names = [item.name for item in items if item.name]
+        if not names:
+            return
+        id_by_name = await IngredientRepository(self.session).bulk_get_or_create(names)
+        links = [
+            IngredientLink(ingredient_id=id_by_name[item.name], quantity=item.quantity, unit=item.unit)
+            for item in items
+            if item.name and item.name in id_by_name
+        ]
+        await self.bulk_link(recipe_id, links)
+
+    async def delete_all_by_recipe(self, recipe_id: int) -> None:
+        """Удалить все ингредиенты рецепта."""
+        await self.session.execute(sa.delete(self.model).where(self.model.recipe_id == int(recipe_id)))
 
     async def bulk_link_ids(
         self,

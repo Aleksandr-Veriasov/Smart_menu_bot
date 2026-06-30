@@ -1,3 +1,4 @@
+from .admin import AdminRepository
 from .base import BaseRepository, SessionMixin, fetch_all
 from .broadcast import BroadcastRepository
 from .category import CategoryRepository
@@ -13,6 +14,7 @@ __all__ = [
     "fetch_all",
     "SessionMixin",
     "BaseRepository",
+    "AdminRepository",
     "UserRepository",
     "RecipeRepository",
     "CategoryRepository",

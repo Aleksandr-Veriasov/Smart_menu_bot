@@ -1,7 +1,9 @@
-from sqlalchemy import select
-
-from packages.db.models import Admin as AdminModel
-from packages.db.repository import BroadcastRepository, RecipeRepository, UserRepository
+from packages.db.repository import (
+    AdminRepository,
+    BroadcastRepository,
+    RecipeRepository,
+    UserRepository,
+)
 from packages.redis.keys import RedisKeys
 from packages.redis.ttl import USER_EXISTS
 from packages.schemas.admin import AdminStatsRead
@@ -16,8 +18,7 @@ class AdminService(BaseService):
     async def authenticate(self, login: str, password: str) -> bool:
         """Проверить логин и пароль администратора."""
         async with self.db.session() as session:
-            result = await session.execute(select(AdminModel).where(AdminModel.login == login))
-            admin = result.scalar_one_or_none()
+            admin = await AdminRepository(session).get_by_login(login)
         if not admin:
             return False
         return verify_password(password, str(admin.password_hash))

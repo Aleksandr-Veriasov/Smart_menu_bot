@@ -163,7 +163,6 @@ class IngredientService(BaseService):
 
         if not dry_run and updated_links:
             await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), updated_links)
-            await session.commit()
 
         return True
 
