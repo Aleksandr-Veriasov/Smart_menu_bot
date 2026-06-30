@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from packages.db.models import Category, RecipeUser
@@ -33,6 +33,15 @@ class CategoryRepository(BaseRepository[Category]):
         statement = select(self.model).order_by(self.model.id)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
+
+    async def count_recipes_by_category(self) -> dict[int, int]:
+        """Количество уникальных рецептов в каждой категории: {category_id: count}."""
+        statement = select(
+            RecipeUser.category_id,
+            func.count(func.distinct(RecipeUser.recipe_id)),
+        ).group_by(RecipeUser.category_id)
+        result = await self.session.execute(statement)
+        return {category_id: count for category_id, count in result.all()}
 
     async def get_by_user_id(self, user_id: int) -> list[Category]:
         """Вернуть категории, в которых у пользователя есть хотя бы один рецепт."""

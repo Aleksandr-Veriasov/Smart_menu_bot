@@ -28,12 +28,14 @@ async def recipes_list(
     if redirect := check_auth(request):
         return redirect
     recipes, total = await service.list_page(page, _PAGE_SIZE, q)
+    legacy_ids = await service.get_legacy_recipe_ids([r.id for r in recipes])
     return templates.TemplateResponse(
         request,
         "recipes/list.html",
         {
             "admin_login": current_login(request),
             "recipes": recipes,
+            "legacy_ids": legacy_ids,
             "q": q,
             "page": page,
             "total": total,

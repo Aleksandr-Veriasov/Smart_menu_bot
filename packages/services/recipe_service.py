@@ -264,6 +264,11 @@ class RecipeService(BaseService):
         async with self.db.session() as session:
             return await self.recipe_repo(session).list_page(offset=(page - 1) * page_size, limit=page_size, q=q)
 
+    async def get_legacy_recipe_ids(self, recipe_ids: list[int]) -> set[int]:
+        """Из переданных id вернуть рецепты в старом формате (есть ингредиент без quantity)."""
+        async with self.db.session() as session:
+            return await self.recipe_repo(session).get_legacy_ingredient_recipe_ids(recipe_ids)
+
     async def get_for_admin(self, recipe_id: int) -> Recipe:
         """Загрузить рецепт со всеми связями или бросить LookupError."""
         async with self.db.session() as session:

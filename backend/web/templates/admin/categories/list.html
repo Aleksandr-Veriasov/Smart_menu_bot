@@ -28,8 +28,7 @@
         <td class="px-4 py-3 font-medium text-gray-800">{{ cat.name }}</td>
         <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ cat.slug or "—" }}</td>
         <td class="px-4 py-3 text-center text-gray-600">
-          {% set recipe_ids = cat.recipe_users | map(attribute='recipe_id') | unique | list %}
-          {{ recipe_ids | length }}
+          {{ recipe_counts.get(cat.id, 0) }}
         </td>
         <td class="px-4 py-3 text-right">
           <div class="flex items-center justify-end gap-2">

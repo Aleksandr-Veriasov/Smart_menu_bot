@@ -239,6 +239,18 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         return (await self.session.execute(stmt)).unique().scalar_one_or_none()
 
+    async def get_legacy_ingredient_recipe_ids(self, recipe_ids: list[int]) -> set[int]:
+        """Из переданных id вернуть те, у кого есть ингредиент без quantity (старый формат)."""
+        if not recipe_ids:
+            return set()
+        stmt = (
+            select(RecipeIngredient.recipe_id)
+            .where(RecipeIngredient.recipe_id.in_(recipe_ids), RecipeIngredient.quantity.is_(None))
+            .distinct()
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return set(rows)
+
     def _ingredient_links_option(self):
         return joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient)
 

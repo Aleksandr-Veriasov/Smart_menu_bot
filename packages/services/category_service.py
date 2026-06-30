@@ -53,6 +53,11 @@ class CategoryService(BaseService):
 
     # ── Admin panel ───────────────────────────────────────────────────────────
 
+    async def get_recipe_counts(self) -> dict[int, int]:
+        """Количество уникальных рецептов по категориям для админки."""
+        async with self.db.session() as session:
+            return await self.category_repo(session).count_recipes_by_category()
+
     async def get_or_raise(self, cat_id: int) -> CategoryRead:
         """Вернуть категорию или бросить LookupError."""
         for cat in await self.get_all_category():

@@ -23,10 +23,11 @@ async def categories_list(request: Request, service: _ServiceDep) -> HTMLRespons
     if redirect := check_auth(request):
         return redirect
     categories = await service.get_all_category()
+    recipe_counts = await service.get_recipe_counts()
     return templates.TemplateResponse(
         request,
         "categories/list.html",
-        {"admin_login": current_login(request), "categories": categories},
+        {"admin_login": current_login(request), "categories": categories, "recipe_counts": recipe_counts},
     )
 
 
