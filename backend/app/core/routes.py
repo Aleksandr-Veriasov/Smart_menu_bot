@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
-from backend.app.api.webapp import webapp_router
+from backend.app.api.webapp import router as webapp_router
+from backend.app.handlers.admin.router import router as admin_router
 
 
 def setup_routes(app: FastAPI) -> None:
-    app.include_router(webapp_router, prefix="/api/webapp", tags=["webapp"])
+    app.include_router(admin_router)
+    app.include_router(webapp_router)

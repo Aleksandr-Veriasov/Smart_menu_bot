@@ -9,7 +9,6 @@ from backend.app.core import (
     setup_routes,
     setup_static,
 )
-from backend.app.handlers.admin.router import router as admin_router
 from backend.app.lifespan import build_lifespan
 from packages.app_state import AppState
 from packages.common_settings.settings import settings
@@ -42,7 +41,6 @@ def create_app() -> FastAPI:
     setup_observability(app)
     setup_static(app)
     setup_middleware(app)
-    app.include_router(admin_router)
     setup_routes(app)
 
     setup_exception_handlers(app)

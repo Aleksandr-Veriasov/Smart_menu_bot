@@ -16,7 +16,7 @@ def setup_middleware(app: FastAPI) -> None:
     if allowed:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed)
 
-    # Session cookie for SQLAdmin auth
+    # Session cookie for Admin UI auth (/admin/*)
     pepper = settings.security.password_pepper
     if pepper is None:
         raise RuntimeError("PASSWORD_PEPPER не задан: SessionMiddleware/AdminAuth не может стартовать.")
