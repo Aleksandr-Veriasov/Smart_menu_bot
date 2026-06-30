@@ -288,7 +288,7 @@ class SentrySettings(BaseAppSettings):
     dsn: AnyUrl | None = Field(default=None, alias="SENTRY_DSN")
 
 
-class AdminSettinds(BaseAppSettings):
+class AdminSettings(BaseAppSettings):
     """
     Конфигурация пользователя Admin
     """
@@ -391,8 +391,8 @@ class Settings(BaseAppSettings):
     sentry: SentrySettings = Field(default_factory=SentrySettings)
     # 🔹 CORS: список доменов, которым можно слать запросы к API
     cors_origins_raw: str | None = Field(default=None, alias="CORS_ORIGINS")
-    admin: AdminSettinds = Field(default_factory=AdminSettinds)
-    security: SecuritySettings = SecuritySettings()
+    admin: AdminSettings = Field(default_factory=AdminSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     webhooks: WebHookSettings = Field(default_factory=WebHookSettings)
     fast_api: FastApiSettings = Field(default_factory=FastApiSettings)
