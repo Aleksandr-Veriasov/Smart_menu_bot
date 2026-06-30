@@ -121,7 +121,9 @@ async def _run_search(
         reply_markup=markup,
         disable_web_page_preview=True,
     )
-    await state.clear()
+    # Сбрасываем только FSM-состояние ввода, но сохраняем recipes_state —
+    # иначе «Назад» из карточки найденного рецепта не сможет восстановить список.
+    await state.set_state(None)
 
 
 @router.message(SearchRecipeStates.WAIT_TITLE, F.text)

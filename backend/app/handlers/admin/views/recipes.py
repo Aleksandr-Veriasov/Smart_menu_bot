@@ -6,9 +6,15 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from backend.app.core.deps import check_auth, current_login, get_recipe_service
+from backend.app.core.deps import (
+    check_auth,
+    current_login,
+    get_ingredient_service,
+    get_recipe_service,
+)
 from backend.app.core.templates import templates
 from packages.recipes_core.units import ALLOWED_UNITS
+from packages.services.ingredient_service import IngredientService
 from packages.services.recipe_service import RecipeService
 from packages.utils import parse_decimal_form
 
@@ -16,6 +22,7 @@ router = APIRouter(prefix="/recipes")
 
 _PAGE_SIZE = 25
 _ServiceDep = Annotated[RecipeService, Depends(get_recipe_service)]
+_IngredientServiceDep = Annotated[IngredientService, Depends(get_ingredient_service)]
 
 
 # ── Список ────────────────────────────────────────────────────────────────────
@@ -28,14 +35,14 @@ async def recipes_list(
     if redirect := check_auth(request):
         return redirect
     recipes, total = await service.list_page(page, _PAGE_SIZE, q)
-    legacy_ids = await service.get_legacy_recipe_ids([r.id for r in recipes])
+    recipe_formats = await service.get_recipe_formats([r.id for r in recipes])
     return templates.TemplateResponse(
         request,
         "recipes/list.html",
         {
             "admin_login": current_login(request),
             "recipes": recipes,
-            "legacy_ids": legacy_ids,
+            "recipe_formats": recipe_formats,
             "q": q,
             "page": page,
             "total": total,
@@ -60,6 +67,32 @@ async def recipe_detail(request: Request, service: _ServiceDep, recipe_id: int) 
         request,
         "recipes/detail.html",
         {"admin_login": current_login(request), "recipe": recipe, "allowed_units": ALLOWED_UNITS},
+    )
+
+
+# ── HTMX: бэкфилл одного рецепта через ИИ ─────────────────────────────────────
+
+
+@router.post(
+    "/{recipe_id}/backfill",
+    response_class=HTMLResponse,
+    response_model=None,
+    include_in_schema=False,
+)
+async def recipe_backfill(
+    request: Request,
+    service: _ServiceDep,
+    ingredient_service: _IngredientServiceDep,
+    recipe_id: int,
+) -> HTMLResponse:
+    if "admin_login" not in request.session:
+        return HTMLResponse("Unauthorized", status_code=401)
+    await ingredient_service.enrich_one(recipe_id)
+    recipe = await service.get_for_admin(recipe_id)
+    return templates.TemplateResponse(
+        request,
+        "recipes/partials/ingredients_refresh.html",
+        {"recipe": recipe, "allowed_units": ALLOWED_UNITS},
     )
 
 

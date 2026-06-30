@@ -1,9 +1,10 @@
 import json
 import logging
+import re
 import time
 from decimal import Decimal
 
-from packages.db.models import Ingredient, Recipe
+from packages.db.models import Ingredient, Recipe, RecipeIngredient
 from packages.db.repository.ingredient import IngredientRepository
 from packages.db.repository.recipe import RecipeRepository
 from packages.db.repository.recipe_ingredient import RecipeIngredientRepository
@@ -14,6 +15,7 @@ from packages.recipes_core.units import normalize_unit
 from packages.schemas.ingredient import DupGroup
 from packages.schemas.recipe import IngredientLink
 from packages.services.base import BaseService
+from packages.utils import normalize_quantity
 
 logger = logging.getLogger(__name__)
 
@@ -76,15 +78,20 @@ class IngredientService(BaseService):
         async with self.db.session() as session:
             return await self.ingredient_repo(session).merge_duplicate(canonical_id, duplicate_id)
 
-    async def count_pending_backfill(self) -> int:
-        """Количество рецептов с хотя бы одним ингредиентом без quantity."""
+    async def count_pending_backfill(self, fmt: str | None = None) -> int:
+        """Количество рецептов, требующих обработки backfill (с учётом фильтра формата)."""
         async with self.db.session() as session:
-            return await self.recipe_ingredient_repo(session).count_pending_backfill()
+            return await self.recipe_repo(session).count_needing_backfill(fmt)
 
-    async def run_backfill(self, limit: int, dry_run: bool) -> dict:
-        """Обогатить qty/unit ингредиентов через LLM. Вернуть {total, enriched, failed, dry_run, limit}."""
+    async def format_stats(self) -> dict[str, int]:
+        """Статистика рецептов по статусу формата: {'old', 'partial', 'new'}."""
         async with self.db.session() as session:
-            recipes = await self.recipe_repo(session).get_needing_qty_backfill(limit)
+            return await self.recipe_repo(session).count_by_fill_status()
+
+    async def run_backfill(self, limit: int, dry_run: bool, fmt: str | None = None) -> dict:
+        """Обогатить qty/unit ингредиентов через LLM. Вернуть {total, enriched, failed, dry_run, limit, fmt}."""
+        async with self.db.session() as session:
+            recipes = await self.recipe_repo(session).get_needing_qty_backfill(limit, fmt)
 
         total = len(recipes)
         enriched = 0
@@ -114,15 +121,30 @@ class IngredientService(BaseService):
             failed,
             " [DRY RUN]" if dry_run else "",
         )
-        return {"total": total, "enriched": enriched, "failed": failed, "dry_run": dry_run, "limit": limit}
+        return {
+            "total": total,
+            "enriched": enriched,
+            "failed": failed,
+            "dry_run": dry_run,
+            "limit": limit,
+            "fmt": fmt or "all",
+        }
+
+    async def enrich_one(self, recipe_id: int, *, dry_run: bool = False) -> bool:
+        """Прогнать backfill для одного рецепта (заполнить qty/unit + нормализовать имена)."""
+        async with self.db.session() as session:
+            recipe = await self.recipe_repo(session).get_needing_qty_backfill_one(recipe_id)
+            if recipe is None:
+                return False
+            return await self._enrich_recipe(recipe, session, dry_run=dry_run)
 
     async def _enrich_recipe(self, recipe: Recipe, session, *, dry_run: bool) -> bool:
-        """Обогатить один рецепт через LLM. Вернуть True при успехе."""
-        links_without_qty = [link for link in recipe.ingredient_links if link.quantity is None]
-        if not links_without_qty:
+        """Обогатить рецепт через LLM: заполнить qty/unit и нормализовать имена ингредиентов."""
+        links = recipe.ingredient_links
+        if not links:
             return True
 
-        ingredient_names = [link.ingredient.name for link in recipe.ingredient_links]
+        ingredient_names = [link.ingredient.name for link in links]
         extractor = get_default_extractor()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT_BACKFILL},
@@ -140,39 +162,105 @@ class IngredientService(BaseService):
             logger.warning("Recipe %d: пустой результат от LLM", recipe.id)
             return False
 
-        name_to_item = {item.name: item for item in items}
-        updated_links = [
-            IngredientLink(
-                ingredient_id=link.ingredient_id,
-                quantity=matched.quantity,
-                unit=matched.unit,
-            )
-            for link in recipe.ingredient_links
-            if (matched := name_to_item.get(link.ingredient.name))
-            and (matched.quantity is not None or matched.unit is not None)
-        ]
+        matches = self._match_items_to_links(links, items)
+
+        # Чистое имя, которое хотим для каждой связи (имя из ответа ИИ либо regex-фолбэк).
+        desired_names = [self._desired_name(matched, link.ingredient.name) for link, matched in matches]
+        id_by_name: dict[str, int] = {}
+        if not dry_run:
+            id_by_name = await self.ingredient_repo(session).bulk_get_or_create([n for n in desired_names if n])
+
+        new_links: list[IngredientLink] = []
+        obsolete_ids: list[int] = []
+        enriched = 0
+        renamed = 0
+        for (link, matched), new_name in zip(matches, desired_names, strict=False):
+            target_id = link.ingredient_id
+            if new_name and new_name != link.ingredient.name:
+                renamed += 1
+                target_id = id_by_name.get(new_name, link.ingredient_id)
+                if target_id != link.ingredient_id:
+                    obsolete_ids.append(link.ingredient_id)
+
+            quantity, unit = link.quantity, link.unit
+            if matched is not None and (matched.quantity is not None or matched.unit is not None):
+                quantity, unit = matched.quantity, matched.unit
+                enriched += 1
+
+            new_links.append(IngredientLink(ingredient_id=target_id, quantity=quantity, unit=unit))
 
         logger.info(
-            "Recipe %d (%s): enriched=%d/%d%s",
+            "Recipe %d (%s): enriched=%d renamed=%d /%d%s",
             recipe.id,
             recipe.title[:40],
-            len(updated_links),
-            len(ingredient_names),
+            enriched,
+            renamed,
+            len(links),
             " [DRY RUN]" if dry_run else "",
         )
 
-        if not dry_run and updated_links:
-            await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), updated_links)
+        if not dry_run:
+            await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), new_links)
+            for old_id in obsolete_ids:
+                await self.recipe_ingredient_repo(session).delete_link(int(recipe.id), old_id)
+            await self.ingredient_repo(session).delete_orphans(obsolete_ids)
 
         return True
 
+    @classmethod
+    def _desired_name(cls, matched: IngredientItem | None, current: str) -> str:
+        """Чистое имя ингредиента: из ответа ИИ (нормализованное), иначе regex-фолбэк от текущего."""
+        raw = matched.name if (matched is not None and matched.name) else current
+        return cls._canonical_name(cls._clean_ingredient_name(raw))
+
+    @staticmethod
+    def _canonical_name(name: str) -> str:
+        """Свести к единому виду: схлопнуть пробелы и сделать первую букву заглавной."""
+        name = re.sub(r"\s+", " ", name or "").strip()
+        return name[:1].upper() + name[1:] if name else name
+
+    @staticmethod
+    def _clean_ingredient_name(name: str) -> str:
+        """Очистить имя: убрать скобки с количеством и лишние пробелы, сохранив регистр."""
+        return re.sub(r"\s+", " ", re.sub(r"\(.*?\)", "", name)).strip()
+
+    @classmethod
+    def _norm_name(cls, name: str) -> str:
+        """Нормализовать имя для сопоставления: очистить от скобок и привести к нижнему регистру."""
+        return cls._clean_ingredient_name(name).lower()
+
+    @classmethod
+    def _match_items_to_links(
+        cls, links: list[RecipeIngredient], items: list[IngredientItem]
+    ) -> list[tuple[RecipeIngredient, IngredientItem | None]]:
+        """Сопоставить ответ LLM со связями рецепта.
+
+        ИИ нормализует имена, поэтому матчить его новые имена со «грязными» именами в БД
+        ненадёжно. Основной путь — позиционный: промпт требует тот же порядок и количество.
+        При расхождении количества — best-effort по точному нормализованному имени.
+        """
+        if len(items) == len(links):
+            return list(zip(links, items, strict=False))
+
+        logger.warning(
+            "Backfill: LLM вернул %d позиций вместо %d — фолбэк на сопоставление по имени",
+            len(items),
+            len(links),
+        )
+        item_by_norm: dict[str, IngredientItem] = {}
+        for item in items:
+            item_by_norm.setdefault(cls._norm_name(item.name), item)
+        return [(link, item_by_norm.get(cls._norm_name(link.ingredient.name))) for link in links]
+
     @staticmethod
     def _build_backfill_message(recipe: Recipe, ingredient_names: list[str]) -> str:
+        numbered = "\n".join(f"{i}. {name}" for i, name in enumerate(ingredient_names, 1))
         return "\n".join(
             [
                 f"Рецепт: {recipe.title}",
                 f"Описание: {recipe.description or 'не указано'}",
-                "Ингредиенты: " + ", ".join(ingredient_names),
+                f"Ингредиенты ({len(ingredient_names)} шт — верни ровно столько же объектов в том же порядке):",
+                numbered,
             ]
         )
 
@@ -196,7 +284,7 @@ class IngredientService(BaseService):
             quantity: Decimal | None = None
             if raw_qty is not None:
                 try:
-                    quantity = Decimal(str(raw_qty))
+                    quantity = normalize_quantity(Decimal(str(raw_qty)))
                 except Exception:
                     pass
             items.append(IngredientItem(name=name, quantity=quantity, unit=normalize_unit(entry.get("unit"))))

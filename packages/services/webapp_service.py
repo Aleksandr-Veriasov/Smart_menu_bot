@@ -30,6 +30,7 @@ from packages.schemas.webapp import (
     WebAppRecipeRead,
 )
 from packages.services.base import BaseService
+from packages.utils import format_qty_unit
 
 
 @dataclass
@@ -298,7 +299,14 @@ class WebAppService(BaseService):
 
         safe_title = html_escape(recipe.title or "")
         safe_description = html_escape(recipe.description or "")
-        ingredients_text = "\n".join(f"- {html_escape(i.name or '')}" for i in (recipe.ingredients or []))
+        ingredients_text = "\n".join(
+            (
+                f"- {html_escape(link.ingredient.name or '')} — {qty}"
+                if (qty := format_qty_unit(link.quantity, link.unit))
+                else f"- {html_escape(link.ingredient.name or '')}"
+            )
+            for link in (recipe.ingredient_links or [])
+        )
         text = (
             "✅ Рецепт обновлен.\n\n"
             f"🍽 <b>Название рецепта:</b> {safe_title}\n\n"

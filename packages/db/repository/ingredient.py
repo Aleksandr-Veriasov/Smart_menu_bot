@@ -86,6 +86,26 @@ class IngredientRepository(BaseRepository[Ingredient]):
 
         return {**existing, **inserted}
 
+    async def delete_orphans(self, ingredient_ids: Iterable[int]) -> int:
+        """Удалить из переданных id те ингредиенты, на которые не осталось ни одной связи. Вернуть число удалённых."""
+        ids = {int(i) for i in ingredient_ids}
+        if not ids:
+            return 0
+        used = set(
+            (
+                await self.session.execute(
+                    select(RecipeIngredient.ingredient_id).where(RecipeIngredient.ingredient_id.in_(ids)).distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        orphans = ids - used
+        if not orphans:
+            return 0
+        await self.session.execute(delete(self.model).where(self.model.id.in_(orphans)))
+        return len(orphans)
+
     async def find_dup_groups(self) -> list[DupGroup]:
         """Группы ингредиентов с одинаковым LOWER(name)."""
         rows = (

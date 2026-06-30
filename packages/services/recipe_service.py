@@ -264,10 +264,25 @@ class RecipeService(BaseService):
         async with self.db.session() as session:
             return await self.recipe_repo(session).list_page(offset=(page - 1) * page_size, limit=page_size, q=q)
 
-    async def get_legacy_recipe_ids(self, recipe_ids: list[int]) -> set[int]:
-        """Из переданных id вернуть рецепты в старом формате (есть ингредиент без quantity)."""
+    async def get_recipe_formats(self, recipe_ids: list[int]) -> dict[int, str]:
+        """Статус формата ингредиентов по рецептам: 'old' | 'partial' | 'new'.
+
+        old — ничего не заполнено, new — всё заполнено, partial — частично.
+        Рецепты без ингредиентов в результат не попадают.
+        """
         async with self.db.session() as session:
-            return await self.recipe_repo(session).get_legacy_ingredient_recipe_ids(recipe_ids)
+            stats = await self.recipe_repo(session).get_ingredient_fill_stats(recipe_ids)
+        formats: dict[int, str] = {}
+        for recipe_id, (filled, total) in stats.items():
+            if total == 0:
+                continue
+            if filled == 0:
+                formats[recipe_id] = "old"
+            elif filled == total:
+                formats[recipe_id] = "new"
+            else:
+                formats[recipe_id] = "partial"
+        return formats
 
     async def get_for_admin(self, recipe_id: int) -> Recipe:
         """Загрузить рецепт со всеми связями или бросить LookupError."""

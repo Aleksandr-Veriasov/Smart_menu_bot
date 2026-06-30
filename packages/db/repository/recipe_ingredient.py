@@ -2,7 +2,6 @@ from collections.abc import Iterable
 from decimal import Decimal
 
 import sqlalchemy as sa
-from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -145,11 +144,3 @@ class RecipeIngredientRepository(BaseRepository[RecipeIngredient]):
         """
         links = [IngredientLink(ingredient_id=int(i)) for i in ingredient_ids if i]
         await self.bulk_link(recipe_id, links)
-
-    async def count_pending_backfill(self) -> int:
-        """Количество рецептов с хотя бы одним ингредиентом без quantity."""
-        return (
-            await self.session.execute(
-                select(func.count(func.distinct(self.model.recipe_id))).where(self.model.quantity.is_(None))
-            )
-        ).scalar_one()

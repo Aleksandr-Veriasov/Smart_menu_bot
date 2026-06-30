@@ -11,7 +11,7 @@
           hx-swap="outerHTML"
           class="flex items-center gap-2">
       <input name="quantity" type="number" step="any"
-             value="{{ link.quantity if link.quantity is not none else '' }}"
+             value="{{ link.quantity | qty }}"
              placeholder="кол-во"
              class="w-24 border border-indigo-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
       <select name="unit"
@@ -43,7 +43,7 @@
 <tr id="ing-row-{{ link.ingredient_id }}" class="hover:bg-gray-50 transition-colors group">
   <td class="px-4 py-2 text-gray-800 text-sm">{{ ing_name }}</td>
   <td class="px-4 py-2 text-sm text-gray-600">
-    {% if link.quantity is not none %}{{ link.quantity }}{% endif %}
+    {% if link.quantity is not none %}{{ link.quantity | qty }}{% endif %}
     {% if link.unit %} {{ link.unit }}{% endif %}
     {% if link.quantity is none and not link.unit %}<span class="text-gray-300">—</span>{% endif %}
   </td>

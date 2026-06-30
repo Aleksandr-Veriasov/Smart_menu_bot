@@ -47,16 +47,19 @@ async def dedup_merge(
     )
 
 
+_BACKFILL_FORMATS = {"all", "old", "partial"}
+
+
 @router.get("/backfill", response_class=HTMLResponse, response_model=None, include_in_schema=False)
 async def backfill_page(request: Request, service: _ServiceDep) -> HTMLResponse | RedirectResponse:
     if redirect := check_auth(request):
         return redirect
 
-    pending_count = await service.count_pending_backfill()
+    stats = await service.format_stats()
     return templates.TemplateResponse(
         request,
         "tools/backfill.html",
-        {"admin_login": current_login(request), "pending_count": pending_count, "result": None},
+        {"admin_login": current_login(request), "stats": stats, "result": None, "fmt": "all"},
     )
 
 
@@ -66,15 +69,19 @@ async def backfill_run(
     service: _ServiceDep,
     dry_run: bool = Form(False),
     limit: int = Form(10),
+    fmt: str = Form("all"),
 ) -> HTMLResponse | RedirectResponse:
     if redirect := check_auth(request):
         return redirect
 
+    if fmt not in _BACKFILL_FORMATS:
+        fmt = "all"
+    fmt_filter = None if fmt == "all" else fmt
     limit = max(1, min(limit, _MAX_LIMIT))
-    result = await service.run_backfill(limit=limit, dry_run=dry_run)
-    pending_count = await service.count_pending_backfill()
+    result = await service.run_backfill(limit=limit, dry_run=dry_run, fmt=fmt_filter)
+    stats = await service.format_stats()
     return templates.TemplateResponse(
         request,
         "tools/backfill.html",
-        {"admin_login": current_login(request), "pending_count": pending_count, "result": result},
+        {"admin_login": current_login(request), "stats": stats, "result": result, "fmt": fmt},
     )

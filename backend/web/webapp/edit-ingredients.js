@@ -13,6 +13,13 @@
 
   const UNITS = ["", "г", "кг", "мл", "л", "ст.л.", "ч.л.", "стакан", "шт", "пучок", "щепотка", "по вкусу"];
 
+  // Форматирует количество без незначащих нулей: "2.000" → "2", "1.500" → "1.5".
+  function fmtQty(q) {
+    if (q == null || q === "") return "";
+    const n = Number(q);
+    return Number.isFinite(n) ? String(n) : String(q);
+  }
+
   // ── тема ────────────────────────────────────────────────────────────────────
 
   function parseHexColor(s) {
@@ -104,7 +111,7 @@
     qtyInput.placeholder = "Кол-во";
     qtyInput.min = "0";
     qtyInput.step = "any";
-    qtyInput.value = quantity != null ? String(quantity) : "";
+    qtyInput.value = fmtQty(quantity);
 
     const unitSel = buildUnitSelect(unit || "");
 

@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from pydantic import BaseModel, Field
 
 from packages.recipes_core.units import normalize_unit
+from packages.utils import normalize_quantity
 
 
 class IngredientItem(BaseModel):
@@ -42,7 +43,7 @@ def _parse_quantity(value: object) -> Decimal | None:
     if value is None:
         return None
     try:
-        return Decimal(str(value))
+        return normalize_quantity(Decimal(str(value)))
     except InvalidOperation:
         return None
 

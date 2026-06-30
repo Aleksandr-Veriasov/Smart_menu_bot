@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import and_, case, desc, func, or_, select, update
 from sqlalchemy.orm import joinedload
 
 from packages.db.models import Ingredient, Recipe, RecipeIngredient, RecipeUser, Video
@@ -102,12 +102,12 @@ class RecipeRepository(BaseRepository[Recipe]):
         return row[0], int(row[1])
 
     async def get_recipe_with_connections(self, recipe_id: int) -> Recipe | None:
-        """Загрузить рецепт вместе с ингредиентами и видео."""
+        """Загрузить рецепт вместе с ингредиентами (с qty/unit) и видео."""
         statement = (
             select(self.model)
             .where(self.model.id == recipe_id)
             .options(
-                joinedload(self.model.ingredients),
+                self._ingredient_links_option(),
                 joinedload(self.model.video),
             )
         )
@@ -239,26 +239,89 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         return (await self.session.execute(stmt)).unique().scalar_one_or_none()
 
-    async def get_legacy_ingredient_recipe_ids(self, recipe_ids: list[int]) -> set[int]:
-        """Из переданных id вернуть те, у кого есть ингредиент без quantity (старый формат)."""
+    async def get_ingredient_fill_stats(self, recipe_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Для переданных рецептов вернуть {recipe_id: (filled, total)}.
+
+        filled — число ингредиентов, у которых заполнено quantity или unit.
+        """
         if not recipe_ids:
-            return set()
+            return {}
+        filled = func.count().filter(or_(RecipeIngredient.quantity.isnot(None), RecipeIngredient.unit.isnot(None)))
         stmt = (
-            select(RecipeIngredient.recipe_id)
-            .where(RecipeIngredient.recipe_id.in_(recipe_ids), RecipeIngredient.quantity.is_(None))
-            .distinct()
+            select(RecipeIngredient.recipe_id, filled, func.count())
+            .where(RecipeIngredient.recipe_id.in_(recipe_ids))
+            .group_by(RecipeIngredient.recipe_id)
         )
-        rows = (await self.session.execute(stmt)).scalars().all()
-        return set(rows)
+        rows = (await self.session.execute(stmt)).all()
+        return {rid: (int(f), int(t)) for rid, f, t in rows}
 
     def _ingredient_links_option(self):
         return joinedload(self.model.ingredient_links).joinedload(RecipeIngredient.ingredient)
 
-    async def get_needing_qty_backfill(self, limit: int | None) -> list[Recipe]:
-        """Рецепты с хотя бы одним ингредиентом без quantity, с загруженными связями."""
-        subq = (
-            select(RecipeIngredient.recipe_id).where(RecipeIngredient.quantity.is_(None)).distinct().scalar_subquery()
+    @staticmethod
+    def _recipe_fill_subq():
+        """Под-выборка со статистикой по рецепту: total, filled (есть qty/unit), dirty (грязное имя)."""
+        filled = func.count().filter(or_(RecipeIngredient.quantity.isnot(None), RecipeIngredient.unit.isnot(None)))
+        dirty = func.count().filter(
+            or_(
+                Ingredient.name.like("%(%"),
+                Ingredient.name.like("%)%"),
+                Ingredient.name.op("~")(r"^\s*\d"),
+            )
         )
+        return (
+            select(
+                RecipeIngredient.recipe_id.label("rid"),
+                func.count().label("total"),
+                filled.label("filled"),
+                dirty.label("dirty"),
+            )
+            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .group_by(RecipeIngredient.recipe_id)
+            .subquery()
+        )
+
+    @classmethod
+    def _needs_backfill_recipe_ids(cls, fmt: str | None = None):
+        """Подзапрос с id рецептов для backfill.
+
+        fmt:
+        - "old"     — ни у одного ингредиента нет qty/unit;
+        - "partial" — часть заполнена, часть нет;
+        - иначе     — любой требующий обработки (есть незаполненные qty/unit или грязное имя).
+        """
+        sub = cls._recipe_fill_subq()
+        if fmt == "old":
+            cond = sub.c.filled == 0
+        elif fmt == "partial":
+            cond = and_(sub.c.filled > 0, sub.c.filled < sub.c.total)
+        else:
+            cond = or_(sub.c.filled < sub.c.total, sub.c.dirty > 0)
+        return select(sub.c.rid).where(cond)
+
+    async def count_by_fill_status(self) -> dict[str, int]:
+        """Количество рецептов (имеющих ингредиенты) по статусу: {'old': n, 'partial': n, 'new': n}."""
+        sub = self._recipe_fill_subq()
+        status = case(
+            (sub.c.filled == 0, "old"),
+            (sub.c.filled == sub.c.total, "new"),
+            else_="partial",
+        )
+        stmt = select(status.label("status"), func.count()).select_from(sub).group_by(status)
+        rows = (await self.session.execute(stmt)).all()
+        result = {"old": 0, "partial": 0, "new": 0}
+        for status_value, count in rows:
+            result[status_value] = int(count)
+        return result
+
+    async def count_needing_backfill(self, fmt: str | None = None) -> int:
+        """Количество рецептов, требующих обработки backfill (с учётом фильтра формата)."""
+        subq = self._needs_backfill_recipe_ids(fmt).subquery()
+        return (await self.session.execute(select(func.count()).select_from(subq))).scalar_one()
+
+    async def get_needing_qty_backfill(self, limit: int | None, fmt: str | None = None) -> list[Recipe]:
+        """Рецепты для backfill с учётом фильтра формата (old/partial/все)."""
+        subq = self._needs_backfill_recipe_ids(fmt).scalar_subquery()
         stmt = (
             select(self.model)
             .where(self.model.id.in_(subq))
