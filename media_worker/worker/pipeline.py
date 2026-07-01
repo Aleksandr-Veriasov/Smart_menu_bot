@@ -24,6 +24,7 @@ from packages.redis.data_models import PipelineDraft
 from packages.redis.repository.message_ids import UserMessageIdsCacheRepository
 from packages.redis.repository.pipeline_draft import PipelineDraftCacheRepository
 from packages.services.recipe_service import RecipeService
+from packages.utils import format_qty_unit
 
 AUDIO_FOLDER = "audio/"
 
@@ -92,7 +93,14 @@ async def run(
         result = await extractor.extract(description=description, recognized_text=transcript)
         title, recipe = result.title, result.instructions_text
         ingredients = result.ingredients
-        ingredient_names = [item.name for item in ingredients] if ingredients else []
+        ingredient_lines = (
+            [
+                f"{item.name} — {qty}" if (qty := format_qty_unit(item.quantity, item.unit)) else item.name
+                for item in ingredients
+            ]
+            if ingredients
+            else []
+        )
         await _progress(85, "Рецепт готов")
 
         if not title or not recipe:
@@ -127,7 +135,7 @@ async def run(
                 original_url=job.url,
                 title=title,
                 recipe=recipe,
-                ingredients=ingredient_names,
+                ingredients=ingredient_lines,
                 recipe_id=recipe_id,
             ),
         )
@@ -148,7 +156,7 @@ async def run(
             chat_id,
             title=title,
             recipe=recipe,
-            ingredients=ingredient_names,
+            ingredients=ingredient_lines,
             pipeline_id=job_id,
         )
         if recipe_msg_id:
