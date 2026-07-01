@@ -217,7 +217,7 @@ async def download_via_saveasbot(
                         break
                     try:
                         msg = await asyncio.wait_for(conv.get_response(), timeout=remaining)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                     logger.info("Получено сообщение от бота (поиск кнопки текста поста)")
                     coords = telethon_client.find_button_coords(msg, desired_button_text)

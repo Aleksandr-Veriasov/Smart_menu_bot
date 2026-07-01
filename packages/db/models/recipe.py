@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -6,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -57,6 +59,13 @@ class Recipe(Base):
         lazy="selectin",
         passive_deletes=True,
     )
+    # Прямой доступ к junction-строкам с qty/unit
+    ingredient_links: Mapped[list["RecipeIngredient"]] = relationship(
+        back_populates="recipe",
+        lazy="selectin",
+        passive_deletes=True,
+        overlaps="ingredients,recipes",
+    )
 
     def __str__(self) -> str:
         return self.title
@@ -102,7 +111,15 @@ class RecipeIngredient(Base):
         ForeignKey("ingredients.id", ondelete="CASCADE"),
         nullable=False,
     )
-    # TODO добавить поле количества и единицы измерения
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    recipe: Mapped["Recipe"] = relationship(
+        back_populates="ingredient_links",
+        lazy="select",
+        overlaps="ingredients,recipes",
+    )
+    ingredient: Mapped["Ingredient"] = relationship(lazy="select", overlaps="ingredients,recipes")
 
 
 class RecipeUser(Base):

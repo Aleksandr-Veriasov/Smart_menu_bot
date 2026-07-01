@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 import pytest
 from fastapi import HTTPException
 
-from backend.app.api.webapp.tg_webapp_auth import (
+from backend.app.security.tg_webapp_auth import (
     TelegramWebAppUser,
     validate_telegram_webapp_init_data,
 )

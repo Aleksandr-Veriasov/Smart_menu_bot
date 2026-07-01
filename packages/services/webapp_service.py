@@ -3,24 +3,19 @@ from dataclasses import dataclass
 from html import escape as html_escape
 
 import requests
-import sqlalchemy as sa
-from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from packages.common_settings.settings import settings
-from packages.db.database import Database
-from packages.db.models import Recipe, RecipeIngredient, RecipeUser, Video
+from packages.db.models import Recipe
 from packages.db.repository import (
     CategoryRepository,
-    IngredientRepository,
     RecipeIngredientRepository,
     RecipeRepository,
     RecipeUserRepository,
+    VideoRepository,
 )
 from packages.db.schemas import RecipeUpdate
-from packages.redis.keys import RedisKeys
+from packages.recipes_core.ingredients_parser import parse_ingredients_lines
 from packages.redis.repository import (
     CategoryCacheRepository,
     RecipeActionCacheRepository,
@@ -34,6 +29,8 @@ from packages.schemas.webapp import (
     WebAppRecipePatch,
     WebAppRecipeRead,
 )
+from packages.services.base import BaseService
+from packages.utils import format_qty_unit
 
 
 @dataclass
@@ -46,11 +43,10 @@ class PatchResult:
     new_category_id: int
 
 
-class WebAppService:
-    def __init__(self, db: Database, redis: Redis | None) -> None:
-        self.db = db
-        self.redis = redis
-        self.keys = RedisKeys
+class WebAppService(BaseService):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.category_cache = CategoryCacheRepository(self.redis)
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -58,34 +54,31 @@ class WebAppService:
 
     async def list_categories(self, user_id: int) -> list[WebAppCategoryRead]:
         """Вернуть список категорий (из кеша Redis, при необходимости с догрузкой из БД)."""
-        if self.redis is not None:
-            cache = CategoryCacheRepository(self.redis)
-            cached = await cache.get_all_name_and_slug()
-            if cached and all((isinstance((cid := x.get("id")), int) and cid > 0) for x in cached):
-                out: list[WebAppCategoryRead] = []
-                for x in cached:
-                    try:
-                        out.append(
-                            WebAppCategoryRead(
-                                id=int(x["id"]),
-                                name=str(x.get("name") or ""),
-                                slug=(str(x.get("slug")) if x.get("slug") is not None else None),
-                            )
+        cached = await self.category_cache.get_all_categories()
+        if cached and all((isinstance((cid := x.get("id")), int) and cid > 0) for x in cached):
+            out: list[WebAppCategoryRead] = []
+            for x in cached:
+                try:
+                    out.append(
+                        WebAppCategoryRead(
+                            id=int(x["id"]),
+                            name=str(x.get("name") or ""),
+                            slug=(str(x.get("slug")) if x.get("slug") is not None else None),
                         )
-                    except Exception:
-                        continue
-                if out:
-                    return out
+                    )
+                except Exception:
+                    continue
+            if out:
+                return out
 
         async with self.db.session() as session:
             categories = await CategoryRepository(session).get_all()
 
         rows = [{"id": c.id, "name": c.name, "slug": c.slug} for c in categories]
-        if self.redis is not None:
-            try:
-                await CategoryCacheRepository(self.redis).set_all_name_and_slug(rows)
-            except Exception:
-                pass
+        try:
+            await self.category_cache.set_all_categories(rows)
+        except Exception:
+            pass
 
         return [WebAppCategoryRead(id=c.id, name=c.name, slug=c.slug) for c in categories]
 
@@ -93,16 +86,14 @@ class WebAppService:
         """Вернуть рецепт пользователя для редактирования в WebApp."""
         async with self.db.session() as session:
             recipe, category_id = await self._load_recipe_for_user(session, recipe_id=recipe_id, user_id=user_id)
-            return self._to_read(recipe, category_id=category_id)
+            return WebAppRecipeRead.from_recipe(recipe, category_id=category_id)
 
     async def get_recipe_draft(self, recipe_id: int, user_id: int) -> WebAppRecipeDraft:
         """Прочитать короткоживущий черновик навигации для рецепта."""
         async with self.db.session() as session:
             await self._load_recipe_for_user(session, recipe_id=recipe_id, user_id=user_id)
 
-        data: dict = {}
-        if self.redis is not None:
-            data = await WebAppRecipeDraftCacheRepository(self.redis).get(user_id=user_id, recipe_id=recipe_id) or {}
+        data = await WebAppRecipeDraftCacheRepository(self.redis).get(user_id=user_id, recipe_id=recipe_id) or {}
         return WebAppRecipeDraft(title=data.get("title"), category_id=data.get("category_id"))
 
     async def set_recipe_draft(self, recipe_id: int, user_id: int, payload: WebAppRecipeDraft) -> WebAppRecipeDraft:
@@ -110,21 +101,19 @@ class WebAppService:
         async with self.db.session() as session:
             await self._load_recipe_for_user(session, recipe_id=recipe_id, user_id=user_id)
 
-        data: dict = {}
-        if self.redis is not None:
-            await WebAppRecipeDraftCacheRepository(self.redis).set_merge(
-                user_id=user_id,
-                recipe_id=recipe_id,
-                title=payload.title,
-                category_id=payload.category_id,
-            )
-            data = await WebAppRecipeDraftCacheRepository(self.redis).get(user_id=user_id, recipe_id=recipe_id) or {}
+        draft_cache = WebAppRecipeDraftCacheRepository(self.redis)
+        await draft_cache.set_merge(
+            user_id=user_id,
+            recipe_id=recipe_id,
+            title=payload.title,
+            category_id=payload.category_id,
+        )
+        data = await draft_cache.get(user_id=user_id, recipe_id=recipe_id) or {}
         return WebAppRecipeDraft(title=data.get("title"), category_id=data.get("category_id"))
 
     async def delete_recipe_draft(self, recipe_id: int, user_id: int) -> None:
         """Удалить черновик навигации."""
-        if self.redis is not None:
-            await WebAppRecipeDraftCacheRepository(self.redis).clear(user_id=user_id, recipe_id=recipe_id)
+        await WebAppRecipeDraftCacheRepository(self.redis).clear(user_id=user_id, recipe_id=recipe_id)
 
     async def patch_recipe(self, recipe_id: int, user_id: int, payload: WebAppRecipePatch) -> WebAppRecipeRead:
         """Обновить поля рецепта. При необходимости клонирует общий рецепт."""
@@ -133,6 +122,7 @@ class WebAppService:
         async with self.db.session() as session:
             result = await self._apply_patch(session, recipe_id=recipe_id, user_id=user_id, payload=payload)
             recipe, category_id = await self._load_recipe_for_user(session, recipe_id=result.recipe_id, user_id=user_id)
+            read = WebAppRecipeRead.from_recipe(recipe, category_id=category_id)
 
         await self._invalidate_caches(
             user_id=user_id,
@@ -144,27 +134,17 @@ class WebAppService:
             draft_recipe_id_to_clear=path_recipe_id,
         )
         await self._update_telegram_message(user_id=user_id, recipe=recipe)
-        return self._to_read(recipe, category_id=category_id)
+        return read
 
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
 
     async def _load_recipe_for_user(self, session: AsyncSession, *, recipe_id: int, user_id: int) -> tuple[Recipe, int]:
-        stmt = (
-            select(Recipe, RecipeUser.category_id)
-            .join(RecipeUser, RecipeUser.recipe_id == Recipe.id)
-            .where(Recipe.id == int(recipe_id), RecipeUser.user_id == int(user_id))
-            .options(joinedload(Recipe.ingredients), joinedload(Recipe.video))
-        )
-        row = (await session.execute(stmt)).first()
+        row = await RecipeRepository(session).get_with_category_for_user(recipe_id, user_id)
         if row is None:
             raise LookupError("Рецепт не найден")
-        return row[0], int(row[1])
-
-    async def _count_recipe_users(self, session: AsyncSession, *, recipe_id: int) -> int:
-        stmt = select(sa.func.count(RecipeUser.id)).where(RecipeUser.recipe_id == int(recipe_id))
-        return int((await session.execute(stmt)).scalar_one() or 0)
+        return row
 
     async def _apply_patch(
         self,
@@ -177,13 +157,15 @@ class WebAppService:
         recipe, category_id = await self._load_recipe_for_user(session, recipe_id=recipe_id, user_id=user_id)
         old_category_id = int(category_id)
 
-        is_shared = await self._count_recipe_users(session, recipe_id=int(recipe.id)) >= 2
+        is_shared = await RecipeUserRepository(session).count_by_recipe(int(recipe.id)) >= 2
 
-        title_will_change = payload.title is not None and self._validate_title(payload.title) != (recipe.title or "")
+        title_will_change = payload.title is not None and payload.title != (recipe.title or "")
         description_will_change = payload.description is not None and payload.description != recipe.description
         ingredients_will_change = False
-        if payload.ingredients_text is not None:
-            ingredients_will_change = self._parse_ingredients(payload.ingredients_text) != [
+        if payload.ingredients is not None:
+            ingredients_will_change = True  # структурированный список всегда перезаписываем
+        elif payload.ingredients_text is not None:
+            ingredients_will_change = parse_ingredients_lines(payload.ingredients_text) != [
                 str(i.name) for i in (recipe.ingredients or []) if getattr(i, "name", None)
             ]
 
@@ -197,9 +179,8 @@ class WebAppService:
             recipe_id = new_recipe_id
         else:
             if payload.title is not None and title_will_change:
-                title = self._validate_title(payload.title)
                 title_changed = True
-                await RecipeRepository(session).update_title(int(recipe_id), title)
+                await RecipeRepository(session).update_title(int(recipe_id), payload.title)
 
             if payload.description is not None and description_will_change:
                 await RecipeRepository(session).update(int(recipe_id), RecipeUpdate(description=payload.description))
@@ -213,12 +194,13 @@ class WebAppService:
                     )
                     category_id = requested
 
-            if payload.ingredients_text is not None and ingredients_will_change:
-                names = self._parse_ingredients(payload.ingredients_text)
-                await session.execute(sa.delete(RecipeIngredient).where(RecipeIngredient.recipe_id == int(recipe_id)))
-                if names:
-                    id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
-                    await RecipeIngredientRepository(session).bulk_link(int(recipe_id), id_by_name.values())
+            if ingredients_will_change:
+                ri_repo = RecipeIngredientRepository(session)
+                await ri_repo.delete_all_by_recipe(int(recipe_id))
+                if payload.ingredients is not None:
+                    await ri_repo.save_from_structured(int(recipe_id), payload.ingredients)
+                elif payload.ingredients_text is not None:
+                    await ri_repo.save_from_names(int(recipe_id), parse_ingredients_lines(payload.ingredients_text))
 
         _, new_category_id = await self._load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=user_id)
         return PatchResult(
@@ -239,31 +221,28 @@ class WebAppService:
         category_id: int,
         payload: WebAppRecipePatch,
     ) -> tuple[int, bool]:
-        new_title = self._validate_title(payload.title) if payload.title is not None else str(original.title)
+        new_title = payload.title if payload.title is not None else str(original.title)
         new_description = payload.description if payload.description is not None else original.description
         new_category_id = int(payload.category_id) if payload.category_id is not None else int(category_id)
         category_changed = new_category_id != int(category_id)
 
-        names = (
-            self._parse_ingredients(payload.ingredients_text)
-            if payload.ingredients_text is not None
-            else [str(i.name) for i in (original.ingredients or []) if getattr(i, "name", None)]
-        )
-
         new_recipe = await RecipeRepository(session).create_basic(new_title, new_description)
 
         if getattr(original, "video", None) is not None:
-            session.add(
-                Video(
-                    recipe_id=int(new_recipe.id),
-                    video_url=str(original.video.video_url),
-                    original_url=original.video.original_url,
-                )
+            await VideoRepository(session).create(
+                str(original.video.video_url),
+                int(new_recipe.id),
+                original_url=original.video.original_url,
             )
 
-        if names:
-            id_by_name = await IngredientRepository(session).bulk_get_or_create(names)
-            await RecipeIngredientRepository(session).bulk_link(int(new_recipe.id), id_by_name.values())
+        ri_repo = RecipeIngredientRepository(session)
+        if payload.ingredients is not None:
+            await ri_repo.save_from_structured(int(new_recipe.id), payload.ingredients)
+        elif payload.ingredients_text is not None:
+            await ri_repo.save_from_names(int(new_recipe.id), parse_ingredients_lines(payload.ingredients_text))
+        else:
+            names = [str(i.name) for i in (original.ingredients or []) if getattr(i, "name", None)]
+            await ri_repo.save_from_names(int(new_recipe.id), names)
 
         await RecipeUserRepository(session).link_user(int(new_recipe.id), int(user_id), int(new_category_id))
         await RecipeUserRepository(session).unlink_user(int(original.id), int(user_id))
@@ -281,15 +260,13 @@ class WebAppService:
         membership_changed: bool,
         draft_recipe_id_to_clear: int,
     ) -> None:
-        if self.redis is None:
-            return
         try:
             if title_changed or category_changed or membership_changed:
                 recipe_cache = RecipeCacheRepository(self.redis)
                 for cid in {int(old_category_id), int(new_category_id)}:
                     await recipe_cache.invalidate_all_recipes_ids_and_titles(int(user_id), cid)
             if category_changed or membership_changed:
-                await CategoryCacheRepository(self.redis).invalidate_user_categories(int(user_id))
+                await self.category_cache.invalidate_user_categories(int(user_id))
             await WebAppRecipeDraftCacheRepository(self.redis).clear(
                 user_id=int(user_id), recipe_id=int(draft_recipe_id_to_clear)
             )
@@ -297,9 +274,6 @@ class WebAppService:
             pass
 
     async def _update_telegram_message(self, *, user_id: int, recipe: Recipe) -> None:
-        if self.redis is None:
-            return
-
         cached = await UserMessageIdsCacheRepository(self.redis).get_user_message_ids(int(user_id))
         if not cached or not cached.message_ids:
             return
@@ -328,7 +302,14 @@ class WebAppService:
 
         safe_title = html_escape(recipe.title or "")
         safe_description = html_escape(recipe.description or "")
-        ingredients_text = "\n".join(f"- {html_escape(i.name or '')}" for i in (recipe.ingredients or []))
+        ingredients_text = "\n".join(
+            (
+                f"- {html_escape(link.ingredient.name or '')} — {qty}"
+                if (qty := format_qty_unit(link.quantity, link.unit))
+                else f"- {html_escape(link.ingredient.name or '')}"
+            )
+            for link in (recipe.ingredient_links or [])
+        )
         text = (
             "✅ Рецепт обновлен.\n\n"
             f"🍽 <b>Название рецепта:</b> {safe_title}\n\n"
@@ -356,35 +337,3 @@ class WebAppService:
                 pass
 
         await asyncio.to_thread(_call)
-
-    # ------------------------------------------------------------------ #
-    # Static utilities                                                     #
-    # ------------------------------------------------------------------ #
-
-    @staticmethod
-    def _validate_title(raw: str) -> str:
-        title = (raw or "").strip()
-        if not title:
-            raise ValueError("Название не может быть пустым")
-        return title
-
-    @staticmethod
-    def _parse_ingredients(text: str) -> list[str]:
-        raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-        parts: list[str] = []
-        for line in raw.split("\n"):
-            line = line.strip()
-            if line:
-                parts.append(line)
-        return list(dict.fromkeys(parts))
-
-    @staticmethod
-    def _to_read(recipe: Recipe, *, category_id: int) -> WebAppRecipeRead:
-        ingredients = [str(i.name) for i in (recipe.ingredients or []) if getattr(i, "name", None)]
-        return WebAppRecipeRead(
-            id=int(recipe.id),
-            title=str(recipe.title),
-            description=recipe.description,
-            category_id=int(category_id),
-            ingredients=ingredients,
-        )

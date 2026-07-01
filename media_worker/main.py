@@ -45,6 +45,7 @@ async def main() -> None:
             tg.create_task(poll_loop(state, notifier), name="poll-loop")
     finally:
         await notifier.close()
+        await asyncio.sleep(0.25)
 
 
 if __name__ == "__main__":

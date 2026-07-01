@@ -1,0 +1,14 @@
+{# Партиал: один чип привязанного пользователя. Вставляется в #linked-users через hx-swap=beforeend. #}
+<div id="user-chip-{{ user.id }}" class="flex items-center gap-1 bg-gray-100 rounded-full px-2 py-1">
+  <a href="/admin/users/{{ user.id }}"
+     class="text-xs text-gray-700 hover:text-indigo-700 transition-colors">
+    {{ user.username or user.id }}
+  </a>
+  <button hx-delete="/admin/recipes/{{ recipe_id }}/users/{{ user.id }}"
+          hx-target="#user-chip-{{ user.id }}"
+          hx-swap="outerHTML swap:0.1s"
+          hx-confirm="Отвязать пользователя {{ user.username or user.id }}?"
+          class="text-gray-400 hover:text-red-500 text-xs leading-none ml-0.5 transition-colors">
+    ×
+  </button>
+</div>

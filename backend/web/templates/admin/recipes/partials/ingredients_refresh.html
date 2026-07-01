@@ -1,0 +1,3 @@
+{% include "recipes/partials/ingredients_tbody.html" %}
+<span id="ing-count" hx-swap-oob="true">{{ recipe.ingredient_links | length }}</span>
+<span id="ing-status" hx-swap-oob="true">{% include "recipes/partials/format_badge.html" %}</span>

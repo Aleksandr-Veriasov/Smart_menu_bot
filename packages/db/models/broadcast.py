@@ -1,4 +1,3 @@
-import enum
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime
@@ -6,29 +5,13 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from packages.enums import (
+    BroadcastAudienceType,
+    BroadcastCampaignStatus,
+    BroadcastMessageStatus,
+)
+
 from .base import Base
-
-
-class BroadcastCampaignStatus(str, enum.Enum):
-    draft = "draft"
-    queued = "queued"
-    running = "running"
-    paused = "paused"
-    completed = "completed"
-    cancelled = "cancelled"
-    failed = "failed"
-
-
-class BroadcastAudienceType(str, enum.Enum):
-    all_users = "all_users"
-
-
-class BroadcastMessageStatus(str, enum.Enum):
-    pending = "pending"
-    sending = "sending"
-    sent = "sent"
-    retry = "retry"
-    failed = "failed"
 
 
 class BroadcastCampaign(Base):

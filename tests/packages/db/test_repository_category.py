@@ -1,6 +1,5 @@
 """Тесты для CategoryRepository."""
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import Category
@@ -19,7 +18,6 @@ from packages.db.schemas import (
 class TestCategoryRepositoryCreate:
     """Тесты для CategoryRepository.create()."""
 
-    @pytest.mark.asyncio
     async def test_create_category_basic(self, db_session: AsyncSession) -> None:
         """Создание базовой категории (slug генерируется автоматически)."""
         category = await CategoryRepository(db_session).create(
@@ -29,7 +27,6 @@ class TestCategoryRepositoryCreate:
         assert category.id is not None
         assert category.name == "Завтраки"
 
-    @pytest.mark.asyncio
     async def test_create_categories_with_same_name(self, db_session: AsyncSession) -> None:
         """Можно создавать категории с одинаковыми именами."""
         repo = CategoryRepository(db_session)
@@ -43,7 +40,6 @@ class TestCategoryRepositoryCreate:
         assert cat1.id != cat2.id
         assert cat1.name == cat2.name
 
-    @pytest.mark.asyncio
     async def test_create_multiple_categories(self, db_session: AsyncSession) -> None:
         """Создание нескольких категорий."""
         repo = CategoryRepository(db_session)
@@ -62,13 +58,11 @@ class TestCategoryRepositoryCreate:
 class TestCategoryRepositoryGet:
     """Тесты для методов получения категорий."""
 
-    @pytest.mark.asyncio
     async def test_get_by_nonexistent_slug_returns_none(self, db_session: AsyncSession) -> None:
         """Получение по несуществующему slug возвращает None."""
         result = await CategoryRepository(db_session).get_by_slug("nonexistent")
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_get_by_slug(self, db_session: AsyncSession) -> None:
         """Получение категории по slug."""
         obj = Category(name="Салаты", slug="salads")
@@ -82,7 +76,6 @@ class TestCategoryRepositoryGet:
         assert category.name == "Салаты"
         assert category.slug == "salads"
 
-    @pytest.mark.asyncio
     async def test_get_all(self, db_session: AsyncSession) -> None:
         """Получение всех категорий."""
         repo = CategoryRepository(db_session)
@@ -101,7 +94,6 @@ class TestCategoryRepositoryGet:
         assert cat1.id in ids
         assert cat2.id in ids
 
-    @pytest.mark.asyncio
     async def test_get_by_user_id(self, db_session: AsyncSession) -> None:
         """Получение категорий пользователя."""
         # Создаем пользователя
@@ -143,7 +135,6 @@ class TestCategoryRepositoryGet:
         assert "Основные" in names
         assert "Закуски" in names
 
-    @pytest.mark.asyncio
     async def test_get_by_user_id_no_recipes(self, db_session: AsyncSession) -> None:
         """Получение категорий для пользователя без рецептов."""
         user = await UserRepository(db_session).create(
@@ -158,7 +149,6 @@ class TestCategoryRepositoryGet:
 class TestCategoryRepositoryIntegration:
     """Интеграционные тесты для CategoryRepository."""
 
-    @pytest.mark.asyncio
     async def test_category_with_multiple_users(self, db_session: AsyncSession) -> None:
         """Одна категория может быть связана с несколькими пользователями."""
         cat_repo = CategoryRepository(db_session)
@@ -203,7 +193,6 @@ class TestCategoryRepositoryIntegration:
         assert cats_user1[0].name == "Общая"
         assert cats_user2[0].name == "Общая"
 
-    @pytest.mark.asyncio
     async def test_get_all_returns_proper_structure(self, db_session: AsyncSession) -> None:
         """get_all возвращает словари с id, name, slug."""
         repo = CategoryRepository(db_session)

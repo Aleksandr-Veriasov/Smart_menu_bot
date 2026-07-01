@@ -1,3 +1,9 @@
+"""Фабрика LLMRecipeExtractor с кешированием singleton-экземпляра.
+
+get_default_extractor() возвращает один и тот же экземпляр на весь процесс (lru_cache).
+_DeepSeekChatAdapter адаптирует DeepSeekClient к протоколу ChatClient.
+"""
+
 from collections.abc import Iterable
 from functools import lru_cache
 from typing import cast
@@ -30,6 +36,7 @@ class _DeepSeekChatAdapter(ChatClient):
 
 @lru_cache(maxsize=1)
 def get_default_extractor() -> LLMRecipeExtractor:
+    """Возвращает singleton LLMRecipeExtractor с DeepSeek-провайдером."""
     client = DeepSeekClient()
     adapter = _DeepSeekChatAdapter(client)
     return LLMRecipeExtractor(chat_client=adapter)

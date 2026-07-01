@@ -95,7 +95,7 @@ async def save_recipe(
         return
 
     try:
-        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_by_slug(category_slug)
         await recipe_service.link_recipe_to_user(int(recipe_id), user.id, category.id)
     except Exception as e:
         logger.exception("Ошибка при сохранении рецепта: %s", e)

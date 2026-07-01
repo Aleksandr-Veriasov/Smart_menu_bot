@@ -24,11 +24,11 @@ class DeepSeekClient:
         timeout: float | None = None,
     ) -> str:
         """Возвращает content первой choice как сырой текст."""
-        responce = self.client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=list(messages),
             temperature=temperature,
             stream=False,
             **({"timeout": timeout} if timeout is not None else {}),
         )
-        return (responce.choices[0].message.content or "").strip()
+        return (response.choices[0].message.content or "").strip()

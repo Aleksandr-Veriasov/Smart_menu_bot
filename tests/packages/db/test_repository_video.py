@@ -1,6 +1,5 @@
 """Тесты для VideoRepository."""
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.repository import (
@@ -19,7 +18,6 @@ from packages.db.schemas import (
 class TestVideoRepositoryCreate:
     """Тесты для VideoRepository.create()."""
 
-    @pytest.mark.asyncio
     async def test_create_video_basic(self, db_session: AsyncSession) -> None:
         """Создание видео с URL."""
         # Создаем рецепт для видео
@@ -48,7 +46,6 @@ class TestVideoRepositoryCreate:
         assert video.recipe_id == recipe.id
         assert video.original_url is None
 
-    @pytest.mark.asyncio
     async def test_create_video_with_original_url(self, db_session: AsyncSession) -> None:
         """Создание видео с оригинальным URL."""
         user = await UserRepository(db_session).create(
@@ -78,7 +75,6 @@ class TestVideoRepositoryCreate:
 class TestVideoRepositoryGet:
     """Тесты для методов получения видео."""
 
-    @pytest.mark.asyncio
     async def test_get_video_url(self, db_session: AsyncSession) -> None:
         """Получение URL видео по ID рецепта."""
         user = await UserRepository(db_session).create(
@@ -104,14 +100,12 @@ class TestVideoRepositoryGet:
 
         assert url == "https://youtube.com/watch?v=xyz789"
 
-    @pytest.mark.asyncio
     async def test_get_video_url_nonexistent_recipe(self, db_session: AsyncSession) -> None:
         """Получение URL видео для несуществующего рецепта возвращает None."""
         url = await VideoRepository(db_session).get_video_url(999999)
 
         assert url is None
 
-    @pytest.mark.asyncio
     async def test_get_by_original_url(self, db_session: AsyncSession) -> None:
         """Получение видео по оригинальному URL."""
         user = await UserRepository(db_session).create(
@@ -141,14 +135,12 @@ class TestVideoRepositoryGet:
         assert video.id == created_video.id
         assert video.original_url == "https://original.example.com/video"
 
-    @pytest.mark.asyncio
     async def test_get_by_original_url_nonexistent(self, db_session: AsyncSession) -> None:
         """Получение по несуществующему оригинальному URL возвращает None."""
         video = await VideoRepository(db_session).get_by_original_url("https://nonexistent.com/video")
 
         assert video is None
 
-    @pytest.mark.asyncio
     async def test_get_all_by_original_url(self, db_session: AsyncSession) -> None:
         """Получение всех видео по оригинальному URL."""
         user = await UserRepository(db_session).create(
@@ -182,7 +174,6 @@ class TestVideoRepositoryGet:
         for video in videos:
             assert video.original_url == original_url
 
-    @pytest.mark.asyncio
     async def test_get_all_by_original_url_with_limit(self, db_session: AsyncSession) -> None:
         """Получение видео с лимитом."""
         user = await UserRepository(db_session).create(
@@ -217,7 +208,6 @@ class TestVideoRepositoryGet:
 class TestVideoRepositoryIntegration:
     """Интеграционные тесты для VideoRepository."""
 
-    @pytest.mark.asyncio
     async def test_video_associated_with_recipe(self, db_session: AsyncSession) -> None:
         """Видео связано с рецептом."""
         user = await UserRepository(db_session).create(

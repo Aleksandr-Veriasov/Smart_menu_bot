@@ -1,6 +1,5 @@
 """Тесты для IngredientRepository."""
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.repository import IngredientRepository
@@ -9,7 +8,6 @@ from packages.db.repository import IngredientRepository
 class TestIngredientRepositoryCreate:
     """Тесты для IngredientRepository.create()."""
 
-    @pytest.mark.asyncio
     async def test_create_ingredient_basic(self, db_session: AsyncSession) -> None:
         """Создание базового ингредиента."""
         ingredient = await IngredientRepository(db_session).create("Помидоры")
@@ -17,7 +15,6 @@ class TestIngredientRepositoryCreate:
         assert ingredient.id is not None
         assert ingredient.name == "Помидоры"
 
-    @pytest.mark.asyncio
     async def test_create_multiple_ingredients(self, db_session: AsyncSession) -> None:
         """Создание нескольких ингредиентов."""
         repo = IngredientRepository(db_session)
@@ -30,7 +27,6 @@ class TestIngredientRepositoryCreate:
         assert ing3.id is not None
         assert ing1.id != ing2.id != ing3.id
 
-    @pytest.mark.asyncio
     async def test_create_existing_ingredient_returns_same(self, db_session: AsyncSession) -> None:
         """get_or_create возвращает существующий ингредиент без дублирования."""
         repo = IngredientRepository(db_session)
@@ -40,14 +36,12 @@ class TestIngredientRepositoryCreate:
         assert ing1.id == ing2.id
         assert ing1.name == ing2.name
 
-    @pytest.mark.asyncio
     async def test_create_ingredient_with_whitespace(self, db_session: AsyncSession) -> None:
         """Создание ингредиента с пробельными символами."""
         ingredient = await IngredientRepository(db_session).create("  Зелень петрушки  ")
 
         assert ingredient.name == "  Зелень петрушки  "
 
-    @pytest.mark.asyncio
     async def test_create_ingredient_case_sensitive(self, db_session: AsyncSession) -> None:
         """Создание ингредиентов с разным регистром создает разные объекты."""
         repo = IngredientRepository(db_session)
@@ -60,7 +54,6 @@ class TestIngredientRepositoryCreate:
 class TestIngredientRepositoryGet:
     """Тесты для методов получения ингредиентов."""
 
-    @pytest.mark.asyncio
     async def test_get_by_name(self, db_session: AsyncSession) -> None:
         """Получение ингредиента по названию."""
         repo = IngredientRepository(db_session)
@@ -72,14 +65,12 @@ class TestIngredientRepositoryGet:
         assert retrieved.id == created.id
         assert retrieved.name == "Лимон"
 
-    @pytest.mark.asyncio
     async def test_get_by_nonexistent_name(self, db_session: AsyncSession) -> None:
         """Получение несуществующего ингредиента возвращает None."""
         result = await IngredientRepository(db_session).get_by_name("Несуществующий ингредиент")
 
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_get_by_name_case_sensitive(self, db_session: AsyncSession) -> None:
         """Поиск по названию чувствителен к регистру."""
         repo = IngredientRepository(db_session)
@@ -93,7 +84,6 @@ class TestIngredientRepositoryGet:
 class TestIngredientRepositoryBulk:
     """Тесты для IngredientRepository.bulk_get_or_create()."""
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_new(self, db_session: AsyncSession) -> None:
         """Массовое создание новых ингредиентов."""
         names = ["Картофель", "Капуста", "Морковь"]
@@ -106,7 +96,6 @@ class TestIngredientRepositoryBulk:
         assert "Морковь" in result
         assert all(isinstance(v, int) for v in result.values())
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_existing(self, db_session: AsyncSession) -> None:
         """Массовое получение существующих ингредиентов."""
         repo = IngredientRepository(db_session)
@@ -120,7 +109,6 @@ class TestIngredientRepositoryBulk:
         assert result["Бук"] == ing1.id
         assert result["Укроп"] == ing2.id
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_mixed(self, db_session: AsyncSession) -> None:
         """Смешанное получение существующих и создание новых."""
         repo = IngredientRepository(db_session)
@@ -134,14 +122,12 @@ class TestIngredientRepositoryBulk:
         assert "Редис" in result
         assert isinstance(result["Редис"], int)
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_empty_list(self, db_session: AsyncSession) -> None:
         """Массовое создание с пустым списком возвращает пустой словарь."""
         result = await IngredientRepository(db_session).bulk_get_or_create([])
 
         assert result == {}
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_with_empty_strings(self, db_session: AsyncSession) -> None:
         """Пустые строки в списке игнорируются."""
         result = await IngredientRepository(db_session).bulk_get_or_create(
@@ -152,7 +138,6 @@ class TestIngredientRepositoryBulk:
         assert "Кабачок" in result
         assert "Баклажан" in result
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_removes_duplicates(self, db_session: AsyncSession) -> None:
         """Дубликаты в списке обработаны правильно."""
         result = await IngredientRepository(db_session).bulk_get_or_create(["Лук", "Лук", "Чеснок"])
@@ -161,7 +146,6 @@ class TestIngredientRepositoryBulk:
         assert "Лук" in result
         assert "Чеснок" in result
 
-    @pytest.mark.asyncio
     async def test_bulk_get_or_create_with_whitespace(self, db_session: AsyncSession) -> None:
         """Пробелы в названиях удаляются."""
         result = await IngredientRepository(db_session).bulk_get_or_create(["  Йогурт  ", "Сметана"])
@@ -175,7 +159,6 @@ class TestIngredientRepositoryBulk:
 class TestIngredientRepositoryIntegration:
     """Интеграционные тесты для IngredientRepository."""
 
-    @pytest.mark.asyncio
     async def test_create_get_consistency(self, db_session: AsyncSession) -> None:
         """Консистентность между create и get."""
         repo = IngredientRepository(db_session)
@@ -186,7 +169,6 @@ class TestIngredientRepositoryIntegration:
         assert created.id == retrieved.id
         assert created.name == retrieved.name
 
-    @pytest.mark.asyncio
     async def test_bulk_create_consistency(self, db_session: AsyncSession) -> None:
         """Консистентность bulk_get_or_create с get_by_name."""
         repo = IngredientRepository(db_session)
@@ -198,7 +180,6 @@ class TestIngredientRepositoryIntegration:
             assert retrieved is not None
             assert retrieved.id == bulk_result[name]
 
-    @pytest.mark.asyncio
     async def test_ingredient_uniqueness_by_name(self, db_session: AsyncSession) -> None:
         """Каждое уникальное название имеет уникальный ID."""
         repo = IngredientRepository(db_session)

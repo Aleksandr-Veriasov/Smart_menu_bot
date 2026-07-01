@@ -26,4 +26,4 @@ async def run_polling() -> None:
         await runtime_stop(state)
         with suppress(Exception):
             await bot.session.close()
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.25)

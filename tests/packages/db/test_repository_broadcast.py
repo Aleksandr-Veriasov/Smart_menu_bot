@@ -5,14 +5,13 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from packages.db.models import BroadcastCampaignStatus
 from packages.db.repository import BroadcastRepository
+from packages.enums import BroadcastCampaignStatus
 
 
 class TestBroadcastRepositoryCampaigns:
     """Тесты для методов работы с кампаниями."""
 
-    @pytest.mark.asyncio
     async def test_create_campaign_basic(self, db_session: AsyncSession) -> None:
         """Создание базовой кампании."""
         campaign = await BroadcastRepository(db_session).create_campaign(
@@ -34,7 +33,6 @@ class TestBroadcastRepositoryCampaigns:
         assert campaign.text == "Привет всем!"
         assert campaign.status == BroadcastCampaignStatus.draft
 
-    @pytest.mark.asyncio
     async def test_get_campaign_or_none_exists(self, db_session: AsyncSession) -> None:
         """Получение существующей кампании."""
         repo = BroadcastRepository(db_session)
@@ -58,14 +56,12 @@ class TestBroadcastRepositoryCampaigns:
         assert retrieved.id == created.id
         assert retrieved.name == "Кампания для получения"
 
-    @pytest.mark.asyncio
     async def test_get_campaign_or_none_not_exists(self, db_session: AsyncSession) -> None:
         """Получение несуществующей кампании возвращает None."""
         campaign = await BroadcastRepository(db_session).get_campaign_or_none(999999)
 
         assert campaign is None
 
-    @pytest.mark.asyncio
     async def test_list_campaigns(self, db_session: AsyncSession) -> None:
         """Получение списка кампаний."""
         repo = BroadcastRepository(db_session)
@@ -93,7 +89,6 @@ class TestBroadcastRepositoryCampaigns:
 class TestBroadcastRepositoryTransitions:
     """Тесты для переходов состояния кампании."""
 
-    @pytest.mark.asyncio
     async def test_queue_campaign(self, db_session: AsyncSession) -> None:
         """Перевод кампании в состояние queued."""
         repo = BroadcastRepository(db_session)
@@ -116,13 +111,11 @@ class TestBroadcastRepositoryTransitions:
         assert queued.status == BroadcastCampaignStatus.queued
         assert queued.last_error is None
 
-    @pytest.mark.asyncio
     async def test_queue_campaign_nonexistent(self, db_session: AsyncSession) -> None:
         """Перевод несуществующей кампании вызывает ошибку."""
         with pytest.raises(LookupError):
             await BroadcastRepository(db_session).queue_campaign(campaign_id=999999)
 
-    @pytest.mark.asyncio
     async def test_pause_campaign(self, db_session: AsyncSession) -> None:
         """Пауза для запущенной кампании."""
         repo = BroadcastRepository(db_session)
@@ -144,7 +137,6 @@ class TestBroadcastRepositoryTransitions:
 
         assert paused.status == BroadcastCampaignStatus.paused
 
-    @pytest.mark.asyncio
     async def test_resume_campaign(self, db_session: AsyncSession) -> None:
         """Возобновление паузированной кампании."""
         now = datetime.now(UTC)
@@ -167,7 +159,6 @@ class TestBroadcastRepositoryTransitions:
 
         assert resumed.status == BroadcastCampaignStatus.running
 
-    @pytest.mark.asyncio
     async def test_cancel_campaign(self, db_session: AsyncSession) -> None:
         """Отмена запущенной кампании."""
         now = datetime.now(UTC)
@@ -195,7 +186,6 @@ class TestBroadcastRepositoryTransitions:
 class TestBroadcastRepositoryUpdate:
     """Тесты для обновления кампаний."""
 
-    @pytest.mark.asyncio
     async def test_update_campaign_basic(self, db_session: AsyncSession) -> None:
         """Обновление полей кампании."""
         repo = BroadcastRepository(db_session)
@@ -221,7 +211,6 @@ class TestBroadcastRepositoryUpdate:
         assert updated.text == "Новый текст"
         assert updated.name == "Новая кампания"
 
-    @pytest.mark.asyncio
     async def test_update_campaign_with_deliveries_raises_error(self, db_session: AsyncSession) -> None:
         """Обновление кампании с отправками вызывает ошибку."""
         repo = BroadcastRepository(db_session)
@@ -252,7 +241,6 @@ class TestBroadcastRepositoryUpdate:
 class TestBroadcastRepositoryMessages:
     """Тесты для работы с сообщениями кампании."""
 
-    @pytest.mark.asyncio
     async def test_list_messages(self, db_session: AsyncSession) -> None:
         """Получение сообщений кампании."""
         repo = BroadcastRepository(db_session)

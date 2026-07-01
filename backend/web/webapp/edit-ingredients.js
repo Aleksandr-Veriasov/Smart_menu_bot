@@ -4,11 +4,23 @@
   const qs = new URLSearchParams(location.search);
   const recipeId = Number(qs.get("recipe_id") || 0);
 
-  const $text = document.getElementById("ing_text");
+  const $list = document.getElementById("ing_list");
+  const $add  = document.getElementById("btn_add");
   const $save = document.getElementById("save");
   const $back = document.getElementById("back");
-  const $err = document.getElementById("err");
-  const $ok = document.getElementById("ok");
+  const $err  = document.getElementById("err");
+  const $ok   = document.getElementById("ok");
+
+  const UNITS = ["", "г", "кг", "мл", "л", "ст.л.", "ч.л.", "стакан", "шт", "пучок", "щепотка", "по вкусу"];
+
+  // Форматирует количество без незначащих нулей: "2.000" → "2", "1.500" → "1.5".
+  function fmtQty(q) {
+    if (q == null || q === "") return "";
+    const n = Number(q);
+    return Number.isFinite(n) ? String(n) : String(q);
+  }
+
+  // ── тема ────────────────────────────────────────────────────────────────────
 
   function parseHexColor(s) {
     if (!s || typeof s !== "string") return null;
@@ -35,32 +47,23 @@
   function isDarkHex(hex) {
     const rgb = parseHexColor(hex);
     if (!rgb) return false;
-    const y = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-    return y < 110;
+    return (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000 < 110;
   }
 
   function applyThemeParams(params) {
     if (!params) return;
     const root = document.documentElement;
-    const bg = params.bg_color;
-    const text = params.text_color;
-    const hint = params.hint_color;
-    const accent = params.button_color;
-    const accentText = params.button_text_color;
-    const secondary = params.secondary_bg_color;
-
-    if (bg) root.style.setProperty("--bg", bg);
-    if (text) root.style.setProperty("--text", text);
-    if (text) root.style.setProperty("--fieldText", text);
-    if (hint) root.style.setProperty("--muted", hint);
-    if (secondary) root.style.setProperty("--card", secondary);
-    if (accent) root.style.setProperty("--accent", accent);
-    if (accentText) {
-      root.style.setProperty("--accentText", accentText);
-      root.style.setProperty("--accent-text", accentText);
+    if (params.bg_color)           root.style.setProperty("--bg", params.bg_color);
+    if (params.text_color)         root.style.setProperty("--text", params.text_color);
+    if (params.text_color)         root.style.setProperty("--fieldText", params.text_color);
+    if (params.hint_color)         root.style.setProperty("--muted", params.hint_color);
+    if (params.secondary_bg_color) root.style.setProperty("--card", params.secondary_bg_color);
+    if (params.button_color)       root.style.setProperty("--accent", params.button_color);
+    if (params.button_text_color) {
+      root.style.setProperty("--accentText", params.button_text_color);
+      root.style.setProperty("--accent-text", params.button_text_color);
     }
-
-    const dark = isDarkHex(bg) || isDarkHex(secondary);
+    const dark = isDarkHex(params.bg_color) || isDarkHex(params.secondary_bg_color);
     root.dataset.mode = dark ? "dark" : "light";
     root.setAttribute("data-theme", dark ? "dark" : "light");
     if (dark) {
@@ -74,29 +77,67 @@
     }
   }
 
-  function setErr(msg) {
-    $err.textContent = msg || "";
-    $ok.textContent = "";
+  // ── утилиты UI ──────────────────────────────────────────────────────────────
+
+  function setErr(msg) { $err.textContent = msg || ""; $ok.textContent = ""; }
+  function setOk(msg)  { $ok.textContent  = msg || ""; $err.textContent = ""; }
+  function setBusy(v)  { $save.disabled = !!v; $save.textContent = v ? "Сохраняю..." : "💾 Сохранить"; }
+
+  // ── строки ингредиентов ─────────────────────────────────────────────────────
+
+  function buildUnitSelect(selected) {
+    const sel = document.createElement("select");
+    UNITS.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u || "—";
+      if (u === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    return sel;
   }
 
-  function setOk(msg) {
-    $ok.textContent = msg || "";
-    $err.textContent = "";
+  function addRow({ name = "", quantity = "", unit = "" } = {}) {
+    const row = document.createElement("div");
+    row.className = "ing-row";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "Название";
+    nameInput.value = name;
+
+    const qtyInput = document.createElement("input");
+    qtyInput.type = "number";
+    qtyInput.placeholder = "Кол-во";
+    qtyInput.min = "0";
+    qtyInput.step = "any";
+    qtyInput.value = fmtQty(quantity);
+
+    const unitSel = buildUnitSelect(unit || "");
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-remove";
+    removeBtn.type = "button";
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", () => row.remove());
+
+    row.append(nameInput, qtyInput, unitSel, removeBtn);
+    $list.appendChild(row);
+    return row;
   }
 
-  function setBusy(isBusy) {
-    $save.disabled = !!isBusy;
-    $save.textContent = isBusy ? "Сохраняю..." : "Сохранить";
+  function getRows() {
+    return [...$list.querySelectorAll(".ing-row")].map((row) => {
+      const [nameInput, qtyInput, unitSel] = row.querySelectorAll("input, select");
+      const name = (nameInput.value || "").trim();
+      const qtyRaw = (qtyInput.value || "").trim();
+      const unit = unitSel.value || null;
+      const quantity = qtyRaw !== "" ? parseFloat(qtyRaw) : null;
+      return { name, quantity, unit };
+    }).filter((r) => r.name);
   }
 
-  function autoGrow(textarea) {
-    if (!textarea) return;
-    const maxPx = Math.floor(window.innerHeight * 0.70);
-    textarea.style.height = "auto";
-    const next = Math.min(textarea.scrollHeight, maxPx);
-    textarea.style.height = `${next}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxPx ? "auto" : "hidden";
-  }
+  // ── API ──────────────────────────────────────────────────────────────────────
 
   async function api(path, opts = {}) {
     const initData = tg?.initData || "";
@@ -111,25 +152,20 @@
     const text = await res.text();
     let json;
     try { json = text ? JSON.parse(text) : null; } catch {
-      const preview = (text || "").slice(0, 400);
-      throw new Error(`Non-JSON response (${res.status}, ${ct || "no-ct"}): ${preview}`);
+      throw new Error(`Non-JSON response (${res.status}, ${ct || "no-ct"}): ${(text || "").slice(0, 400)}`);
     }
-    if (!res.ok) {
-      const detail = json?.detail || text || `HTTP ${res.status}`;
-      throw new Error(detail);
-    }
+    if (!res.ok) throw new Error(json?.detail || text || `HTTP ${res.status}`);
     if (json == null) throw new Error(`Empty JSON response (HTTP ${res.status})`);
     return json;
   }
 
   function goBackTo(targetRecipeId) {
     try { tg?.BackButton?.hide(); } catch {}
-    // history.back() is unreliable in some Telegram WebViews (form state can be lost).
-    // Force a fresh load of the main page.
     const rid = targetRecipeId || recipeId;
-    const url = `/webapp/edit-recipe.html?recipe_id=${encodeURIComponent(String(rid))}&from=ing&t=${Date.now()}`;
-    location.replace(url);
+    location.replace(`/webapp/edit-recipe.html?recipe_id=${encodeURIComponent(String(rid))}&from=ing&t=${Date.now()}`);
   }
+
+  // ── загрузка ─────────────────────────────────────────────────────────────────
 
   async function load() {
     if (!recipeId) throw new Error("Нет recipe_id в URL");
@@ -137,52 +173,53 @@
 
     tg.ready();
     tg.expand();
+    try { tg.requestFullscreen?.(); } catch {}
     applyThemeParams(tg.themeParams);
 
-    try {
-      tg.BackButton.show();
-      tg.BackButton.onClick(() => goBackTo(recipeId));
-    } catch {}
+    try { tg.BackButton.show(); tg.BackButton.onClick(() => goBackTo(recipeId)); } catch {}
 
     setBusy(true);
     const recipe = await api(`/recipes/${recipeId}`, { method: "GET" });
-    $text.value = Array.isArray(recipe.ingredients) ? recipe.ingredients.join("\n") : "";
-    autoGrow($text);
+
+    const details = Array.isArray(recipe.ingredient_details) ? recipe.ingredient_details : [];
+    if (details.length > 0) {
+      details.forEach((d) => addRow({ name: d.name, quantity: d.quantity, unit: d.unit || "" }));
+    } else {
+      // фолбэк на легаси список имён
+      (recipe.ingredients || []).forEach((name) => addRow({ name }));
+    }
+
     setBusy(false);
-    setTimeout(() => $text.focus(), 0);
   }
+
+  // ── сохранение ───────────────────────────────────────────────────────────────
 
   async function save() {
-    setErr("");
-    setOk("");
+    setErr(""); setOk("");
     setBusy(true);
 
-    const ingredients_text = ($text.value || "");
+    const ingredients = getRows();
+    if (ingredients.length === 0) {
+      setErr("Добавьте хотя бы один ингредиент");
+      return;
+    }
+
     const updated = await api(`/recipes/${recipeId}`, {
       method: "PATCH",
-      body: JSON.stringify({ ingredients_text }),
+      body: JSON.stringify({ ingredients }),
     });
 
-    try {
-      tg?.sendData?.(JSON.stringify({ type: "recipe_updated", recipe_id: recipeId }));
-    } catch {}
+    try { tg?.sendData?.(JSON.stringify({ type: "recipe_updated", recipe_id: recipeId })); } catch {}
 
     setOk("Сохранено");
-    const nextId = Number(updated?.id || recipeId) || recipeId;
-    setTimeout(() => goBackTo(nextId), 250);
+    setTimeout(() => goBackTo(Number(updated?.id || recipeId) || recipeId), 250);
   }
 
-  $save.addEventListener("click", () => {
-    save()
-      .catch((e) => setErr(String(e?.message || e)))
-      .finally(() => setBusy(false));
-  });
+  // ── события ──────────────────────────────────────────────────────────────────
 
+  $add.addEventListener("click", () => { addRow(); $list.lastElementChild?.querySelector("input")?.focus(); });
+  $save.addEventListener("click", () => save().catch((e) => setErr(String(e?.message || e))).finally(() => setBusy(false)));
   $back.addEventListener("click", () => goBackTo(recipeId));
-  $text.addEventListener("input", () => autoGrow($text));
-  window.addEventListener("resize", () => autoGrow($text));
 
-  load()
-    .catch((e) => setErr(String(e?.message || e)))
-    .finally(() => setBusy(false));
+  load().catch((e) => setErr(String(e?.message || e))).finally(() => setBusy(false));
 })();

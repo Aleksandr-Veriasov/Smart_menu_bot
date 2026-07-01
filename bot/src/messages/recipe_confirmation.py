@@ -160,7 +160,7 @@ async def send_video_with_wait(
     while remaining > 0:
         try:
             return await asyncio.wait_for(task, timeout=min(check_interval, remaining))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             remaining -= check_interval
             continue
     # дедлайн: отменяем задачу, чтобы потом видео не прилетело «вдогонку»

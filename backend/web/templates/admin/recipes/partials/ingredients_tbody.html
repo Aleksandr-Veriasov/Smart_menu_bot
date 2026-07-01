@@ -1,0 +1,32 @@
+<tbody id="ingredients-tbody" class="divide-y divide-gray-50">
+  {% for link in recipe.ingredient_links %}
+    {% with ing_name=link.ingredient.name, editing=false, recipe_id=recipe.id %}
+      {% include "recipes/partials/ingredient_row.html" %}
+    {% endwith %}
+  {% endfor %}
+  <tr id="add-row">
+    <td colspan="3" class="px-4 py-3">
+      <form hx-post="/admin/recipes/{{ recipe.id }}/ingredients/add"
+            hx-target="#ingredients-tbody"
+            hx-swap="beforeend"
+            hx-on::after-request="this.reset()"
+            class="flex items-center gap-2">
+        <input name="name" type="text" required placeholder="Название ингредиента"
+               class="flex-1 border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+        <input name="quantity" type="number" step="any" placeholder="кол-во"
+               class="w-24 border border-dashed border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+        <select name="unit"
+                class="border border-dashed border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-solid">
+          <option value="">— ед. —</option>
+          {% for u in allowed_units %}
+          <option value="{{ u }}">{{ u }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit"
+                class="bg-gray-100 hover:bg-indigo-600 hover:text-white text-gray-600 text-xs px-3 py-1.5 rounded transition-colors">
+          + Добавить
+        </button>
+      </form>
+    </td>
+  </tr>
+</tbody>

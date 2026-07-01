@@ -7,7 +7,6 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -19,9 +18,6 @@ from sqlalchemy.ext.asyncio import (
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
-
-# Configure pytest-asyncio to use auto mode (creates event loop for each test)
-pytest_plugins = ("pytest_asyncio",)
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +40,6 @@ def _load_env_file(path: Path) -> None:
 
 
 _load_env_file(Path(__file__).resolve().parents[1] / ".env.test")
-
-
-# Configure asyncio mode
-def pytest_configure(config):
-    """Configure pytest-asyncio mode."""
-    config.option.asyncio_mode = "auto"
 
 
 def get_test_database_url() -> str:
@@ -184,7 +174,7 @@ async def _truncate_tables(engine) -> None:
         await conn.commit()
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 async def db_session(test_db_engine, test_session_factory, test_async_engine) -> AsyncGenerator[AsyncSession, None]:
     """Предоставить чистую тестовую сессию.
 

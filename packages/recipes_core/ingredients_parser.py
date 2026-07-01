@@ -1,41 +1,40 @@
+"""Легаси-парсер ингредиентов из текстового формата LLM.
+
+Используется в write-path до перехода на структурированный JSON-ответ (SYSTEM_PROMPT_STRUCTURED).
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def to_ingredient_name(x: object) -> str:
+    """Извлекает строковое имя ингредиента из dict или строки."""
     if isinstance(x, dict):
         return (x.get("name") or "").strip()
     return str(x or "").strip()
 
 
 def parse_ingredients(text: str) -> list:
-    """
-    Разбирает строку с ингредиентами и возвращает список ингредиентов.
-    """
+    """Разбирает текст с маркированным списком ингредиентов (- item) в список строк."""
     logger.debug("Начинаем парсинг ингредиентов...")
-    # Убираем лишние пробелы и символы
     lines: list = text.strip().split("\n")
-    ingredients: list = []  # Инициализация списка ингредиентов
-
-    logger.debug(f"Исходный текст: {text}")
-    logger.debug(f"Количество строк: {len(lines)}")
-    logger.debug(f"Строки: {lines}")
+    ingredients: list = []
 
     for line_number, line in enumerate(lines, 1):
         logger.debug(f"Обрабатываем строку {line_number}: {line}")
-
-        # Убираем лишние пробелы
         stripped_line: str = line.strip()
-
-        # Проверяем, если строка начинается с маркера '- ', то это ингредиент
         if stripped_line.startswith("- "):
-            # Убираем маркер '- ' и пробелы
             ingredient_name: str = stripped_line[2:].strip()
-            # Проверяем, что ингредиент не пустой
             if ingredient_name:
                 ingredients.append(ingredient_name)
 
     logger.debug(f"Парсинг завершен. Найдено ингредиентов: {len(ingredients)}")
-
     return ingredients
+
+
+def parse_ingredients_lines(text: str) -> list[str]:
+    """Разбирает произвольный текст в список имён ингредиентов (по строкам, без дублей)."""
+    raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    parts = [line.strip() for line in raw.split("\n") if line.strip()]
+    return list(dict.fromkeys(parts))

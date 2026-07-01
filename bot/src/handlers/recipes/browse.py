@@ -42,7 +42,7 @@ async def recipes_menu(
     await callback.answer()
     if not isinstance(callback.message, Message):
         return
-    categories = await category_service.get_user_categories_cached(user.id)
+    categories = await category_service.get_user_categories(user.id)
 
     try:
         mode = RecipeMode(callback_data.mode)
@@ -115,7 +115,7 @@ async def recipes_book_from_category(
     category_slug = callback_data.slug
 
     try:
-        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_by_slug(category_slug)
     except ValueError:
         logger.warning("Категория книги рецептов не найдена: slug=%s", category_slug)
         await message_service.safe_edit(
@@ -214,7 +214,7 @@ async def _handle_show_from_category(
 ) -> None:
     """Сценарий показа списка рецептов в категории."""
     try:
-        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_by_slug(category_slug)
     except ValueError:
         logger.warning("Категория пользователя не найдена: slug=%s user_id=%s", category_slug, user_id)
         await message_service.safe_edit(

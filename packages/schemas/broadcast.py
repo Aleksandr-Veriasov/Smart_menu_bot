@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from packages.db.models import BroadcastAudienceType, BroadcastCampaignStatus
+from packages.enums import BroadcastAudienceType, BroadcastCampaignStatus
 
 
 def _coerce_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 class BroadcastCampaignCreate(BaseModel):

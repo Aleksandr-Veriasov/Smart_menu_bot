@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Главная{% endblock %}
+{% block page_title %}Главная{% endblock %}
+
+{% block content %}
+
+{% if stats %}
+
+{# ── Строка 1: общая статистика ───────────────────────────────────────────── #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+  {% set main_cards = [
+    ("👤", "Пользователи",      stats.users_count,             "/admin/users"),
+    ("📋", "Рецепты",           stats.recipes_count,           "/admin/recipes"),
+    ("📣", "Рассылки",          stats.broadcasts_count,        "/admin/broadcast"),
+    ("🔴", "Активных рассылок", stats.active_broadcasts_count, "/admin/broadcast"),
+  ] %}
+  {% for icon, label, value, href in main_cards %}
+  <a href="{{ href }}"
+     class="bg-white border border-gray-200 rounded-xl px-5 py-5 flex flex-col gap-1
+            hover:border-indigo-400 hover:shadow-sm transition-all">
+    <div class="flex items-center gap-2 text-gray-500 text-sm">
+      <span>{{ icon }}</span>
+      <span>{{ label }}</span>
+    </div>
+    <div class="text-3xl font-bold text-gray-800">{{ value }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+{# ── Строка 2: активность пользователей ──────────────────────────────────── #}
+<div class="grid grid-cols-3 gap-4">
+  {% set activity_cards = [
+    ("⚡", "Активных за 1 ч",  stats.active_1h),
+    ("🕐", "Активных за 12 ч", stats.active_12h),
+    ("📅", "Активных за 24 ч", stats.active_1d),
+  ] %}
+  {% for icon, label, value in activity_cards %}
+  <a href="/admin/users"
+     class="bg-white border border-gray-200 rounded-xl px-5 py-5 flex flex-col gap-1
+            hover:border-indigo-400 hover:shadow-sm transition-all">
+    <div class="flex items-center gap-2 text-gray-500 text-sm">
+      <span>{{ icon }}</span>
+      <span>{{ label }}</span>
+    </div>
+    <div class="text-3xl font-bold text-gray-800">{{ value }}</div>
+    <div class="text-xs text-gray-400 mt-1">пользователей</div>
+  </a>
+  {% endfor %}
+</div>
+
+{% endif %}
+
+{% endblock %}

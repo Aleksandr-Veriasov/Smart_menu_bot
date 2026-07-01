@@ -1,10 +1,7 @@
-"""Тесты classify_failure и backoff_seconds из broadcast_sender."""
+"""Тесты classify_failure и backoff_seconds из integrations.telegram_api."""
 
-from packages.services.broadcast_sender import (
-    FailureKind,
-    backoff_seconds,
-    classify_failure,
-)
+from packages.enums import BroadcastFailureKind as FailureKind
+from packages.integrations.telegram_api import backoff_seconds, classify_failure
 
 
 class TestClassifyFailurePermanent:

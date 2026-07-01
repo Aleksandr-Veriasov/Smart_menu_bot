@@ -1,9 +1,12 @@
-USER_EXISTS = 7 * 24 * 60 * 60  # 7 дней
+USER_EXISTS = 24 * 60 * 60  # 24 часа
 RECIPE_COUNT_SHORT = 15  # 15 секунд
 RECIPE_COUNT_LONG = 24 * 60 * 60  # 24 часа
 LOCK = 10  # 10 секунд
 USER_CATEGORIES = 24 * 60 * 60  # 24 часа
+CATEGORY = 24 * 60 * 60  # 24 часа
 USER_RECIPES_IDS_AND_TITLES = 10 * 60  # 10 минут
 PIPELINE_DRAFT = 24 * 60 * 60  # 24 часа
 RECIPE_ACTION = 30 * 60  # 30 минут
 WEBAPP_RECIPE_DRAFT = 10 * 60  # 10 минут
+LAST_RECIPE_MESSAGES = 48 * 60 * 60  # 48 часов — лимит удаления сообщений в Telegram
+DUP_REJECTED_PAIRS = 60 * 60  # 1 час

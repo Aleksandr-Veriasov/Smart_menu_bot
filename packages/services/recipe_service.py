@@ -2,8 +2,16 @@ import logging
 import random
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from decimal import Decimal
 
-from packages.db.models import Recipe, Video
+from packages.db.models import (
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    RecipeUser,
+    User,
+    Video,
+)
 from packages.db.repository import (
     IngredientRepository,
     RecipeIngredientRepository,
@@ -11,8 +19,10 @@ from packages.db.repository import (
     RecipeUserRepository,
     VideoRepository,
 )
+from packages.db.repository.user import UserRepository
 from packages.db.schemas import RecipeShort
 from packages.redis.repository import CategoryCacheRepository, RecipeCacheRepository
+from packages.schemas.recipe import IngredientLink
 from packages.services.base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +48,7 @@ class RecipeService(BaseService):
         self.video_repo = VideoRepository
         self.ingredient_repo = IngredientRepository
         self.recipe_ingredient_repo = RecipeIngredientRepository
+        self.user_repo = UserRepository
 
     async def get_all_by_user_and_category(self, user_id: int, category_id: int) -> list[RecipeShort]:
         """Все id и названия рецептов пользователя."""
@@ -49,10 +60,10 @@ class RecipeService(BaseService):
         async with self._lock(self.keys.user_init_lock(user_id=user_id)):
             async with self.db.session() as session:
                 recipes = await self.recipe_repo(session).get_all_by_user_and_category(user_id, category_id)
-                result = [RecipeShort.model_validate(r) for r in recipes]
-                await self.recipe_cache.set_all_recipes_ids_and_titles(
-                    user_id, category_id, [r.model_dump() for r in result]
-                )
+            result = [RecipeShort.model_validate(r) for r in recipes]
+            await self.recipe_cache.set_all_recipes_ids_and_titles(
+                user_id, category_id, [r.model_dump() for r in result]
+            )
         logger.debug(f"👉 Пользователь: {user_id} категория: {category_id} " f"название рецептов и id из БД: {result}")
         return result
 
@@ -173,8 +184,6 @@ class RecipeService(BaseService):
             await self.recipe_user_repo(session).unlink_user(recipe_id, user_id)
         if category_id is not None:
             await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
-            # Обновляем кэш рецептов
-            await self.get_all_by_user_and_category(user_id=user_id, category_id=category_id)
 
     async def get_random_recipe(self, user_id: int, category_id: int) -> Recipe | None:
         """Возвращает случайный рецепт пользователя из категории."""
@@ -193,21 +202,47 @@ class RecipeService(BaseService):
         video_url: str | None = None,
         original_url: str | None = None,
     ) -> int:
-        """Сохраняет черновик рецепта без привязки к пользователю и категории."""
+        """Сохраняет черновик рецепта без привязки к пользователю и категории.
+
+        ingredients может быть:
+        - list[IngredientItem] — новый путь, сохраняет quantity/unit
+        - str — легаси текстовый формат с маркерами '- '
+        - Iterable[str/dict] — легаси список имён
+        """
+        from packages.recipes_core.deepseek_parsers import IngredientItem
         from packages.recipes_core.ingredients_parser import (
             parse_ingredients,
             to_ingredient_name,
         )
 
         ingredients_raw = parse_ingredients(ingredients) if isinstance(ingredients, str) else list(ingredients)
+        is_structured = ingredients_raw and isinstance(ingredients_raw[0], IngredientItem)
+
         async with self.db.session() as session:
             recipe = await self.recipe_repo(session).create_basic(
                 title=title,
                 description=description or "Не указано",
             )
-            names = [n for n in (to_ingredient_name(x) for x in ingredients_raw) if n]
-            id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
-            await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), id_by_name.values())
+
+            if is_structured:
+                items: list[IngredientItem] = ingredients_raw
+                names = [item.name for item in items if item.name]
+                id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
+                links = [
+                    IngredientLink(
+                        ingredient_id=id_by_name[item.name],
+                        quantity=item.quantity,
+                        unit=item.unit,
+                    )
+                    for item in items
+                    if item.name and item.name in id_by_name
+                ]
+                await self.recipe_ingredient_repo(session).bulk_link(int(recipe.id), links)
+            else:
+                names = [n for n in (to_ingredient_name(x) for x in ingredients_raw) if n]
+                id_by_name = await self.ingredient_repo(session).bulk_get_or_create(names)
+                await self.recipe_ingredient_repo(session).bulk_link_ids(int(recipe.id), id_by_name.values())
+
             if video_url:
                 await self.video_repo(session).create(video_url, int(recipe.id), original_url=original_url)
             return int(recipe.id)
@@ -221,8 +256,116 @@ class RecipeService(BaseService):
             await repo.update_title(recipe_id, new_title)
         if category_id is not None:
             await self.recipe_cache.invalidate_all_recipes_ids_and_titles(user_id, category_id)
-            # Обновляем кэш рецептов
-            await self.get_all_by_user_and_category(user_id=user_id, category_id=category_id)
+
+    # ── Admin panel ───────────────────────────────────────────────────────────
+
+    async def list_page(self, page: int, page_size: int, q: str = "") -> tuple[list[Recipe], int]:
+        """Вернуть страницу рецептов и общее количество для admin-панели."""
+        async with self.db.session() as session:
+            return await self.recipe_repo(session).list_page(offset=(page - 1) * page_size, limit=page_size, q=q)
+
+    async def get_recipe_formats(self, recipe_ids: list[int]) -> dict[int, str]:
+        """Статус формата ингредиентов по рецептам: 'old' | 'partial' | 'new'.
+
+        old — ничего не заполнено, new — всё заполнено, partial — частично.
+        Рецепты без ингредиентов в результат не попадают.
+        """
+        async with self.db.session() as session:
+            stats = await self.recipe_repo(session).get_ingredient_fill_stats(recipe_ids)
+        formats: dict[int, str] = {}
+        for recipe_id, (filled, total) in stats.items():
+            if total == 0:
+                continue
+            if filled == 0:
+                formats[recipe_id] = "old"
+            elif filled == total:
+                formats[recipe_id] = "new"
+            else:
+                formats[recipe_id] = "partial"
+        return formats
+
+    async def get_for_admin(self, recipe_id: int) -> Recipe:
+        """Загрузить рецепт со всеми связями или бросить LookupError."""
+        async with self.db.session() as session:
+            recipe = await self.recipe_repo(session).get_for_admin(recipe_id)
+        if recipe is None:
+            raise LookupError(f"Рецепт #{recipe_id} не найден")
+        return recipe
+
+    async def update_meta(self, recipe_id: int, *, title: str, description: str | None) -> Recipe | None:
+        """Обновить название и описание рецепта."""
+        async with self.db.session() as session:
+            return await self.recipe_repo(session).update_meta(recipe_id, title=title, description=description)
+
+    async def get_ingredient_link(
+        self, recipe_id: int, ingredient_id: int, *, with_ingredient: bool = False
+    ) -> RecipeIngredient | None:
+        """Найти связь рецепт-ингредиент."""
+        async with self.db.session() as session:
+            return await self.recipe_ingredient_repo(session).get_link(
+                recipe_id, ingredient_id, with_ingredient=with_ingredient
+            )
+
+    async def update_ingredient_link(
+        self, recipe_id: int, ingredient_id: int, *, quantity: Decimal | None, unit: str | None
+    ) -> tuple[RecipeIngredient | None, str]:
+        """Обновить qty/unit связи. Вернуть (link, ingredient_name)."""
+        async with self.db.session() as session:
+            link = await self.recipe_ingredient_repo(session).update_link(
+                recipe_id, ingredient_id, quantity=quantity, unit=unit
+            )
+            if link:
+                ing = await session.get(Ingredient, ingredient_id)
+                ing_name = ing.name if ing else "?"
+            else:
+                ing_name = "?"
+        return link, ing_name
+
+    async def remove_ingredient(self, recipe_id: int, ingredient_id: int) -> None:
+        """Удалить связь рецепт-ингредиент."""
+        async with self.db.session() as session:
+            await self.recipe_ingredient_repo(session).delete_link(recipe_id, ingredient_id)
+
+    async def add_ingredient(
+        self, recipe_id: int, name: str, *, quantity: Decimal | None, unit: str | None
+    ) -> tuple[RecipeIngredient | None, str]:
+        """Создать или получить ингредиент по имени и добавить его в рецепт."""
+        async with self.db.session() as session:
+            id_by_name = await self.ingredient_repo(session).bulk_get_or_create([name])
+            ing_id = id_by_name[name]
+            await self.recipe_ingredient_repo(session).bulk_link(
+                recipe_id, [IngredientLink(ingredient_id=ing_id, quantity=quantity, unit=unit)]
+            )
+            link = await self.recipe_ingredient_repo(session).get_link(recipe_id, ing_id)
+        return link, name
+
+    async def search_users(self, recipe_id: int, q: str) -> tuple[list[User], set[int]]:
+        """Поиск пользователей по username и множество уже привязанных user_id."""
+        async with self.db.session() as session:
+            linked_ids = await self.recipe_user_repo(session).get_linked_user_ids(recipe_id)
+            users = await self.user_repo(session).search_by_username(q, limit=10)
+        return users, linked_ids
+
+    async def attach_user(self, recipe_id: int, user_id: int) -> User | None:
+        """Привязать пользователя к рецепту (без категории). Вернуть объект пользователя."""
+        async with self.db.session() as session:
+            exists = await self.recipe_user_repo(session).is_linked(recipe_id, user_id)
+            if not exists:
+                session.add(RecipeUser(recipe_id=recipe_id, user_id=user_id))
+                await session.flush()
+            return await session.get(User, user_id)
+
+    async def detach_user(self, recipe_id: int, user_id: int) -> None:
+        """Отвязать пользователя от рецепта."""
+        async with self.db.session() as session:
+            await self.recipe_user_repo(session).unlink_user(recipe_id, user_id)
+
+    async def delete(self, recipe_id: int) -> None:
+        """Удалить рецепт (если найден)."""
+        async with self.db.session() as session:
+            recipe = await session.get(Recipe, recipe_id)
+            if recipe:
+                await session.delete(recipe)
 
     @staticmethod
     def _collect_recipe_candidates(videos: list[Video]) -> tuple[Video | None, list[int]]:

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Рецепты{% endblock %}
+{% block page_title %}Рецепты <span class="text-gray-400 font-normal text-sm">({{ total }})</span>{% endblock %}
+
+{% block content %}
+
+{# ── Поиск ── #}
+<form method="get" class="mb-4 flex gap-2 max-w-md">
+  <input name="q" value="{{ q }}" placeholder="Поиск по названию…"
+         class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+  <button type="submit"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+    Найти
+  </button>
+  {% if q %}
+  <a href="/admin/recipes" class="text-sm text-gray-500 hover:text-gray-700 px-2 py-2">✕</a>
+  {% endif %}
+</form>
+
+{# ── Таблица ── #}
+<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-xs tracking-wide">
+      <tr>
+        <th class="px-4 py-3 text-left w-12">ID</th>
+        <th class="px-4 py-3 text-left">Название</th>
+        <th class="px-4 py-3 text-center w-24">Ингр.</th>
+        <th class="px-4 py-3 text-center w-28">Формат</th>
+        <th class="px-4 py-3 text-center w-24">Польз.</th>
+        <th class="px-4 py-3 text-center w-20">Видео</th>
+        <th class="px-4 py-3 text-left w-36">Создан</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for r in recipes %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-3 text-gray-400">{{ r.id }}</td>
+        <td class="px-4 py-3">
+          <a href="/admin/recipes/{{ r.id }}"
+             class="font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+            {{ r.title }}
+          </a>
+        </td>
+        <td class="px-4 py-3 text-center text-gray-600">{{ r.ingredients | length }}</td>
+        <td class="px-4 py-3 text-center">
+          {% with fmt = recipe_formats.get(r.id) %}
+            {% include "recipes/partials/format_badge.html" %}
+          {% endwith %}
+        </td>
+        <td class="px-4 py-3 text-center text-gray-600">{{ r.linked_users | length }}</td>
+        <td class="px-4 py-3 text-center">
+          {% if r.video %}
+            <span class="text-green-600">✓</span>
+          {% else %}
+            <span class="text-gray-300">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-500 text-xs">
+          {{ r.created_at.strftime("%d.%m.%Y") if r.created_at else "—" }}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="px-4 py-8 text-center text-gray-400">Ничего не найдено</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Пагинация ── #}
+{% if total_pages > 1 %}
+<div class="mt-4 flex items-center gap-2 text-sm">
+  {% if page > 1 %}
+  <a href="?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}"
+     class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">← Назад</a>
+  {% endif %}
+
+  <span class="text-gray-500">Страница {{ page }} из {{ total_pages }}</span>
+
+  {% if page < total_pages %}
+  <a href="?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}"
+     class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Вперёд →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

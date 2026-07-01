@@ -25,7 +25,7 @@ async def show_random_recipe_from_category(
 ) -> None:
     """Показывает случайный рецепт из выбранной категории пользователя."""
     try:
-        category = await category_service.get_id_and_name_by_slug_cached(category_slug)
+        category = await category_service.get_by_slug(category_slug)
     except ValueError:
         await message_service.safe_edit(message, "Категория не найдена.", reply_markup=home_keyboard())
         return

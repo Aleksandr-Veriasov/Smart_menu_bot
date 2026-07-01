@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +34,7 @@ class PostgresDumpService:
         dump_dir = Path(self.cfg.dump_dir).expanduser()
         dump_dir.mkdir(parents=True, exist_ok=True)
 
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         file_name = f"{self.cfg.dump_filename_prefix}_{self.cfg.database_name}_{stamp}.dump"
         return dump_dir / file_name
 
@@ -49,7 +49,7 @@ class PostgresDumpService:
         if not match:
             return None
         try:
-            return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+            return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
         except ValueError:
             return None
 
@@ -59,7 +59,7 @@ class PostgresDumpService:
         if not dump_dir.exists():
             return 0
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self.cfg.dump_retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self.cfg.dump_retention_days)
         removed = 0
         for file_path in dump_dir.glob(f"{self.cfg.dump_filename_prefix}_{self.cfg.database_name}_*.dump"):
             ts = self._extract_dump_timestamp(file_path.name)
@@ -193,7 +193,7 @@ class DropboxDumpClient:
         if not match:
             return None
         try:
-            return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+            return datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
         except ValueError:
             return None
 
@@ -368,7 +368,7 @@ class DropboxDumpClient:
         return resp.json()
 
     def cleanup_retention(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self.cfg.dump_retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self.cfg.dump_retention_days)
         root = self._normalize_root_path(self.dropbox_cfg.root_path)
         list_path = "" if root == "/" else root
         removed = 0
@@ -401,7 +401,7 @@ class DropboxDumpClient:
 # Public API
 def _next_run_at(hour_utc: int, minute_utc: int) -> datetime:
     """Возвращает ближайший момент запуска по UTC для заданного часа и минуты."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     next_run = now.replace(hour=hour_utc, minute=minute_utc, second=0, microsecond=0)
     if next_run <= now:
         next_run = next_run + timedelta(days=1)
@@ -419,7 +419,7 @@ async def run_daily_dump_scheduler() -> None:
 
     while True:
         next_run = _next_run_at(cfg.dump_schedule_hour_utc, cfg.dump_schedule_minute_utc)
-        delay = (next_run - datetime.now(timezone.utc)).total_seconds()
+        delay = (next_run - datetime.now(UTC)).total_seconds()
         logger.info(f"Следующий дамп БД запланирован на {next_run.isoformat()}")
 
         await asyncio.sleep(max(delay, 0))

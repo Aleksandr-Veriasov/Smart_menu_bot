@@ -90,7 +90,9 @@ async def run(
         # 7. Извлекаем рецепт через AI
         extractor = get_default_extractor()
         result = await extractor.extract(description=description, recognized_text=transcript)
-        title, recipe, ingredients = result.title, result.instructions_text, result.ingredients_text
+        title, recipe = result.title, result.instructions_text
+        ingredients = result.ingredients
+        ingredient_names = [item.name for item in ingredients] if ingredients else []
         await _progress(85, "Рецепт готов")
 
         if not title or not recipe:
@@ -125,7 +127,7 @@ async def run(
                 original_url=job.url,
                 title=title,
                 recipe=recipe,
-                ingredients=ingredients,
+                ingredients=ingredient_names,
                 recipe_id=recipe_id,
             ),
         )
@@ -146,7 +148,7 @@ async def run(
             chat_id,
             title=title,
             recipe=recipe,
-            ingredients=ingredients if isinstance(ingredients, list) else [ingredients],
+            ingredients=ingredient_names,
             pipeline_id=job_id,
         )
         if recipe_msg_id:

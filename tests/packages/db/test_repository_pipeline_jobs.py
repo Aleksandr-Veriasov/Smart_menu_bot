@@ -1,6 +1,5 @@
 """Тесты для PipelineJobRepository."""
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import PipelineJobStatus
@@ -19,7 +18,6 @@ async def _make_user(session: AsyncSession) -> int:
 
 
 class TestPipelineJobRepositoryEnqueue:
-    @pytest.mark.asyncio
     async def test_enqueue_creates_job(self, db_session: AsyncSession) -> None:
         """enqueue создаёт запись со статусом pending и нужными полями."""
         user_id = await _make_user(db_session)
@@ -43,7 +41,6 @@ class TestPipelineJobRepositoryEnqueue:
         assert job.next_retry_at is None
         assert job.created_at is not None
 
-    @pytest.mark.asyncio
     async def test_enqueue_idempotent(self, db_session: AsyncSession) -> None:
         """Повторный enqueue с тем же (chat_id, message_id) возвращает существующую запись."""
         user_id = await _make_user(db_session)
@@ -57,7 +54,6 @@ class TestPipelineJobRepositoryEnqueue:
 
 
 class TestPipelineJobRepositoryClaim:
-    @pytest.mark.asyncio
     async def test_claim_transitions_to_running(self, db_session: AsyncSession) -> None:
         """claim переводит задачу в running, увеличивает attempts, ставит locked_until."""
         user_id = await _make_user(db_session)
@@ -73,7 +69,6 @@ class TestPipelineJobRepositoryClaim:
         assert job.locked_until is not None
         assert job.locked_until.tzinfo is not None
 
-    @pytest.mark.asyncio
     async def test_claim_empty_when_no_pending(self, db_session: AsyncSession) -> None:
         """claim возвращает пустой список если нет pending задач."""
         repo = PipelineJobRepository(db_session)
@@ -84,7 +79,6 @@ class TestPipelineJobRepositoryClaim:
 
 
 class TestPipelineJobRepositoryAck:
-    @pytest.mark.asyncio
     async def test_ack_marks_done(self, db_session: AsyncSession) -> None:
         """ack переводит задачу в done и снимает блокировку."""
         user_id = await _make_user(db_session)
@@ -105,7 +99,6 @@ class TestPipelineJobRepositoryAck:
 
 
 class TestPipelineJobRepositoryNack:
-    @pytest.mark.asyncio
     async def test_nack_schedules_retry(self, db_session: AsyncSession) -> None:
         """nack при первой ошибке возвращает в pending с next_retry_at."""
         user_id = await _make_user(db_session)
@@ -124,7 +117,6 @@ class TestPipelineJobRepositoryNack:
         assert job.last_error == "download failed"
         assert job.locked_until is None
 
-    @pytest.mark.asyncio
     async def test_nack_marks_failed_after_max_attempts(self, db_session: AsyncSession) -> None:
         """nack после 5 попыток ставит статус failed."""
         from sqlalchemy import update
@@ -153,7 +145,6 @@ class TestPipelineJobRepositoryNack:
 
 
 class TestPipelineJobRepositorySetProgressMessageId:
-    @pytest.mark.asyncio
     async def test_set_progress_message_id(self, db_session: AsyncSession) -> None:
         """set_progress_message_id сохраняет message_id для прогресс-сообщения."""
         user_id = await _make_user(db_session)
