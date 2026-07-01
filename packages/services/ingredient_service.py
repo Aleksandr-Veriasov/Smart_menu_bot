@@ -134,12 +134,28 @@ class IngredientService(BaseService):
         }
 
     async def enrich_one(self, recipe_id: int, *, dry_run: bool = False) -> bool:
-        """Прогнать backfill для одного рецепта (заполнить qty/unit + нормализовать имена)."""
+        """Прогнать backfill для одного рецепта (заполнить qty/unit + нормализовать имена).
+
+        Формат определяется по самому рецепту: partial (часть заполнена) → промпт,
+        учитывающий пропорции известных ингредиентов.
+        """
         async with self.db.session() as session:
             recipe = await self.recipe_repo(session).get_needing_qty_backfill_one(recipe_id)
             if recipe is None:
                 return False
-            return await self._enrich_recipe(recipe, session, dry_run=dry_run)
+            fmt = self.fill_status(recipe.ingredient_links)
+            return await self._enrich_recipe(recipe, session, dry_run=dry_run, fmt=fmt)
+
+    @staticmethod
+    def fill_status(links: list[RecipeIngredient]) -> str:
+        """Статус заполнения ингредиентов рецепта: 'old' | 'partial' | 'new'."""
+        total = len(links)
+        filled = sum(1 for link in links if link.quantity is not None or link.unit is not None)
+        if total == 0 or filled == 0:
+            return "old"
+        if filled == total:
+            return "new"
+        return "partial"
 
     async def _enrich_recipe(self, recipe: Recipe, session, *, dry_run: bool, fmt: str | None = None) -> bool:
         """Обогатить рецепт через LLM: заполнить qty/unit и нормализовать имена ингредиентов."""

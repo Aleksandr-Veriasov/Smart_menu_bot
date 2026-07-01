@@ -43,19 +43,9 @@
         </td>
         <td class="px-4 py-3 text-center text-gray-600">{{ r.ingredients | length }}</td>
         <td class="px-4 py-3 text-center">
-          {% set fmt = recipe_formats.get(r.id) %}
-          {% if fmt == 'new' %}
-            <span class="inline-block px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs"
-                  title="Новый формат: у всех ингредиентов заполнено кол-во/единица">Новый</span>
-          {% elif fmt == 'partial' %}
-            <span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs"
-                  title="Частично: часть ингредиентов без кол-ва и единицы">Частично</span>
-          {% elif fmt == 'old' %}
-            <span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs"
-                  title="Старый формат: ни у одного ингредиента нет кол-ва/единицы">Старый</span>
-          {% else %}
-            <span class="text-gray-300" title="Нет ингредиентов">—</span>
-          {% endif %}
+          {% with fmt = recipe_formats.get(r.id) %}
+            {% include "recipes/partials/format_badge.html" %}
+          {% endwith %}
         </td>
         <td class="px-4 py-3 text-center text-gray-600">{{ r.linked_users | length }}</td>
         <td class="px-4 py-3 text-center">

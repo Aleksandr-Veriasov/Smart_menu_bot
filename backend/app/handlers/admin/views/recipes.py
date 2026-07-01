@@ -66,7 +66,12 @@ async def recipe_detail(request: Request, service: _ServiceDep, recipe_id: int) 
     return templates.TemplateResponse(
         request,
         "recipes/detail.html",
-        {"admin_login": current_login(request), "recipe": recipe, "allowed_units": ALLOWED_UNITS},
+        {
+            "admin_login": current_login(request),
+            "recipe": recipe,
+            "allowed_units": ALLOWED_UNITS,
+            "fmt": IngredientService.fill_status(recipe.ingredient_links),
+        },
     )
 
 
@@ -92,7 +97,11 @@ async def recipe_backfill(
     return templates.TemplateResponse(
         request,
         "recipes/partials/ingredients_refresh.html",
-        {"recipe": recipe, "allowed_units": ALLOWED_UNITS},
+        {
+            "recipe": recipe,
+            "allowed_units": ALLOWED_UNITS,
+            "fmt": IngredientService.fill_status(recipe.ingredient_links),
+        },
     )
 
 
