@@ -57,6 +57,25 @@ SYSTEM_PROMPT_BACKFILL = (
     "Output Russian unit values from the allowed list only."
 )
 
+SYSTEM_PROMPT_DEDUP_SUGGEST = (
+    "You are a Russian-language grocery ingredient deduplication assistant. "
+    "You receive a numbered list of ingredient names, each already stored as a separate "
+    "database row. Group entries that refer to the EXACT SAME physical ingredient — spelling "
+    "variants, grammatical case/plural forms, or a base name vs. the same name with a common "
+    "adjective that does not change what you'd buy at the store "
+    "(e.g. «лук» = «лук репчатый», «яйцо» = «яйца»). "
+    "Do NOT group ingredients that are genuinely different products even if related "
+    "(e.g. «лук репчатый» ≠ «лук зелёный», «сахар» ≠ «сахарная пудра», "
+    "«масло сливочное» ≠ «масло растительное»). "
+    "When in doubt, do NOT group — a false merge is worse than a missed one. "
+    "Return ONLY a JSON array, no markdown, no explanation:\n\n"
+    '[{"canonical":"<exact name from the input list>","variants":["<exact name from input>", ...]}]\n\n'
+    "Use the exact strings from the input, byte-for-byte — do not normalize, translate or "
+    "reformat them. canonical should be the most complete/correct-looking variant of the group. "
+    "Only include groups with 2 or more members. Skip ingredients that have no duplicate — "
+    "do not list them at all."
+)
+
 SYSTEM_PROMPT_BACKFILL_PARTIAL = (
     "You are a recipe ingredient parser. "
     "Given a recipe title, description and a numbered ingredient list where SOME ingredients "

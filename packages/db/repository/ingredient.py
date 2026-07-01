@@ -106,6 +106,20 @@ class IngredientRepository(BaseRepository[Ingredient]):
         await self.session.execute(delete(self.model).where(self.model.id.in_(orphans)))
         return len(orphans)
 
+    async def list_all_with_counts(self) -> list[tuple[int, str, int]]:
+        """Все ингредиенты с числом связанных рецептов: (id, name, recipe_count)."""
+        rows = await self.session.execute(
+            select(
+                self.model.id,
+                self.model.name,
+                func.count(RecipeIngredient.recipe_id).label("recipe_count"),
+            )
+            .outerjoin(RecipeIngredient, RecipeIngredient.ingredient_id == self.model.id)
+            .group_by(self.model.id, self.model.name)
+            .order_by(self.model.name)
+        )
+        return [(row.id, row.name, row.recipe_count) for row in rows.all()]
+
     async def find_dup_groups(self) -> list[DupGroup]:
         """Группы ингредиентов с одинаковым LOWER(name)."""
         rows = (

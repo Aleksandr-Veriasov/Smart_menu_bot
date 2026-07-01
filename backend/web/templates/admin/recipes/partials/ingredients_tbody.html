@@ -1,6 +1,6 @@
 <tbody id="ingredients-tbody" class="divide-y divide-gray-50">
   {% for link in recipe.ingredient_links %}
-    {% with ing_name=link.ingredient.name, editing=false %}
+    {% with ing_name=link.ingredient.name, editing=false, recipe_id=recipe.id %}
       {% include "recipes/partials/ingredient_row.html" %}
     {% endwith %}
   {% endfor %}

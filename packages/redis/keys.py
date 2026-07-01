@@ -65,3 +65,8 @@ class RedisKeys:
     def broadcast_worker_lock(cls, scope: str = "main") -> str:
         """Глобальный lock воркера рассылок."""
         return f"{cls.PREFIX}:lock:broadcast_worker:{scope}"
+
+    @classmethod
+    def ingredient_dup_rejected_pairs(cls) -> str:
+        """Пары ингредиентов, отклонённые админом при ИИ-поиске дублей (SET, TTL — окно повторного показа)."""
+        return f"{cls.PREFIX}:ingredients:dup_rejected"

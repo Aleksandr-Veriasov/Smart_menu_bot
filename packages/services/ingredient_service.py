@@ -12,9 +12,11 @@ from packages.recipes_core.deepseek_parsers import IngredientItem
 from packages.recipes_core.promts import (
     SYSTEM_PROMPT_BACKFILL,
     SYSTEM_PROMPT_BACKFILL_PARTIAL,
+    SYSTEM_PROMPT_DEDUP_SUGGEST,
 )
 from packages.recipes_core.services.provider import get_default_extractor
 from packages.recipes_core.units import normalize_unit
+from packages.redis.repository import IngredientDedupCacheRepository
 from packages.schemas.ingredient import DupGroup
 from packages.schemas.recipe import IngredientLink
 from packages.services.base import BaseService
@@ -23,6 +25,7 @@ from packages.utils import normalize_quantity
 logger = logging.getLogger(__name__)
 
 _BACKFILL_REQUEST_INTERVAL = 0.5
+_DEDUP_SUGGEST_CHUNK_SIZE = 250
 
 
 class IngredientService(BaseService):
@@ -31,6 +34,7 @@ class IngredientService(BaseService):
         self.ingredient_repo = IngredientRepository
         self.recipe_ingredient_repo = RecipeIngredientRepository
         self.recipe_repo = RecipeRepository
+        self.dedup_cache = IngredientDedupCacheRepository(self.redis)
 
     async def list_page(self, page: int, page_size: int, q: str = "") -> tuple[list[Ingredient], int]:
         """Вернуть страницу ингредиентов и общее количество для admin-панели."""
@@ -80,6 +84,87 @@ class IngredientService(BaseService):
         """Смержить дубль в canonical: перевесить RecipeIngredient, удалить дубль."""
         async with self.db.session() as session:
             return await self.ingredient_repo(session).merge_duplicate(canonical_id, duplicate_id)
+
+    async def reject_pair(self, id_a: int, id_b: int) -> None:
+        """Запомнить пару как «не дубли» — ИИ не предложит её повторно в течение TTL."""
+        await self.dedup_cache.reject(id_a, id_b)
+
+    async def suggest_dup_groups(self) -> list[DupGroup]:
+        """Найти семантические дубли через LLM (синонимы, падежи — не ловятся LOWER()).
+
+        Список ингредиентов бьётся на чанки (контекст LLM), поэтому пары из разных
+        чанков не будут найдены — известное ограничение, приемлемое для ручной проверки.
+        Найденные группы не сохраняются — merge подтверждает админ вручную, как для
+        точных LOWER()-дублей. Пары, отклонённые админом ранее (см. reject_pair),
+        не показываются повторно, пока не истечёт TTL в Redis.
+        """
+        async with self.db.session() as session:
+            all_ingredients = await self.ingredient_repo(session).list_all_with_counts()
+
+        rejected = await self.dedup_cache.list_rejected()
+        by_name = {name: (ing_id, name, cnt) for ing_id, name, cnt in all_ingredients}
+        extractor = get_default_extractor()
+        groups: list[DupGroup] = []
+
+        chunks = [
+            all_ingredients[i : i + _DEDUP_SUGGEST_CHUNK_SIZE]
+            for i in range(0, len(all_ingredients), _DEDUP_SUGGEST_CHUNK_SIZE)
+        ]
+        for i, chunk in enumerate(chunks):
+            if i > 0:
+                time.sleep(_BACKFILL_REQUEST_INTERVAL)
+            numbered = "\n".join(f"{n}. {name}" for n, (_id, name, _cnt) in enumerate(chunk, 1))
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT_DEDUP_SUGGEST},
+                {"role": "user", "content": numbered},
+            ]
+            try:
+                raw = extractor.chat.chat(messages, temperature=0.0, timeout=60.0)
+            except Exception as exc:
+                logger.error("Dedup-suggest: LLM ошибка на чанке %d: %s", i, exc)
+                continue
+            groups.extend(self._parse_dedup_suggest_response(raw, by_name, rejected))
+
+        return groups
+
+    @classmethod
+    def _parse_dedup_suggest_response(
+        cls, raw: str, by_name: dict[str, tuple[int, str, int]], rejected: set[str]
+    ) -> list[DupGroup]:
+        """Разобрать ответ LLM в DupGroup: сопоставить имена с ингредиентами и отсеять отклонённые пары."""
+        try:
+            data = json.loads(raw.strip())
+        except json.JSONDecodeError:
+            logger.warning("Dedup-suggest: LLM вернул невалидный JSON: %.120s", raw)
+            return []
+        if not isinstance(data, list):
+            return []
+
+        result: list[DupGroup] = []
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            canonical_name = entry.get("canonical")
+            variant_names = entry.get("variants")
+            if not canonical_name or not isinstance(variant_names, list):
+                continue
+
+            canonical = by_name.get(canonical_name)
+            if not canonical:
+                continue
+
+            resolved: list[tuple[int, str, int]] = [canonical]
+            for name in variant_names:
+                variant = by_name.get(name)
+                if not variant or variant == canonical or variant in resolved:
+                    continue
+                if IngredientDedupCacheRepository.is_rejected_pair(canonical[0], variant[0], rejected):
+                    continue
+                resolved.append(variant)
+
+            if len(resolved) >= 2:
+                result.append(DupGroup(lower_name=resolved[0][1].lower(), variants=resolved))
+        return result
 
     async def count_pending_backfill(self, fmt: str | None = None) -> int:
         """Количество рецептов, требующих обработки backfill (с учётом фильтра формата)."""
