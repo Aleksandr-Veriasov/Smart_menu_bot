@@ -259,10 +259,14 @@ class RecipeService(BaseService):
 
     # ── Admin panel ───────────────────────────────────────────────────────────
 
-    async def list_page(self, page: int, page_size: int, q: str = "") -> tuple[list[Recipe], int]:
+    async def list_page(
+        self, page: int, page_size: int, q: str = "", sort: str = "id", order: str = "desc"
+    ) -> tuple[list[Recipe], int]:
         """Вернуть страницу рецептов и общее количество для admin-панели."""
         async with self.db.session() as session:
-            return await self.recipe_repo(session).list_page(offset=(page - 1) * page_size, limit=page_size, q=q)
+            return await self.recipe_repo(session).list_page(
+                offset=(page - 1) * page_size, limit=page_size, q=q, sort=sort, order=order
+            )
 
     async def get_recipe_formats(self, recipe_ids: list[int]) -> dict[int, str]:
         """Статус формата ингредиентов по рецептам: 'old' | 'partial' | 'new'.
@@ -361,11 +365,9 @@ class RecipeService(BaseService):
             await self.recipe_user_repo(session).unlink_user(recipe_id, user_id)
 
     async def delete(self, recipe_id: int) -> None:
-        """Удалить рецепт (если найден)."""
+        """Удалить рецепт. Raises ValueError если не найден."""
         async with self.db.session() as session:
-            recipe = await session.get(Recipe, recipe_id)
-            if recipe:
-                await session.delete(recipe)
+            await self.recipe_repo(session).delete(recipe_id)
 
     @staticmethod
     def _collect_recipe_candidates(videos: list[Video]) -> tuple[Video | None, list[int]]:

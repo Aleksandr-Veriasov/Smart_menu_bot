@@ -21,6 +21,8 @@ from packages.utils import parse_decimal_form
 router = APIRouter(prefix="/recipes")
 
 _PAGE_SIZE = 25
+_SORT_FIELDS = {"id", "ingredients", "users"}
+_SORT_ORDERS = {"asc", "desc"}
 _ServiceDep = Annotated[RecipeService, Depends(get_recipe_service)]
 _IngredientServiceDep = Annotated[IngredientService, Depends(get_ingredient_service)]
 
@@ -30,11 +32,16 @@ _IngredientServiceDep = Annotated[IngredientService, Depends(get_ingredient_serv
 
 @router.get("", response_class=HTMLResponse, response_model=None, include_in_schema=False)
 async def recipes_list(
-    request: Request, service: _ServiceDep, page: int = 1, q: str = ""
+    request: Request, service: _ServiceDep, page: int = 1, q: str = "", sort: str = "id", order: str = "desc"
 ) -> HTMLResponse | RedirectResponse:
+    """Список рецептов с поиском по названию, сортировкой (id/ingredients/users) и пагинацией."""
     if redirect := check_auth(request):
         return redirect
-    recipes, total = await service.list_page(page, _PAGE_SIZE, q)
+    if sort not in _SORT_FIELDS:
+        sort = "id"
+    if order not in _SORT_ORDERS:
+        order = "desc"
+    recipes, total = await service.list_page(page, _PAGE_SIZE, q, sort, order)
     recipe_formats = await service.get_recipe_formats([r.id for r in recipes])
     return templates.TemplateResponse(
         request,
@@ -44,6 +51,8 @@ async def recipes_list(
             "recipes": recipes,
             "recipe_formats": recipe_formats,
             "q": q,
+            "sort": sort,
+            "order": order,
             "page": page,
             "total": total,
             "total_pages": max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE),
@@ -57,6 +66,7 @@ async def recipes_list(
 
 @router.get("/{recipe_id}", response_class=HTMLResponse, response_model=None, include_in_schema=False)
 async def recipe_detail(request: Request, service: _ServiceDep, recipe_id: int) -> HTMLResponse | RedirectResponse:
+    """Страница рецепта: метаданные, ингредиенты, видео, привязанные пользователи."""
     if redirect := check_auth(request):
         return redirect
     try:
@@ -90,6 +100,7 @@ async def recipe_backfill(
     ingredient_service: _IngredientServiceDep,
     recipe_id: int,
 ) -> HTMLResponse:
+    """Запустить ИИ-бэкфилл qty/unit для одного рецепта и вернуть обновлённый блок ингредиентов."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     await ingredient_service.enrich_one(recipe_id)
@@ -122,6 +133,7 @@ async def ingredient_update(
     quantity: str = Form(""),
     unit: str = Form(""),
 ) -> HTMLResponse:
+    """Сохранить qty/unit для существующей связи рецепт-ингредиент и вернуть строку таблицы."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     link, ing_name = await service.update_ingredient_link(
@@ -146,6 +158,7 @@ async def ingredient_update(
 async def ingredient_edit_row(
     request: Request, service: _ServiceDep, recipe_id: int, ingredient_id: int
 ) -> HTMLResponse:
+    """Вернуть строку ингредиента в режиме редактирования (форма qty/unit)."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     link = await service.get_ingredient_link(recipe_id, ingredient_id, with_ingredient=True)
@@ -174,6 +187,7 @@ async def ingredient_edit_row(
     include_in_schema=False,
 )
 async def ingredient_remove(request: Request, service: _ServiceDep, recipe_id: int, ingredient_id: int) -> HTMLResponse:
+    """Удалить связь рецепт-ингредиент."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     await service.remove_ingredient(recipe_id, ingredient_id)
@@ -197,6 +211,7 @@ async def ingredient_add(
     quantity: str = Form(""),
     unit: str = Form(""),
 ) -> HTMLResponse:
+    """Добавить новый ингредиент к рецепту (создаёт Ingredient при необходимости)."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     name = name.strip()
@@ -222,6 +237,7 @@ async def ingredient_add(
     include_in_schema=False,
 )
 async def recipe_edit_meta_form(request: Request, service: _ServiceDep, recipe_id: int) -> HTMLResponse:
+    """Вернуть форму редактирования title/description рецепта."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     recipe = await service.get_recipe_basic(recipe_id)
@@ -243,6 +259,7 @@ async def recipe_save_meta(
     title: str = Form(...),
     description: str = Form(""),
 ) -> HTMLResponse:
+    """Сохранить title/description рецепта и вернуть read-only блок метаданных."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     recipe = await service.update_meta(recipe_id, title=title.strip(), description=description.strip() or None)
@@ -256,6 +273,7 @@ async def recipe_save_meta(
     include_in_schema=False,
 )
 async def recipe_view_meta(request: Request, service: _ServiceDep, recipe_id: int) -> HTMLResponse:
+    """Отменить редактирование и вернуть read-only блок метаданных без сохранения."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     recipe = await service.get_recipe_basic(recipe_id)
@@ -272,6 +290,7 @@ async def recipe_view_meta(request: Request, service: _ServiceDep, recipe_id: in
     include_in_schema=False,
 )
 async def recipe_users_search(request: Request, service: _ServiceDep, recipe_id: int, q: str = "") -> HTMLResponse:
+    """Найти пользователей по подстроке для привязки к рецепту (мин. 2 символа)."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     if len(q.strip()) < 2:
@@ -291,6 +310,7 @@ async def recipe_users_search(request: Request, service: _ServiceDep, recipe_id:
     include_in_schema=False,
 )
 async def recipe_user_attach(request: Request, service: _ServiceDep, recipe_id: int, user_id: int) -> HTMLResponse:
+    """Привязать пользователя к рецепту и вернуть чип привязанного пользователя."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     user = await service.attach_user(recipe_id, user_id)
@@ -308,6 +328,7 @@ async def recipe_user_attach(request: Request, service: _ServiceDep, recipe_id: 
     include_in_schema=False,
 )
 async def recipe_user_detach(request: Request, service: _ServiceDep, recipe_id: int, user_id: int) -> HTMLResponse:
+    """Отвязать пользователя от рецепта."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
     await service.detach_user(recipe_id, user_id)
@@ -319,7 +340,11 @@ async def recipe_user_detach(request: Request, service: _ServiceDep, recipe_id: 
 
 @router.delete("/{recipe_id}", response_model=None, include_in_schema=False)
 async def recipe_delete(request: Request, service: _ServiceDep, recipe_id: int) -> RedirectResponse | HTMLResponse:
+    """Удалить рецепт целиком и вернуться к списку."""
     if "admin_login" not in request.session:
         return HTMLResponse("Unauthorized", status_code=401)
-    await service.delete(recipe_id)
+    try:
+        await service.delete(recipe_id)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
     return RedirectResponse(url="/admin/recipes", status_code=303)

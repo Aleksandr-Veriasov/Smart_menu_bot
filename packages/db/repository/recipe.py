@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import and_, case, desc, func, or_, select, update
+from sqlalchemy import and_, asc, case, desc, func, or_, select, update
 from sqlalchemy.orm import joinedload
 
 from packages.db.models import Ingredient, Recipe, RecipeIngredient, RecipeUser, Video
@@ -206,24 +206,58 @@ class RecipeRepository(BaseRepository[Recipe]):
 
     # ── Admin panel ───────────────────────────────────────────────────────────
 
-    async def list_page(self, *, offset: int, limit: int, q: str) -> tuple[list[Recipe], int]:
-        """Вернуть страницу рецептов и общее количество для admin-панели."""
-        base = select(self.model)
+    async def list_page(
+        self, *, offset: int, limit: int, q: str, sort: str = "id", order: str = "desc"
+    ) -> tuple[list[Recipe], int]:
+        """Вернуть страницу рецептов и общее количество для admin-панели.
+
+        Сортировка по ingredients/users считается через агрегат в отдельном
+        компактном запросе (только id, LIMIT/OFFSET), полные данные по найденным
+        id догружаются вторым запросом — так на странице всегда не больше
+        `limit` строк без загрузки всей таблицы для сортировки в Python.
+        """
+        direction = asc if order == "asc" else desc
+
+        filtered = select(self.model.id)
         if q:
-            base = base.where(self.model.title.ilike(f"%{q}%"))
-        total = (await self.session.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+            filtered = filtered.where(self.model.title.ilike(f"%{q}%"))
+
+        total_query = select(func.count()).select_from(filtered.subquery())
+        total = (await self.session.execute(total_query)).scalar_one()
+
+        if sort == "ingredients":
+            id_query = (
+                filtered.outerjoin(RecipeIngredient, RecipeIngredient.recipe_id == self.model.id)
+                .group_by(self.model.id)
+                .order_by(
+                    direction(func.count(func.distinct(RecipeIngredient.ingredient_id))), direction(self.model.id)
+                )
+            )
+        elif sort == "users":
+            id_query = (
+                filtered.outerjoin(RecipeUser, RecipeUser.recipe_id == self.model.id)
+                .group_by(self.model.id)
+                .order_by(direction(func.count(func.distinct(RecipeUser.user_id))), direction(self.model.id))
+            )
+        else:
+            id_query = filtered.order_by(direction(self.model.id))
+
+        page_ids = (await self.session.execute(id_query.offset(offset).limit(limit))).scalars().all()
+        if not page_ids:
+            return [], int(total)
+
         stmt = (
-            base.options(
+            select(self.model)
+            .where(self.model.id.in_(page_ids))
+            .options(
                 joinedload(self.model.ingredients),
                 joinedload(self.model.linked_users),
                 joinedload(self.model.video),
             )
-            .order_by(desc(self.model.id))
-            .offset(offset)
-            .limit(limit)
         )
-        recipes = (await self.session.execute(stmt)).unique().scalars().all()
-        return list(recipes), int(total)
+        fetched = {r.id: r for r in (await self.session.execute(stmt)).unique().scalars().all()}
+        recipes = [fetched[i] for i in page_ids if i in fetched]
+        return recipes, int(total)
 
     async def get_for_admin(self, recipe_id: int) -> Recipe | None:
         """Загрузить рецепт со всеми связями для admin-панели."""

@@ -39,7 +39,7 @@ class Recipe(Base):
     recipe_users: Mapped[list["RecipeUser"]] = relationship(
         back_populates="recipe",
         lazy="selectin",
-        passive_deletes=True,
+        passive_deletes="all",
         overlaps="linked_recipes,linked_users",
     )
 
@@ -59,11 +59,14 @@ class Recipe(Base):
         lazy="selectin",
         viewonly=True,
     )
-    # Прямой доступ к junction-строкам с qty/unit
+    # Прямой доступ к junction-строкам с qty/unit. passive_deletes="all" (не True!) обязателен:
+    # коллекция грузится eagerly через lazy="selectin", и обычный True не подавляет обнуление
+    # recipe_id у уже загруженных детей (см. should_null_fks в sqlalchemy/orm/dependency.py) —
+    # только "all" полностью отдаёт удаление на откуп ON DELETE CASCADE в БД.
     ingredient_links: Mapped[list["RecipeIngredient"]] = relationship(
         back_populates="recipe",
         lazy="selectin",
-        passive_deletes=True,
+        passive_deletes="all",
     )
 
     def __str__(self) -> str:
@@ -190,7 +193,7 @@ class Category(Base):
     recipe_users: Mapped[list["RecipeUser"]] = relationship(
         back_populates="category",
         lazy="selectin",
-        passive_deletes=True,
+        passive_deletes="all",
     )
 
     def __str__(self) -> str:
