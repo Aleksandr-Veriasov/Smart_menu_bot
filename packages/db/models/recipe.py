@@ -52,19 +52,18 @@ class Recipe(Base):
         passive_deletes=True,
     )
 
-    # Ингредиенты (многие-ко-многим)
+    # Ингредиенты (многие-ко-многим), только для чтения — запись идёт через ingredient_links/RecipeIngredientRepository
     ingredients: Mapped[list["Ingredient"]] = relationship(
         secondary="recipe_ingredients",
         back_populates="recipes",
         lazy="selectin",
-        passive_deletes=True,
+        viewonly=True,
     )
     # Прямой доступ к junction-строкам с qty/unit
     ingredient_links: Mapped[list["RecipeIngredient"]] = relationship(
         back_populates="recipe",
         lazy="selectin",
         passive_deletes=True,
-        overlaps="ingredients,recipes",
     )
 
     def __str__(self) -> str:
@@ -83,7 +82,7 @@ class Ingredient(Base):
         secondary="recipe_ingredients",
         back_populates="ingredients",
         lazy="selectin",
-        passive_deletes=True,
+        viewonly=True,
     )
 
     def __str__(self) -> str:
@@ -117,9 +116,8 @@ class RecipeIngredient(Base):
     recipe: Mapped["Recipe"] = relationship(
         back_populates="ingredient_links",
         lazy="select",
-        overlaps="ingredients,recipes",
     )
-    ingredient: Mapped["Ingredient"] = relationship(lazy="select", overlaps="ingredients,recipes")
+    ingredient: Mapped["Ingredient"] = relationship(lazy="select")
 
 
 class RecipeUser(Base):
