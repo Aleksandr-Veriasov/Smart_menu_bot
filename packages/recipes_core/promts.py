@@ -56,3 +56,24 @@ SYSTEM_PROMPT_BACKFILL = (
     "MUST equal the number of input ingredients. "
     "Output Russian unit values from the allowed list only."
 )
+
+SYSTEM_PROMPT_BACKFILL_PARTIAL = (
+    "You are a recipe ingredient parser. "
+    "Given a recipe title, description and a numbered ingredient list where SOME ingredients "
+    "already have a known quantity/unit and others are missing them, "
+    "estimate and fill in the quantity and unit for EVERY ingredient. "
+    "Rely on the recipe text and on the proportions of the already-known ingredients "
+    "to infer realistic amounts for the missing ones. "
+    "Keep the already-known quantity and unit values unchanged. "
+    "return ONLY a JSON array, no markdown, no explanation:\n\n"
+    '[{"name":"<normalized name>","quantity":<number|null>,"unit":"<unit|null>"}]\n\n'
+    f"Allowed units: {_UNITS_LIST}. "
+    "Only use null when the amount genuinely cannot be estimated. "
+    "Normalize name to the base ingredient in Russian, without quantities, units or "
+    "parenthetical notes (e.g. «5 зубчиков чеснока (для соуса)» → «чеснок», "
+    "«Соль (по вкусу)» → «соль»). "
+    "The input is a numbered ingredient list. Return EXACTLY one object per numbered line, "
+    "in the same order. Do NOT split, merge, reorder, add or drop items — the array length "
+    "MUST equal the number of input ingredients. "
+    "Output Russian unit values from the allowed list only."
+)

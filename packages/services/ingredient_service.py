@@ -9,7 +9,10 @@ from packages.db.repository.ingredient import IngredientRepository
 from packages.db.repository.recipe import RecipeRepository
 from packages.db.repository.recipe_ingredient import RecipeIngredientRepository
 from packages.recipes_core.deepseek_parsers import IngredientItem
-from packages.recipes_core.promts import SYSTEM_PROMPT_BACKFILL
+from packages.recipes_core.promts import (
+    SYSTEM_PROMPT_BACKFILL,
+    SYSTEM_PROMPT_BACKFILL_PARTIAL,
+)
 from packages.recipes_core.services.provider import get_default_extractor
 from packages.recipes_core.units import normalize_unit
 from packages.schemas.ingredient import DupGroup
@@ -106,7 +109,7 @@ class IngredientService(BaseService):
                 if recipe_fresh is None:
                     failed += 1
                     continue
-                ok = await self._enrich_recipe(recipe_fresh, session, dry_run=dry_run)
+                ok = await self._enrich_recipe(recipe_fresh, session, dry_run=dry_run, fmt=fmt)
             if ok:
                 enriched += 1
             else:
@@ -138,17 +141,18 @@ class IngredientService(BaseService):
                 return False
             return await self._enrich_recipe(recipe, session, dry_run=dry_run)
 
-    async def _enrich_recipe(self, recipe: Recipe, session, *, dry_run: bool) -> bool:
+    async def _enrich_recipe(self, recipe: Recipe, session, *, dry_run: bool, fmt: str | None = None) -> bool:
         """Обогатить рецепт через LLM: заполнить qty/unit и нормализовать имена ингредиентов."""
         links = recipe.ingredient_links
         if not links:
             return True
 
-        ingredient_names = [link.ingredient.name for link in links]
+        is_partial = fmt == "partial"
+        system_prompt = SYSTEM_PROMPT_BACKFILL_PARTIAL if is_partial else SYSTEM_PROMPT_BACKFILL
         extractor = get_default_extractor()
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT_BACKFILL},
-            {"role": "user", "content": self._build_backfill_message(recipe, ingredient_names)},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": self._build_backfill_message(recipe, links, include_known=is_partial)},
         ]
 
         try:
@@ -252,17 +256,33 @@ class IngredientService(BaseService):
             item_by_norm.setdefault(cls._norm_name(item.name), item)
         return [(link, item_by_norm.get(cls._norm_name(link.ingredient.name))) for link in links]
 
-    @staticmethod
-    def _build_backfill_message(recipe: Recipe, ingredient_names: list[str]) -> str:
-        numbered = "\n".join(f"{i}. {name}" for i, name in enumerate(ingredient_names, 1))
+    @classmethod
+    def _build_backfill_message(
+        cls, recipe: Recipe, links: list[RecipeIngredient], *, include_known: bool = False
+    ) -> str:
+        if include_known:
+            numbered = "\n".join(
+                f"{i}. {link.ingredient.name} — {cls._format_known_qty(link)}" for i, link in enumerate(links, 1)
+            )
+        else:
+            numbered = "\n".join(f"{i}. {link.ingredient.name}" for i, link in enumerate(links, 1))
         return "\n".join(
             [
                 f"Рецепт: {recipe.title}",
                 f"Описание: {recipe.description or 'не указано'}",
-                f"Ингредиенты ({len(ingredient_names)} шт — верни ровно столько же объектов в том же порядке):",
+                f"Ингредиенты ({len(links)} шт — верни ровно столько же объектов в том же порядке):",
                 numbered,
             ]
         )
+
+    @staticmethod
+    def _format_known_qty(link: RecipeIngredient) -> str:
+        """Известные qty/unit связи для промпта partial-бэкфилла, либо метка «нужно оценить»."""
+        if link.quantity is None and link.unit is None:
+            return "количество неизвестно, оцени"
+        qty = format(link.quantity.normalize(), "f") if link.quantity is not None else "?"
+        unit = link.unit or ""
+        return f"известно: {qty} {unit}".strip()
 
     @staticmethod
     def _parse_backfill_response(raw: str) -> list[IngredientItem]:

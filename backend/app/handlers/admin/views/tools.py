@@ -47,7 +47,8 @@ async def dedup_merge(
     )
 
 
-_BACKFILL_FORMATS = {"all", "old", "partial"}
+_BACKFILL_FORMATS = {"old", "partial"}
+_DEFAULT_FORMAT = "old"
 
 
 @router.get("/backfill", response_class=HTMLResponse, response_model=None, include_in_schema=False)
@@ -59,7 +60,7 @@ async def backfill_page(request: Request, service: _ServiceDep) -> HTMLResponse 
     return templates.TemplateResponse(
         request,
         "tools/backfill.html",
-        {"admin_login": current_login(request), "stats": stats, "result": None, "fmt": "all"},
+        {"admin_login": current_login(request), "stats": stats, "result": None, "fmt": _DEFAULT_FORMAT},
     )
 
 
@@ -69,16 +70,15 @@ async def backfill_run(
     service: _ServiceDep,
     dry_run: bool = Form(False),
     limit: int = Form(10),
-    fmt: str = Form("all"),
+    fmt: str = Form(_DEFAULT_FORMAT),
 ) -> HTMLResponse | RedirectResponse:
     if redirect := check_auth(request):
         return redirect
 
     if fmt not in _BACKFILL_FORMATS:
-        fmt = "all"
-    fmt_filter = None if fmt == "all" else fmt
+        fmt = _DEFAULT_FORMAT
     limit = max(1, min(limit, _MAX_LIMIT))
-    result = await service.run_backfill(limit=limit, dry_run=dry_run, fmt=fmt_filter)
+    result = await service.run_backfill(limit=limit, dry_run=dry_run, fmt=fmt)
     stats = await service.format_stats()
     return templates.TemplateResponse(
         request,
