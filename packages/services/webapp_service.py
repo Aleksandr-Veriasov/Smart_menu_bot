@@ -194,10 +194,13 @@ class WebAppService(BaseService):
                     )
                     category_id = requested
 
-            if payload.ingredients_text is not None and ingredients_will_change:
+            if ingredients_will_change:
                 ri_repo = RecipeIngredientRepository(session)
                 await ri_repo.delete_all_by_recipe(int(recipe_id))
-                await ri_repo.save_from_names(int(recipe_id), parse_ingredients_lines(payload.ingredients_text))
+                if payload.ingredients is not None:
+                    await ri_repo.save_from_structured(int(recipe_id), payload.ingredients)
+                elif payload.ingredients_text is not None:
+                    await ri_repo.save_from_names(int(recipe_id), parse_ingredients_lines(payload.ingredients_text))
 
         _, new_category_id = await self._load_recipe_for_user(session, recipe_id=int(recipe_id), user_id=user_id)
         return PatchResult(
