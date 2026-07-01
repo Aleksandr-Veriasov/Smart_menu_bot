@@ -24,17 +24,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("🚀 Запуск webhook-сервера FastAPI…")
     state = build_state()
     bot = build_bot()
-    dp = await build_dispatcher(state)
-
-    register_pool_metrics(state.db.engine, service="bot")
-    await runtime_start(bot, state, allowed_updates=dp.resolve_used_update_types())
-
-    # сохраним в app.state, чтобы роуты имели доступ
-    app.state.bot = bot
-    app.state.dp = dp
-    logger.info("✅ aiogram-приложение запущено (режим webhook).")
 
     try:
+        dp = await build_dispatcher(state)
+
+        register_pool_metrics(state.db.engine, service="bot")
+        await runtime_start(bot, state, allowed_updates=dp.resolve_used_update_types())
+
+        # сохраним в app.state, чтобы роуты имели доступ
+        app.state.bot = bot
+        app.state.dp = dp
+        logger.info("✅ aiogram-приложение запущено (режим webhook).")
+
         yield
     finally:
         logger.info("🛑 Остановка webhook-сервера…")
